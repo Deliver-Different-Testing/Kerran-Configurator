@@ -1,4 +1,4 @@
-namespace AdminManager.Core.Application.Dtos.Workflow
+namespace DfrntDriveConfigurator.Core.Application.Dtos.Workflow
 {
     public class WorkflowTemplateUpdateRequest : WorkflowTemplateCreateRequest
     {

@@ -1,6 +1,6 @@
-using AdminManager.Core.Application.Dtos.Common;
+using DfrntDriveConfigurator.Core.Application.Dtos.Common;
 
-namespace AdminManager.Core.Application.Dtos.AppConfig
+namespace DfrntDriveConfigurator.Core.Application.Dtos.AppConfig
 {
     public class AppConfigCreateRequest : BaseRequest
     {

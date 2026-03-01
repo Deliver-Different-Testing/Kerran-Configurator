@@ -2,14 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AdminManager.Core.Application.Dtos.AppConfig;
-using AdminManager.Core.Application.Dtos.Common;
-using AdminManager.Core.Application.Dtos.MobileConfig;
-using AdminManager.Core.Application.Utilities;
-using AdminManager.Core.Domain.Despatch;
+using DfrntDriveConfigurator.Core.Application.Dtos.AppConfig;
+using DfrntDriveConfigurator.Core.Application.Dtos.Common;
+using DfrntDriveConfigurator.Core.Application.Dtos.MobileConfig;
+using DfrntDriveConfigurator.Core.Application.Utilities;
+using DfrntDriveConfigurator.Core.Domain;
+using DfrntDriveConfigurator.Core.Domain.Despatch;
 using Microsoft.EntityFrameworkCore;
 
-namespace AdminManager.Core.Application.Services
+namespace DfrntDriveConfigurator.Core.Application.Services
 {
     public class AppConfigService(IDbContextFactory<DynamicDespatchDbContext> contextFactory) : BaseService(contextFactory)
     {

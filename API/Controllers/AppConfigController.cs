@@ -1,14 +1,14 @@
 using System;
 using System.Threading.Tasks;
-using AdminManager.Core.Application.Dtos.AppConfig;
-using AdminManager.Core.Application.Dtos.Common;
-using AdminManager.Core.Application.Services;
+using DfrntDriveConfigurator.Core.Application.Dtos.AppConfig;
+using DfrntDriveConfigurator.Core.Application.Dtos.Common;
+using DfrntDriveConfigurator.Core.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Serilog;
 
-namespace AdminManager.Api.Controllers
+namespace DfrntDriveConfigurator.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]

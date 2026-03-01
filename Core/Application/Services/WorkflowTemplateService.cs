@@ -3,14 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using AdminManager.Core.Application.Dtos.Common;
-using AdminManager.Core.Application.Dtos.MobileConfig;
-using AdminManager.Core.Application.Dtos.Workflow;
-using AdminManager.Core.Application.Utilities;
-using AdminManager.Core.Domain.Despatch;
+using DfrntDriveConfigurator.Core.Application.Dtos.Common;
+using DfrntDriveConfigurator.Core.Application.Dtos.MobileConfig;
+using DfrntDriveConfigurator.Core.Application.Dtos.Workflow;
+using DfrntDriveConfigurator.Core.Application.Utilities;
+using DfrntDriveConfigurator.Core.Domain;
+using DfrntDriveConfigurator.Core.Domain.Despatch;
 using Microsoft.EntityFrameworkCore;
 
-namespace AdminManager.Core.Application.Services
+namespace DfrntDriveConfigurator.Core.Application.Services
 {
     public class WorkflowTemplateService(IDbContextFactory<DynamicDespatchDbContext> contextFactory) : BaseService(contextFactory)
     {
@@ -74,6 +75,26 @@ namespace AdminManager.Core.Application.Services
             {
                 Success = true,
                 Templates = templates.Select(MapToDto).ToList()
+            };
+        }
+
+        public async Task<WorkflowLookupsResponse> GetLookups(Guid messageId)
+        {
+            var eventTypes = await Context.TucEventTypes
+                .OrderBy(e => e.UcetName)
+                .Select(e => new LookupItem { Id = e.UcetId, Name = e.UcetName ?? "" })
+                .ToListAsync();
+
+            var jobStatuses = await Context.TucJobStatuses
+                .OrderBy(s => s.UcjsId)
+                .Select(s => new LookupItem { Id = s.UcjsId, Name = s.UcjsName ?? "" })
+                .ToListAsync();
+
+            return new WorkflowLookupsResponse(messageId)
+            {
+                Success = true,
+                EventTypes = eventTypes,
+                JobStatuses = jobStatuses
             };
         }
 

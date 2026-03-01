@@ -1,6 +1,6 @@
 using System;
 
-namespace AdminManager.Core.Application.Dtos.AppConfig
+namespace DfrntDriveConfigurator.Core.Application.Dtos.AppConfig
 {
     public class AppConfigDto
     {

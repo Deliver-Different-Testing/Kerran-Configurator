@@ -1,0 +1,29 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.csproj.user
+
+## Node
+node_modules/
+.npm/
+
+## Build output
+wwwroot/dist/
+
+## IDE
+.idea/
+*.swp
+*~
+
+## Secrets / local settings
+Properties/launchSettings.json
+
+## OS
+.DS_Store
+Thumbs.db
+.claude/

@@ -1,4 +1,4 @@
-namespace AdminManager.Core.Application.Dtos.AccessorialWorkflowTask
+namespace DfrntDriveConfigurator.Core.Application.Dtos.AccessorialWorkflowTask
 {
     public class AccessorialWorkflowTaskDto
     {

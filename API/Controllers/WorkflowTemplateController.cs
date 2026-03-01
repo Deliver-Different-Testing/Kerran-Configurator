@@ -1,14 +1,14 @@
 using System;
 using System.Threading.Tasks;
-using AdminManager.Core.Application.Dtos.Common;
-using AdminManager.Core.Application.Dtos.Workflow;
-using AdminManager.Core.Application.Services;
+using DfrntDriveConfigurator.Core.Application.Dtos.Common;
+using DfrntDriveConfigurator.Core.Application.Dtos.Workflow;
+using DfrntDriveConfigurator.Core.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Serilog;
 
-namespace AdminManager.Api.Controllers
+namespace DfrntDriveConfigurator.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -130,6 +130,25 @@ namespace AdminManager.Api.Controllers
                     return HandleInvalidModelState(request.MessageId);
 
                 return HandleResponse(await _workflowTemplateService.Delete(request));
+            }
+            catch (Exception e)
+            {
+                Log.Error(e.InnerException == null ? e.ToString() : e + Environment.NewLine + e.InnerException);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// GET /api/workflowtemplate/lookups
+        /// Returns event types and job statuses for dropdown population.
+        /// </summary>
+        [HttpGet("lookups")]
+        public async Task<IActionResult> GetLookups()
+        {
+            try
+            {
+                Log.Information($"({Request.Method} {Request.Path})");
+                return HandleResponseNoLogging(await _workflowTemplateService.GetLookups(Guid.NewGuid()));
             }
             catch (Exception e)
             {

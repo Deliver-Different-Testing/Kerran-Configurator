@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using AdminManager.Core.Application.Dtos.Common;
+using DfrntDriveConfigurator.Core.Application.Dtos.Common;
 
-namespace AdminManager.Core.Application.Dtos.Workflow
+namespace DfrntDriveConfigurator.Core.Application.Dtos.Workflow
 {
     public class WorkflowNlpResponse : BaseResponse
     {

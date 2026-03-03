@@ -10,6 +10,15 @@ variables:
   GITLAB_NUGET_USERNAME: "gitlab-ci-token"
   GITLAB_NUGET_TOKEN: "${CI_JOB_TOKEN}"
 
+# Override the template's default herokuish test job — this project
+# uses its own test jobs defined below.
+test:
+  stage: templating
+  script:
+    - echo "Skipped — see test:frontend:lint"
+  rules:
+    - when: never
+
 # Only run deploy on protected branches, not on MR pipelines
 deploy-dynamic-pipeline:
   rules:
@@ -55,9 +64,9 @@ workflow:
     - npm ci --cache .npm --prefer-offline
   extends: .test-rules
 
-# Lint - fast check, runs first
+# Lint and type-check
 test:frontend:lint:
-  stage: .pre
+  stage: templating
   extends: .frontend-base
   allow_failure: false
   script:

@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,14 @@ using Serilog;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure forwarded headers for proxy/load balancer support
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Add services to the container.
 builder.Services.AddHealthChecks()
@@ -165,6 +174,10 @@ if (string.IsNullOrEmpty(domain))
     throw new InvalidOperationException(
         "Could not find a env var string named 'Domain'.");
 
+// Ensure domain has leading dot for subdomain cookie sharing
+if (!domain.StartsWith('.'))
+    domain = "." + domain;
+
 // Configure Redis Based Distributed Session
 var redisConfig = Environment.GetEnvironmentVariable("RedisConfig");
 if (string.IsNullOrEmpty(redisConfig))
@@ -204,6 +217,10 @@ builder.Services.AddSession(options =>
 
 
 var app = builder.Build();
+
+// Must be first - handle forwarded headers from proxy/load balancer
+app.UseForwardedHeaders();
+
 app.MapHealthChecks("/healthz", new HealthCheckOptions
 {
     ResponseWriter = async (context, report) =>

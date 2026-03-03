@@ -45,6 +45,21 @@ public class EventTypeController(EventTypeService eventTypeService) : BaseContro
         }
     }
 
+    [HttpGet("group/{groupName}")]
+    public async Task<IActionResult> GetEventTypesByGroup(string groupName)
+    {
+        try
+        {
+            Log.Information($"({Request.Method} {Request.Path})");
+            return HandleResponseNoLogging(await eventTypeService.GetEventTypesByGroup(groupName, Guid.NewGuid()));
+        }
+        catch (Exception e)
+        {
+            Log.Error(e.InnerException == null ? e.ToString() : e + Environment.NewLine + e.InnerException);
+            throw;
+        }
+    }
+
     [HttpGet("{eventTypeId}/eventTypeGroups")]
     public async Task<IActionResult> GetEventTypeGroups(int eventTypeId)
     {

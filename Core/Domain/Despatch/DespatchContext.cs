@@ -23,6 +23,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<JobWorkflowStep> JobWorkflowSteps { get; set; }
 
+    public virtual DbSet<TblUser> TblUsers { get; set; }
+
     public virtual DbSet<TucClient> TucClients { get; set; }
 
     public virtual DbSet<TucEventTemplate> TucEventTemplates { get; set; }
@@ -38,8 +40,6 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<TucJobStatus> TucJobStatuses { get; set; }
 
     public virtual DbSet<TucJobType> TucJobTypes { get; set; }
-
-    public virtual DbSet<TblUser> TblUsers { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -136,6 +136,45 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.TemplateDetailId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_JobWorkflowStep_TemplateDetail");
+        });
+
+        modelBuilder.Entity<TblUser>(entity =>
+        {
+            entity.HasKey(e => e.UserName);
+
+            entity.ToTable("tblUser");
+
+            entity.HasIndex(e => e.CourierId, "CourierID");
+
+            entity.HasIndex(e => e.FullName, "IX_tblUser_FullName").IsUnique();
+
+            entity.HasIndex(e => e.StaffId, "StaffID");
+
+            entity.HasIndex(e => e.UserGroupId, "UserGroupID");
+
+            entity.Property(e => e.UserName).HasMaxLength(50);
+            entity.Property(e => e.Active).HasAnnotation("Relational:DefaultConstraintName", "DF_tblUser_Active");
+            entity.Property(e => e.CourierId).HasColumnName("CourierID");
+            entity.Property(e => e.CourierSecurity).HasAnnotation("Relational:DefaultConstraintName", "DF_tblUser_CourierSecurity");
+            entity.Property(e => e.Created).HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.FullName)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.InternetAccess).HasAnnotation("Relational:DefaultConstraintName", "DF__tblUser__Interne__556091EC");
+            entity.Property(e => e.LastAccessed).HasColumnType("datetime");
+            entity.Property(e => e.LastModified).HasColumnType("datetime");
+            entity.Property(e => e.LastModifiedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Notes).HasColumnType("ntext");
+            entity.Property(e => e.Password)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.StaffId).HasColumnName("StaffID");
+            entity.Property(e => e.UserGroupId).HasColumnName("UserGroupID");
         });
 
         modelBuilder.Entity<TucClient>(entity =>
@@ -690,10 +729,20 @@ public partial class DespatchContext : DbContext
             entity.HasIndex(e => e.UcetdTemplateId, "IX_tucEventTemplateDetail_Template");
 
             entity.Property(e => e.UcetdId).HasColumnName("ucetdID");
+            entity.Property(e => e.UcetdConfigJson).HasColumnName("ucetdConfigJson");
+            entity.Property(e => e.UcetdContext)
+                .IsRequired()
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("both")
+                .HasColumnName("ucetdContext");
             entity.Property(e => e.UcetdEventTypeId).HasColumnName("ucetdEventTypeID");
             entity.Property(e => e.UcetdIsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("ucetdIsActive");
+            entity.Property(e => e.UcetdRequired)
+                .HasDefaultValue(true)
+                .HasColumnName("ucetdRequired");
             entity.Property(e => e.UcetdSequence).HasColumnName("ucetdSequence");
             entity.Property(e => e.UcetdStatusId).HasColumnName("ucetdStatusID");
             entity.Property(e => e.UcetdTemplateId).HasColumnName("ucetdTemplateID");

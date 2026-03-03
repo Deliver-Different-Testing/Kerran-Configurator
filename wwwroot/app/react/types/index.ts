@@ -1,6 +1,83 @@
-// ============================================================================
-// Type definitions matching the C# DTOs
-// ============================================================================
+// ── Frontend UI Types ──
+
+export interface TaskConfig {
+  minPhotos?: number;
+  maxPhotos?: number;
+  label?: string;
+  mandatory?: string;
+  signerNameReq?: boolean;
+  minAge?: number;
+  idTypes?: string[];
+  matchField?: string;
+  action?: string;
+  scanRequired?: boolean;
+  mustMatch?: boolean;
+  message?: string;
+  acknowledge?: boolean;
+  required?: boolean;
+  options?: string[];
+  radius?: number;
+  mode?: string;
+  docType?: string;
+  note?: string;
+  minTemp?: number;
+  maxTemp?: number;
+  requirePhoto?: boolean;
+}
+
+export interface TaskType {
+  id: string;
+  icon: string;
+  name: string;
+  desc: string;
+  cat: 'Capture' | 'Verification' | 'Confirmation' | 'Communication';
+  config: TaskConfig;
+}
+
+export interface StageTask {
+  taskId: string;
+  required: boolean;
+  config: TaskConfig;
+  context: StepContext;
+}
+
+export type StageName = 'Enroute to Pickup' | 'Pickup' | 'Enroute to Delivery' | 'Delivery';
+
+export type StagesMap = Partial<Record<StageName, StageTask[]>>;
+
+export interface PresetWorkflow {
+  name: string;
+  stages: StagesMap;
+}
+
+// ── Supports ──
+
+export interface SupportType {
+  id: string;
+  icon: string;
+  color: string;
+  name: string;
+  desc: string;
+  enabled: boolean;
+  order: number;
+}
+
+// ── Feature Flags ──
+
+export interface FeatureFlag {
+  id: string;
+  icon: string;
+  name: string;
+  desc: string;
+  enabled: boolean;
+  overrides: number;
+}
+
+// ── Scope ──
+
+export type AppliesToScope = 'default' | 'client' | 'service' | 'both' | 'np';
+
+// ── Backend API DTOs ──
 
 export interface AppConfigDto {
   id: number;
@@ -16,18 +93,6 @@ export interface AppConfigDto {
   lastModifiedBy: string | null;
 }
 
-export interface AppConfigCreateRequest {
-  configKey: string;
-  configValue: string | null;
-  dataType: string;
-  category: string;
-  description: string | null;
-}
-
-export interface AppConfigUpdateRequest extends AppConfigCreateRequest {
-  id: number;
-}
-
 export interface WorkflowTemplateDto {
   id: number;
   name: string;
@@ -37,12 +102,12 @@ export interface WorkflowTemplateDto {
   speedId: number | null;
   speedName: string | null;
   isActive: boolean;
-  mirrorToAgentPortal: boolean;
   created: string;
   createdBy: string | null;
   lastModified: string | null;
   lastModifiedBy: string | null;
   scopeLabel: string;
+  mirrorToAgentPortal: boolean;
   stepCount: number;
   details: WorkflowTemplateDetailDto[];
 }
@@ -57,15 +122,20 @@ export interface WorkflowTemplateDetailDto {
   timeOffset: number;
   sequence: number;
   isActive: boolean;
+  required: boolean;
+  configJson: string | null;
+  context: StepContext;
 }
+
+export type StepContext = 'app' | 'portal' | 'both';
 
 export interface WorkflowTemplateCreateRequest {
   name: string;
-  description: string | null;
-  clientId: number | null;
-  speedId: number | null;
-  isActive: boolean;
-  mirrorToAgentPortal: boolean;
+  description?: string;
+  clientId?: number | null;
+  speedId?: number | null;
+  isActive?: boolean;
+  mirrorToAgentPortal?: boolean;
   details: WorkflowTemplateDetailCreateRequest[];
 }
 
@@ -75,26 +145,39 @@ export interface WorkflowTemplateDetailCreateRequest {
   timeOffset: number;
   sequence: number;
   isActive: boolean;
+  required: boolean;
+  configJson: string | null;
+  context: StepContext;
 }
 
-export interface WorkflowNlpResponse {
-  suggestedName: string;
-  clientScope: string | null;
-  serviceScope: string | null;
-  steps: WorkflowNlpStepDto[];
-  explanation: string;
+export interface LookupItem {
+  id: number;
+  name: string;
+}
+
+export interface WorkflowLookupsResponse {
+  messageId: string;
   success: boolean;
-  messages: { message: string }[];
+  messages: Array<{ message: string }>;
+  eventTypes: LookupItem[];
+  jobStatuses: LookupItem[];
 }
 
-export interface WorkflowNlpStepDto {
-  eventTypeId: number | null;
-  eventTypeName: string;
-  sequence: number;
-  statusId: number | null;
-  stageTrigger: string;
-  timeOffset: number;
+// ── Lookup DTOs ──
+
+export interface ClientLookupDto {
+  id: number;
+  name: string;
+  code: string;
 }
+
+export interface ServiceLookupDto {
+  id: number;
+  name: string;
+  code: string;
+}
+
+// ── Event Type DTOs ──
 
 export interface EventTypeDto {
   id: number;
@@ -112,36 +195,40 @@ export interface EventTypeGroupMappingDto {
   isActive: boolean;
 }
 
-export interface MobileConfigResponse {
-  features: Record<string, boolean>;
-  branding: Record<string, string>;
-  supportTasks: { eventTypeId: number; name: string }[];
-  success: boolean;
-}
+// ── API Response Wrapper ──
 
-// Base API response wrapper
 export interface ApiResponse<T = unknown> {
   messageId: string;
   success: boolean;
-  messages: { message: string }[];
+  messages: Array<{ message: string }>;
   data?: T;
   [key: string]: unknown;
 }
 
-// Stage triggers for the workflow editor
-export const STAGE_TRIGGERS = [
+// ── Stage Constants ──
+
+export const STAGE_NAMES: StageName[] = [
   'Enroute to Pickup',
   'Pickup',
   'Enroute to Delivery',
   'Delivery',
-] as const;
+];
 
-export type StageTrigger = (typeof STAGE_TRIGGERS)[number];
+export const STAGE_IDS = {
+  ENROUTE_TO_PICKUP: 1,
+  PICKUP: 2,
+  ENROUTE_TO_DELIVERY: 3,
+  DELIVERY: 4,
+} as const;
 
-// ============================================================================
-// Accessorial Workflow Task types
-// Links AccessorialCharge -> workflow steps that get injected into jobs
-// ============================================================================
+export const STAGE_ID_NAMES: Record<number, string> = {
+  1: 'Enroute to Pickup',
+  2: 'Pickup',
+  3: 'Enroute to Delivery',
+  4: 'Delivery',
+};
+
+// ── Accessorial Workflow Task types ──
 
 export interface AccessorialWorkflowTaskDto {
   id: number;
@@ -157,18 +244,7 @@ export interface AccessorialWorkflowTaskDto {
   active: boolean;
 }
 
-export interface AccessorialWorkflowTaskCreateRequest {
-  accessorialChargeId: number;
-  eventTypeId: number;
-  stageId: number;
-  sequence: number;
-  required: boolean;
-  configJson: string | null;
-}
-
-// ============================================================================
-// Generic Fallback Renderer Pattern
-// ============================================================================
+// ── Generic Fallback Renderer Pattern ──
 
 export interface GenericFallbackStepConfig {
   fields: GenericFallbackField[];
@@ -182,22 +258,7 @@ export interface GenericFallbackField {
   label: string;
   type: 'text' | 'number' | 'select' | 'checkbox' | 'date' | 'time';
   required?: boolean;
-  options?: string[]; // for 'select' type
+  options?: string[];
   placeholder?: string;
   defaultValue?: string;
 }
-
-// Stage ID constants matching SQL definition
-export const STAGE_IDS = {
-  ENROUTE_TO_PICKUP: 1,
-  PICKUP: 2,
-  ENROUTE_TO_DELIVERY: 3,
-  DELIVERY: 4,
-} as const;
-
-export const STAGE_ID_NAMES: Record<number, string> = {
-  1: 'Enroute to Pickup',
-  2: 'Pickup',
-  3: 'Enroute to Delivery',
-  4: 'Delivery',
-};

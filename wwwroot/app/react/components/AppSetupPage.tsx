@@ -1,43 +1,50 @@
-import React, { useState } from 'react';
-import { WorkflowsTab } from './WorkflowsTab';
-import { SupportsTab } from './SupportsTab';
-import { FeatureFlagsTab } from './FeatureFlagsTab';
+import { useState } from 'react';
+import WorkflowsTab from './WorkflowsTab';
+import SupportsTab from './SupportsTab';
+import FeatureFlagsTab from './FeatureFlagsTab';
+import type { ToastFn } from '../App';
 
-const tabs = ['Workflows', 'Supports', 'Feature Flags'] as const;
-type Tab = (typeof tabs)[number];
+type TabId = 'workflows' | 'supports' | 'flags';
 
-export const AppSetupPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('Workflows');
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'workflows', label: 'Workflows' },
+  { id: 'supports', label: 'Supports' },
+  { id: 'flags', label: 'Feature Flags' },
+];
+
+interface Props {
+  showToast: ToastFn;
+}
+
+export default function AppSetupPage({ showToast }: Props) {
+  const [activeTab, setActiveTab] = useState<TabId>('workflows');
 
   return (
-    <div className="app-setup-page">
-      <div className="page-header">
-        <h2>App Setup</h2>
-        <p className="text-muted">Configure the DF Drive mobile application</p>
-      </div>
-
-      {/* Horizontal tab bar */}
-      <ul className="nav nav-tabs mb-3">
-        {tabs.map((tab) => (
-          <li className="nav-item" key={tab}>
-            <button
-              className={`nav-link ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab)}
+    <div className="main">
+      <div className="topbar">
+        <div className="topbar-top">
+          <div>
+            <h1>App Setup</h1>
+            <div className="subtitle">Configure the DFRNT Drive mobile app — workflows, supports, and feature flags</div>
+          </div>
+        </div>
+        <div className="tab-bar">
+          {TABS.map(tab => (
+            <div
+              key={tab.id}
+              className={`tab-item${activeTab === tab.id ? ' active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
             >
-              {tab}
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      {/* Tab content */}
-      <div className="tab-content">
-        {activeTab === 'Workflows' && <WorkflowsTab />}
-        {activeTab === 'Supports' && <SupportsTab />}
-        {activeTab === 'Feature Flags' && <FeatureFlagsTab />}
+              {tab.label}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="content">
+        {activeTab === 'workflows' && <WorkflowsTab showToast={showToast} />}
+        {activeTab === 'supports' && <SupportsTab showToast={showToast} />}
+        {activeTab === 'flags' && <FeatureFlagsTab showToast={showToast} />}
       </div>
     </div>
   );
-};
-
-export default AppSetupPage;
+}

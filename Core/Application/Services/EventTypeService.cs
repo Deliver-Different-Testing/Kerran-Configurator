@@ -60,6 +60,31 @@ public class EventTypeService(IDbContextFactory<DynamicDespatchDbContext> contex
         return new EventTypeGroupMappingsResponse(messageId) { Success = true, Mappings = mappings };
     }
 
+    public async Task<EventTypeGroupMappingsResponse> GetEventTypesByGroup(string groupName, Guid messageId)
+    {
+        var mappings = await Context.TucEventTypeEventTypeGroups
+            .Include(m => m.EventType)
+            .Join(Context.TucEventTypeGroups,
+                m => m.EventTypeGroupId,
+                g => g.Id,
+                (m, g) => new { Mapping = m, Group = g })
+            .Where(x => x.Group.Name == groupName)
+            .OrderBy(x => x.Mapping.Sequence)
+            .Select(x => new EventTypeGroupMappingItemDto
+            {
+                Id = x.Mapping.Id,
+                EventTypeId = x.Mapping.EventTypeId,
+                EventTypeGroupId = x.Mapping.EventTypeGroupId,
+                EventTypeName = x.Mapping.EventType.UcetName ?? "",
+                GroupName = x.Group.Name ?? "",
+                Sequence = x.Mapping.Sequence,
+                IsActive = x.Mapping.IsActive
+            })
+            .ToListAsync();
+
+        return new EventTypeGroupMappingsResponse(messageId) { Success = true, Mappings = mappings };
+    }
+
     public async Task<BaseResponse> AddEventTypeGroup(int eventTypeId, int eventTypeGroupId, int sequence, Guid messageId)
     {
         var response = new BaseResponse(messageId);

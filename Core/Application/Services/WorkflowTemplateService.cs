@@ -127,7 +127,10 @@ namespace DfrntDriveConfigurator.Core.Application.Services
                     UcetdEventTypeId = detail.EventTypeId,
                     UcetdTimeOffset = detail.TimeOffset,
                     UcetdSequence = detail.Sequence,
-                    UcetdIsActive = detail.IsActive
+                    UcetdIsActive = detail.IsActive,
+                    UcetdRequired = detail.Required,
+                    UcetdConfigJson = detail.ConfigJson,
+                    UcetdContext = detail.Context ?? "both"
                 });
             }
             await Context.SaveChangesAsync();
@@ -168,7 +171,10 @@ namespace DfrntDriveConfigurator.Core.Application.Services
                     UcetdEventTypeId = detail.EventTypeId,
                     UcetdTimeOffset = detail.TimeOffset,
                     UcetdSequence = detail.Sequence,
-                    UcetdIsActive = detail.IsActive
+                    UcetdIsActive = detail.IsActive,
+                    UcetdRequired = detail.Required,
+                    UcetdConfigJson = detail.ConfigJson,
+                    UcetdContext = detail.Context ?? "both"
                 });
             }
 
@@ -293,7 +299,10 @@ namespace DfrntDriveConfigurator.Core.Application.Services
                         TimeOffset = d.UcetdTimeOffset,
                         IsCompleted = completed != null,
                         CompletedAt = completed?.CompletedAt,
-                        Source = "template" // base workflow step
+                        Source = "template", // base workflow step
+                        Required = d.UcetdRequired,
+                        ConfigJson = d.UcetdConfigJson,
+                        Context = d.UcetdContext ?? "both"
                     };
                 })
                 .ToList();
@@ -561,7 +570,10 @@ namespace DfrntDriveConfigurator.Core.Application.Services
                     EventTypeName = d.UcetdEventType?.UcetName ?? "",
                     TimeOffset = d.UcetdTimeOffset,
                     Sequence = d.UcetdSequence,
-                    IsActive = d.UcetdIsActive
+                    IsActive = d.UcetdIsActive,
+                    Required = d.UcetdRequired,
+                    ConfigJson = d.UcetdConfigJson,
+                    Context = d.UcetdContext ?? "both"
                 })
                 .ToList()
         };

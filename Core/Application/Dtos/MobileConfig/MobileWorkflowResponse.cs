@@ -48,5 +48,11 @@ namespace DfrntDriveConfigurator.Core.Application.Dtos.MobileConfig
         /// Contains field definitions, validation rules, etc.
         /// </summary>
         public string? ConfigJson { get; set; }
+
+        /// <summary>
+        /// Where this step appears: "app" (MAUI only), "portal" (Agent Portal only), or "both".
+        /// MAUI filters to "app" or "both". Agent Portal filters to "portal" or "both".
+        /// </summary>
+        public string Context { get; set; } = "both";
     }
 }

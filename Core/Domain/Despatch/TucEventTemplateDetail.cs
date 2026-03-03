@@ -21,6 +21,12 @@ public partial class TucEventTemplateDetail
 
     public bool UcetdIsActive { get; set; }
 
+    public bool UcetdRequired { get; set; }
+
+    public string UcetdConfigJson { get; set; }
+
+    public string UcetdContext { get; set; }
+
     public virtual ICollection<JobWorkflowStep> JobWorkflowSteps { get; set; } = new List<JobWorkflowStep>();
 
     public virtual TucEventType UcetdEventType { get; set; }

@@ -7,7 +7,8 @@ async function build() {
   const ctx = await esbuild.context({
     entryPoints: [path.join('wwwroot', 'app', 'react', 'index.tsx')],
     bundle: true,
-    outfile: path.join('wwwroot', 'dist', 'app.js'),
+    outdir: path.join('wwwroot', 'dist'),
+    entryNames: 'app',
     minify: !isDev,
     sourcemap: isDev,
     target: 'es2021',

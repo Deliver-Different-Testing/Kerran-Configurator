@@ -2,6 +2,15 @@
 // API service layer - wraps fetch calls to the backend
 // ============================================================================
 
+import type {
+  AppConfigDto,
+  WorkflowTemplateDto,
+  WorkflowTemplateCreateRequest,
+  WorkflowLookupsResponse,
+  ClientLookupDto,
+  ServiceLookupDto,
+} from '../types';
+
 const BASE_URL = '/api';
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -21,67 +30,82 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
 // --- AppConfig ---
 export const appConfigApi = {
-  getAll: () => request<any>('/appconfig'),
-  get: (id: number) => request<any>(`/appconfig/${id}`),
+  getAll: () => request<{ configs: AppConfigDto[] }>('/appconfig'),
+  get: (id: number) => request<{ config: AppConfigDto }>(`/appconfig/${id}`),
   search: (category?: string, searchText?: string) =>
-    request<any>('/appconfig/Search', {
+    request<{ configs: AppConfigDto[] }>('/appconfig/Search', {
       method: 'POST',
       body: JSON.stringify({ category, searchText }),
     }),
-  create: (data: any) =>
-    request<any>('/appconfig', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: any) =>
-    request<any>(`/appconfig/${id}`, { method: 'POST', body: JSON.stringify(data) }),
+  create: (data: Partial<AppConfigDto>) =>
+    request<{ config: AppConfigDto }>('/appconfig', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<AppConfigDto>) =>
+    request<{ config: AppConfigDto }>(`/appconfig/${id}`, { method: 'POST', body: JSON.stringify(data) }),
   delete: (id: number) =>
-    request<any>(`/appconfig/${id}`, { method: 'DELETE' }),
+    request<{ success: boolean }>(`/appconfig/${id}`, { method: 'DELETE' }),
 };
 
 // --- WorkflowTemplate ---
 export const workflowApi = {
-  getAll: () => request<any>('/workflowtemplate'),
-  get: (id: number) => request<any>(`/workflowtemplate/${id}`),
+  getAll: () => request<{ templates: WorkflowTemplateDto[] }>('/workflowtemplate'),
+  get: (id: number) => request<{ template: WorkflowTemplateDto }>(`/workflowtemplate/${id}`),
   search: (searchText?: string) =>
-    request<any>('/workflowtemplate/Search', {
+    request<{ templates: WorkflowTemplateDto[] }>('/workflowtemplate/Search', {
       method: 'POST',
       body: JSON.stringify({ searchText }),
     }),
-  getLookups: () => request<any>('/workflowtemplate/lookups'),
-  create: (data: any) =>
-    request<any>('/workflowtemplate', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: any) =>
-    request<any>(`/workflowtemplate/${id}`, { method: 'POST', body: JSON.stringify(data) }),
+  getLookups: () => request<WorkflowLookupsResponse>('/workflowtemplate/lookups'),
+  create: (data: WorkflowTemplateCreateRequest) =>
+    request<{ template: WorkflowTemplateDto }>('/workflowtemplate', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: WorkflowTemplateCreateRequest) =>
+    request<{ template: WorkflowTemplateDto }>(`/workflowtemplate/${id}`, { method: 'POST', body: JSON.stringify(data) }),
   delete: (id: number) =>
-    request<any>(`/workflowtemplate/${id}`, { method: 'DELETE' }),
-  parseNlp: (instruction: string) =>
-    request<any>('/workflowtemplate/nlp/parse', {
-      method: 'POST',
-      body: JSON.stringify({ instruction }),
-    }),
+    request<{ success: boolean }>(`/workflowtemplate/${id}`, { method: 'DELETE' }),
 };
 
-// --- EventType (reuse existing) ---
+// --- EventType ---
 export const eventTypeApi = {
-  getAll: () => request<any>('/eventtype'),
+  getAll: () => request<{ eventTypes: Array<{ id: number; name: string; group: string }> }>('/eventtype'),
   search: (searchText?: string) =>
-    request<any>('/eventtype/Search', {
+    request<{ eventTypes: Array<{ id: number; name: string; group: string }> }>('/eventtype/Search', {
       method: 'POST',
       body: JSON.stringify({ searchText }),
     }),
   getEventTypeGroups: (eventTypeId: number) =>
-    request<any>(`/eventtype/${eventTypeId}/eventTypeGroups`),
-  addEventTypeGroup: (eventTypeId: number, data: any) =>
-    request<any>(`/eventtype/${eventTypeId}/eventTypeGroups`, {
+    request<{ mappings: Array<{ id: number; eventTypeId: number; eventTypeGroupId: number; sequence: number; isActive: boolean }> }>(`/eventtype/${eventTypeId}/eventTypeGroups`),
+  getByGroup: (groupName: string) =>
+    request<{ mappings: Array<{ id: number; eventTypeId: number; eventTypeGroupId: number; eventTypeName: string; groupName: string; sequence: number; isActive: boolean }> }>(`/eventtype/group/${encodeURIComponent(groupName)}`),
+  addEventTypeGroup: (eventTypeId: number, data: { eventTypeGroupId: number; sequence?: number }) =>
+    request<{ mapping: { id: number } }>(`/eventtype/${eventTypeId}/eventTypeGroups`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   deleteEventTypeGroup: (eventTypeId: number, mappingId: number) =>
-    request<any>(`/eventtype/${eventTypeId}/eventTypeGroups/${mappingId}`, {
+    request<{ success: boolean }>(`/eventtype/${eventTypeId}/eventTypeGroups/${mappingId}`, {
       method: 'DELETE',
     }),
 };
 
+// --- Lookup ---
+export const lookupApi = {
+  getClients: () => request<{ clients: ClientLookupDto[] }>('/lookup/clients'),
+  getServices: () => request<{ services: ServiceLookupDto[] }>('/lookup/services'),
+  searchClients: (q?: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (limit) params.set('limit', String(limit));
+    return request<{ clients: ClientLookupDto[] }>(`/lookup/clients?${params}`);
+  },
+  searchServices: (q?: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (limit) params.set('limit', String(limit));
+    return request<{ services: ServiceLookupDto[] }>(`/lookup/services?${params}`);
+  },
+};
+
 // --- MobileConfig ---
 export const mobileApi = {
-  getConfig: () => request<any>('/mobile/config'),
-  getWorkflow: (jobId: number) => request<any>(`/mobile/workflow?jobId=${jobId}`),
+  getConfig: () => request<Record<string, unknown>>('/mobile/config'),
+  getWorkflow: (jobId: number) => request<Record<string, unknown>>(`/mobile/workflow?jobId=${jobId}`),
 };

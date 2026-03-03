@@ -21,5 +21,8 @@ namespace DfrntDriveConfigurator.Core.Application.Dtos.Workflow
         public int TimeOffset { get; set; }
         public int Sequence { get; set; }
         public bool IsActive { get; set; } = true;
+        public bool Required { get; set; } = true;
+        public string? ConfigJson { get; set; }
+        public string Context { get; set; } = "both";
     }
 }

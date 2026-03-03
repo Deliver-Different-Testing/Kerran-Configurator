@@ -144,6 +144,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<AppConfigService>();
 builder.Services.AddScoped<WorkflowTemplateService>();
 builder.Services.AddScoped<EventTypeService>();
+builder.Services.AddScoped<LookupService>();
 
 // Register DespatchContext with a placeholder connection string
 // The DynamicDespatchDbContextFactory resolves the real connection per-request via tenant claims
@@ -291,11 +292,11 @@ app.Use(async (context, next) =>
     // Content Security Policy - restrict resource loading
     var csp =
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "img-src 'self' data: blob: https:; " +
         "font-src 'self' https://fonts.gstatic.com data:; " +
-        "connect-src 'self' wss: ws: https://cdn.jsdelivr.net" + (app.Environment.IsDevelopment() ? " http://localhost:*" : "") + "; " +
+        "connect-src 'self' wss: ws:" + (app.Environment.IsDevelopment() ? " http://localhost:*" : "") + "; " +
         "worker-src 'self' blob:; " +
         "frame-ancestors 'none'; " +
         "frame-src 'none'; " +

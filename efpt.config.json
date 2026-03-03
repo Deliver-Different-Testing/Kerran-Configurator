@@ -39,6 +39,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tblUser]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tucClient]",
          "ObjectType": 0
       },

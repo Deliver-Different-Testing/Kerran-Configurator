@@ -6,7 +6,8 @@
     "dev": "node build.js --dev",
     "build": "node build.js",
     "type-check": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "echo \"No tests configured yet\" && exit 0"
   },
   "dependencies": {
     "react": "^18.3.1",

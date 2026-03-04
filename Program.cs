@@ -217,6 +217,7 @@ builder.Services.AddSession(options =>
 
 
 var app = builder.Build();
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 
 // Must be first - handle forwarded headers from proxy/load balancer
 app.UseForwardedHeaders();

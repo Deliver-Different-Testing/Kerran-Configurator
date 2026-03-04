@@ -10,24 +10,28 @@ interface SupportWithCategory extends SupportType {
   category: string;
   phase: string;
   eventCode: string;
+  mappingId: number;
 }
 
 function eventTypeToSupport(
-  et: { eventTypeId: number; eventTypeName: string; mappingId: number; sequence: number; isActive: boolean },
+  et: { eventTypeId: number; eventTypeName: string; mappingId: number; sequence: number; isActive: boolean; kind?: string; url?: string | null; displayName?: string | null; description?: string | null; icon?: string | null; color?: string | null },
   order: number
 ): SupportWithCategory {
   const meta = SUPPORTS_META[et.eventTypeName];
   return {
     id: String(et.eventTypeId),
-    icon: meta?.icon || '📋',
-    color: meta?.color || '#3bc7f4',
-    name: et.eventTypeName,
-    desc: meta?.description || '',
+    icon: et.icon || meta?.icon || '📋',
+    color: et.color || meta?.color || '#3bc7f4',
+    name: et.displayName || et.eventTypeName,
+    desc: et.description || meta?.description || '',
     enabled: et.isActive,
     order,
+    kind: (et.kind === 'link' ? 'link' : 'form') as 'form' | 'link',
+    url: et.url || undefined,
     category: meta?.category || 'Other',
     phase: meta?.phase || 'both',
     eventCode: meta?.eventCode || '',
+    mappingId: et.mappingId,
   };
 }
 
@@ -35,6 +39,17 @@ interface AddModalState {
   open: boolean;
   availableTypes: Array<{ id: number; name: string }>;
   loading: boolean;
+}
+
+interface EditModalState {
+  open: boolean;
+  support: SupportWithCategory | null;
+  kind: 'form' | 'link';
+  url: string;
+  displayName: string;
+  description: string;
+  icon: string;
+  color: string;
 }
 
 export default function SupportsTab({ showToast }: Props) {
@@ -46,6 +61,9 @@ export default function SupportsTab({ showToast }: Props) {
   const [addModal, setAddModal] = useState<AddModalState>({ open: false, availableTypes: [], loading: false });
   const [addSearch, setAddSearch] = useState('');
   const [supportGroupId, setSupportGroupId] = useState<number | null>(null);
+  const defaultEditModal: EditModalState = { open: false, support: null, kind: 'form', url: '', displayName: '', description: '', icon: '', color: '#3bc7f4' };
+  const [editModal, setEditModal] = useState<EditModalState>(defaultEditModal);
+  const [editSaving, setEditSaving] = useState(false);
   const dragIdx = useRef<number | null>(null);
 
   const loadSupports = useCallback(async () => {
@@ -67,6 +85,12 @@ export default function SupportsTab({ showToast }: Props) {
               mappingId: m.id,
               sequence: m.sequence,
               isActive: m.isActive,
+              kind: m.kind,
+              url: m.url,
+              displayName: m.displayName,
+              description: m.description,
+              icon: m.icon,
+              color: m.color,
             },
             m.sequence
           )
@@ -161,21 +185,70 @@ export default function SupportsTab({ showToast }: Props) {
   }, [supports, showToast]);
 
   // Add an event type to the "App Support" group
-  const addSupportType = useCallback(async (eventTypeId: number) => {
+  const addSupportType = useCallback(async (eventTypeId: number, eventTypeName: string) => {
     if (!supportGroupId) {
       showToast('Support group not found — cannot add');
       return;
     }
+    const meta = SUPPORTS_META[eventTypeName];
+    const isLink = meta?.category === 'External Links';
     try {
       const nextSeq = supports.length + 1;
-      await eventTypeApi.addEventTypeGroup(eventTypeId, { eventTypeGroupId: supportGroupId, sequence: nextSeq });
+      await eventTypeApi.addEventTypeGroup(eventTypeId, {
+        eventTypeGroupId: supportGroupId,
+        sequence: nextSeq,
+        kind: isLink ? 'link' : 'form',
+      });
       showToast('Support type added');
       setAddModal({ open: false, availableTypes: [], loading: false });
-      await loadSupports(); // reload to pick up the new item
+      await loadSupports();
+      // If it's a link type, immediately open the edit modal so the user can set the URL
+      if (isLink) {
+        setTimeout(() => {
+          setSupports(prev => {
+            const added = prev.find(s => s.id === String(eventTypeId));
+            if (added) setEditModal({ open: true, support: added, kind: 'link', url: '', displayName: '', description: meta?.description || '', icon: meta?.icon || '🔗', color: meta?.color || '#2563eb' });
+            return prev;
+          });
+        }, 500);
+      }
     } catch {
       showToast('Failed to add support type');
     }
   }, [supports, supportGroupId, showToast, loadSupports]);
+
+  const openEditModal = useCallback((s: SupportWithCategory) => {
+    setEditModal({ open: true, support: s, kind: s.kind, url: s.url || '', displayName: s.name, description: s.desc, icon: s.icon, color: s.color });
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (!editModal.support || !supportGroupId) return;
+    const s = editModal.support;
+    if (editModal.kind === 'link' && !editModal.url.startsWith('https://')) {
+      showToast('URL must start with https://');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await eventTypeApi.addEventTypeGroup(parseInt(s.id), {
+        eventTypeGroupId: supportGroupId,
+        sequence: s.order,
+        kind: editModal.kind,
+        url: editModal.kind === 'link' ? editModal.url : undefined,
+        displayName: editModal.displayName || undefined,
+        description: editModal.description || undefined,
+        icon: editModal.icon || undefined,
+        color: editModal.color || undefined,
+      });
+      showToast('Support type updated');
+      setEditModal(defaultEditModal);
+      await loadSupports();
+    } catch {
+      showToast('Failed to update support type');
+    } finally {
+      setEditSaving(false);
+    }
+  }, [editModal, supportGroupId, showToast, loadSupports]);
 
   const toggleCategory = (cat: string) => {
     setCollapsedCategories(prev => {
@@ -254,7 +327,7 @@ export default function SupportsTab({ showToast }: Props) {
                         key={t.id}
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 6, cursor: 'pointer', transition: 'background .1s' }}
                         className="ss-item"
-                        onClick={() => addSupportType(t.id)}
+                        onClick={() => addSupportType(t.id, t.name)}
                       >
                         <span style={{ fontSize: 16 }}>{meta?.icon || '📋'}</span>
                         <div style={{ flex: 1 }}>
@@ -273,6 +346,88 @@ export default function SupportsTab({ showToast }: Props) {
             )}
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setAddModal({ open: false, availableTypes: [], loading: false })}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Edit Support Type Modal */}
+      <div className={`modal-overlay${editModal.open ? ' show' : ''}`} onClick={e => { if (e.target === e.currentTarget) setEditModal(defaultEditModal); }}>
+        {editModal.open && editModal.support && (
+          <div className="modal">
+            <h2>Edit Support Type</h2>
+            <div className="modal-sub">Configure support type for couriers in DF Drive</div>
+            <div className="field">
+              <label>Icon (emoji)</label>
+              <input
+                value={editModal.icon}
+                onChange={e => setEditModal(prev => ({ ...prev, icon: e.target.value }))}
+                style={{ width: 80, padding: '9px 12px', border: '1px solid rgba(13,12,44,.12)', borderRadius: 'var(--radius)', fontSize: 18, fontFamily: 'inherit', outline: 'none', textAlign: 'center' }}
+              />
+            </div>
+            <div className="field">
+              <label>Name</label>
+              <input
+                placeholder="e.g. H&S Hazard Form"
+                value={editModal.displayName}
+                onChange={e => setEditModal(prev => ({ ...prev, displayName: e.target.value }))}
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid rgba(13,12,44,.12)', borderRadius: 'var(--radius)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
+              />
+            </div>
+            <div className="field">
+              <label>Description</label>
+              <input
+                placeholder="Short description"
+                value={editModal.description}
+                onChange={e => setEditModal(prev => ({ ...prev, description: e.target.value }))}
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid rgba(13,12,44,.12)', borderRadius: 'var(--radius)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
+              />
+            </div>
+            <div className="field">
+              <label>Type</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  style={{ flex: 1, padding: '10px', border: `2px solid ${editModal.kind === 'form' ? 'var(--cyan)' : 'rgba(13,12,44,.12)'}`, borderRadius: 10, background: editModal.kind === 'form' ? 'rgba(59,199,244,.06)' : 'var(--white)', cursor: 'pointer', textAlign: 'center', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', color: 'var(--ink)' }}
+                  onClick={() => setEditModal(prev => ({ ...prev, kind: 'form' }))}
+                >
+                  <span style={{ fontSize: 20, display: 'block', marginBottom: 4 }}>📋</span>
+                  In-App Form
+                </button>
+                <button
+                  type="button"
+                  style={{ flex: 1, padding: '10px', border: `2px solid ${editModal.kind === 'link' ? 'var(--cyan)' : 'rgba(13,12,44,.12)'}`, borderRadius: 10, background: editModal.kind === 'link' ? 'rgba(59,199,244,.06)' : 'var(--white)', cursor: 'pointer', textAlign: 'center', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', color: 'var(--ink)' }}
+                  onClick={() => setEditModal(prev => ({ ...prev, kind: 'link' }))}
+                >
+                  <span style={{ fontSize: 20, display: 'block', marginBottom: 4 }}>🔗</span>
+                  External Link
+                </button>
+              </div>
+            </div>
+            {editModal.kind === 'link' && (
+              <div className="field">
+                <label>URL</label>
+                <input
+                  placeholder="https://forms.example.com/hazard-report"
+                  value={editModal.url}
+                  onChange={e => setEditModal(prev => ({ ...prev, url: e.target.value }))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid rgba(13,12,44,.12)', borderRadius: 'var(--radius)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
+                />
+                <div style={{ fontSize: 10, color: 'rgba(13,12,44,.35)', marginTop: 3 }}>Must start with https://. Opens in the courier's browser when tapped.</div>
+              </div>
+            )}
+            <div className="field">
+              <label>Colour</label>
+              <input
+                type="color"
+                value={editModal.color}
+                onChange={e => setEditModal(prev => ({ ...prev, color: e.target.value }))}
+                style={{ width: 60, height: 36, padding: 2, border: '1px solid rgba(13,12,44,.12)', borderRadius: 6, cursor: 'pointer' }}
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setEditModal(defaultEditModal)}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveEdit} disabled={editSaving}>{editSaving ? 'Saving...' : 'Save'}</button>
             </div>
           </div>
         )}
@@ -314,8 +469,17 @@ export default function SupportsTab({ showToast }: Props) {
                         <span>{s.icon}</span>
                       </div>
                       <div className="support-info">
-                        <div className="s-name">{s.name}</div>
+                        <div className="s-name">
+                          {s.name}
+                          {s.kind === 'link'
+                            ? <span style={{ fontSize: 9, fontWeight: 700, background: '#eff6ff', color: '#2563eb', padding: '1px 6px', borderRadius: 4, marginLeft: 6 }}>🔗 LINK</span>
+                            : <span style={{ fontSize: 9, fontWeight: 700, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, marginLeft: 6 }}>📋 FORM</span>
+                          }
+                        </div>
                         <div className="s-desc">{s.desc}</div>
+                        {s.kind === 'link' && s.url && (
+                          <div style={{ fontSize: 10, color: '#2563eb', marginTop: 2, wordBreak: 'break-all' }}>{s.url}</div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 80 }}>
                         <span className={`sup-phase sup-phase-${s.phase}`}>
@@ -330,6 +494,7 @@ export default function SupportsTab({ showToast }: Props) {
                           <input type="checkbox" checked={s.enabled} onChange={() => toggleEnabled(realIdx)} />
                           <span className="slider" />
                         </label>
+                        <button className="btn-icon" onClick={() => openEditModal(s)} title="Edit">✏️</button>
                         <button className="btn-icon" onClick={() => removeSupport(realIdx)} title="Remove from tenant">🗑️</button>
                       </div>
                     </div>

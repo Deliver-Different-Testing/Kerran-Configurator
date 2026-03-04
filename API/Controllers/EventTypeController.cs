@@ -81,7 +81,7 @@ public class EventTypeController(EventTypeService eventTypeService) : BaseContro
         try
         {
             Log.Information($"({Request.Method} {Request.Path}): {JsonConvert.SerializeObject(request)}");
-            return HandleResponse(await eventTypeService.AddEventTypeGroup(eventTypeId, request.EventTypeGroupId, request.Sequence, request.MessageId));
+            return HandleResponse(await eventTypeService.AddEventTypeGroup(eventTypeId, request, request.MessageId));
         }
         catch (Exception e)
         {

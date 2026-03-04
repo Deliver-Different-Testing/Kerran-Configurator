@@ -16,6 +16,7 @@ export const TASKS: TaskType[] = [
   { id: 'docupload', icon: '📄', name: 'Document Upload', desc: 'Upload or photograph document', cat: 'Capture', config: { label: 'Customs Document', docType: 'any' } },
   { id: 'clientnote', icon: '🔔', name: 'Client Note', desc: 'Show note/instruction from client', cat: 'Communication', config: { note: 'Handle with care — fragile contents', acknowledge: true } },
   { id: 'coldchain', icon: '🧊', name: 'Cold Chain Check', desc: 'Record temperature reading', cat: 'Verification', config: { minTemp: -2, maxTemp: 8, requirePhoto: true } },
+  { id: 'instructionnote', icon: '📋', name: 'Instruction Note', desc: 'Display configurable instruction to courier', cat: 'Communication', config: { label: '', note: '', acknowledge: true } },
 ];
 
 export const TASK_MAP = new Map(TASKS.map(t => [t.id, t]));

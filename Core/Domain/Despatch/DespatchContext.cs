@@ -797,6 +797,12 @@ public partial class DespatchContext : DbContext
 
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Sequence).HasDefaultValue(1);
+            entity.Property(e => e.Kind).HasMaxLength(10).HasDefaultValue("form");
+            entity.Property(e => e.Url).HasMaxLength(500);
+            entity.Property(e => e.DisplayName).HasMaxLength(100);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Icon).HasMaxLength(10);
+            entity.Property(e => e.Color).HasMaxLength(10);
 
             entity.HasOne(d => d.EventTypeGroup).WithMany(p => p.TucEventTypeEventTypeGroups)
                 .HasForeignKey(d => d.EventTypeGroupId)

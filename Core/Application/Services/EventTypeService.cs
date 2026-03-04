@@ -53,7 +53,13 @@ public class EventTypeService(IDbContextFactory<DynamicDespatchDbContext> contex
                     EventTypeName = m.EventType.UcetName ?? "",
                     GroupName = g.Name ?? "",
                     Sequence = m.Sequence,
-                    IsActive = m.IsActive
+                    IsActive = m.IsActive,
+                    Kind = m.Kind ?? "form",
+                    Url = m.Url,
+                    DisplayName = m.DisplayName,
+                    Description = m.Description,
+                    Icon = m.Icon,
+                    Color = m.Color
                 })
             .ToListAsync();
 
@@ -78,33 +84,51 @@ public class EventTypeService(IDbContextFactory<DynamicDespatchDbContext> contex
                 EventTypeName = x.Mapping.EventType.UcetName ?? "",
                 GroupName = x.Group.Name ?? "",
                 Sequence = x.Mapping.Sequence,
-                IsActive = x.Mapping.IsActive
+                IsActive = x.Mapping.IsActive,
+                Kind = x.Mapping.Kind ?? "form",
+                Url = x.Mapping.Url,
+                DisplayName = x.Mapping.DisplayName,
+                Description = x.Mapping.Description,
+                Icon = x.Mapping.Icon,
+                Color = x.Mapping.Color
             })
             .ToListAsync();
 
         return new EventTypeGroupMappingsResponse(messageId) { Success = true, Mappings = mappings };
     }
 
-    public async Task<BaseResponse> AddEventTypeGroup(int eventTypeId, int eventTypeGroupId, int sequence, Guid messageId)
+    public async Task<BaseResponse> AddEventTypeGroup(int eventTypeId, AddEventTypeGroupRequest request, Guid messageId)
     {
         var response = new BaseResponse(messageId);
 
         var existing = await Context.TucEventTypeEventTypeGroups
-            .FirstOrDefaultAsync(m => m.EventTypeId == eventTypeId && m.EventTypeGroupId == eventTypeGroupId);
+            .FirstOrDefaultAsync(m => m.EventTypeId == eventTypeId && m.EventTypeGroupId == request.EventTypeGroupId);
 
         if (existing != null)
         {
             existing.IsActive = true;
-            existing.Sequence = sequence;
+            existing.Sequence = request.Sequence;
+            existing.Kind = request.Kind;
+            existing.Url = request.Url;
+            existing.DisplayName = request.DisplayName;
+            existing.Description = request.Description;
+            existing.Icon = request.Icon;
+            existing.Color = request.Color;
         }
         else
         {
             Context.TucEventTypeEventTypeGroups.Add(new TucEventTypeEventTypeGroup
             {
                 EventTypeId = eventTypeId,
-                EventTypeGroupId = eventTypeGroupId,
-                Sequence = sequence,
-                IsActive = true
+                EventTypeGroupId = request.EventTypeGroupId,
+                Sequence = request.Sequence,
+                IsActive = true,
+                Kind = request.Kind,
+                Url = request.Url,
+                DisplayName = request.DisplayName,
+                Description = request.Description,
+                Icon = request.Icon,
+                Color = request.Color
             });
         }
 
@@ -153,6 +177,12 @@ public class EventTypeGroupMappingItemDto
     public string GroupName { get; set; } = "";
     public int Sequence { get; set; }
     public bool IsActive { get; set; }
+    public string Kind { get; set; } = "form";
+    public string? Url { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public string? Icon { get; set; }
+    public string? Color { get; set; }
 }
 
 public class EventTypeGroupMappingsResponse : BaseResponse
@@ -165,4 +195,10 @@ public class AddEventTypeGroupRequest : BaseRequest
 {
     public int EventTypeGroupId { get; set; }
     public int Sequence { get; set; }
+    public string Kind { get; set; } = "form";
+    public string? Url { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public string? Icon { get; set; }
+    public string? Color { get; set; }
 }

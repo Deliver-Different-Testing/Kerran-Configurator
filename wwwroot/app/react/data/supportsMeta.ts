@@ -61,6 +61,9 @@ export const SUPPORTS_META: Record<string, SupportMeta> = {
   'Truck - Tail Lift Delivery':    { icon: '⬇️', color: '#2a4eff', description: 'Tail lift required at delivery', category: 'Truck', phase: 'delivery', eventCode: 'C40102' },
   'Truck - Oversize':              { icon: '📏', color: '#2a4eff', description: 'Item is oversized', category: 'Truck', phase: 'delivery', eventCode: 'C40103' },
   'Truck - Overweight':            { icon: '⚖️', color: '#2a4eff', description: 'Item is overweight', category: 'Truck', phase: 'delivery', eventCode: 'C40104' },
+
+  // ── External Links ──
+  'External Link':                 { icon: '🔗', color: '#2563eb', description: 'Opens an external URL (Google Form, intranet, etc)', category: 'External Links', phase: 'both', eventCode: '' },
 };
 
 // All category names in display order
@@ -73,4 +76,5 @@ export const SUPPORT_CATEGORIES = [
   'Job Not Ready',
   'Other',
   'Truck',
+  'External Links',
 ] as const;

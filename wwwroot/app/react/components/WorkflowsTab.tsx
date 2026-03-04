@@ -36,6 +36,8 @@ function configSummary(t: StageTask): string {
     case 'barcode': return c.mustMatch ? 'Must match' : '';
     case 'coldchain': return `${c.minTemp}–${c.maxTemp}°C`;
     case 'timestamp': return c.mode === 'auto' ? 'Auto' : 'Manual';
+    case 'instructionnote': return c.label || 'Instruction Note';
+    case 'clientnote': return c.acknowledge ? 'Ack required' : '';
     default: return '';
   }
 }
@@ -181,6 +183,8 @@ export default function WorkflowsTab({ showToast }: Props) {
 
   const dragRef = useRef<{ fromStage: StageName; fromIdx: number } | null>(null);
   const dragLibRef = useRef<string | null>(null);
+  const dragOverIdxRef = useRef<{ stage: StageName; idx: number } | null>(null);
+  const [dragInsert, setDragInsert] = useState<{ stage: StageName; idx: number; pos: 'before' | 'after' } | null>(null);
   const initialStagesRef = useRef<string>('{}');
 
   // Load lookups on mount
@@ -472,8 +476,26 @@ export default function WorkflowsTab({ showToast }: Props) {
 
   const onDrop = useCallback((stage: StageName) => {
     setDragOverStage(null);
+    setDragInsert(null);
+    const insertIdx = dragOverIdxRef.current?.stage === stage ? dragOverIdxRef.current.idx : null;
+    dragOverIdxRef.current = null;
     if (dragLibRef.current) {
-      addTask(stage, dragLibRef.current);
+      if (insertIdx !== null) {
+        // Insert at specific position
+        const taskId = dragLibRef.current;
+        if (!gatedTaskIds.has(taskId)) {
+          const t = TASK_MAP.get(taskId);
+          if (t) {
+            updateStages(s => {
+              if (!s[stage]) s[stage] = [];
+              s[stage]!.splice(insertIdx, 0, { taskId, required: true, config: { ...t.config }, context: 'both' });
+              return s;
+            });
+          }
+        }
+      } else {
+        addTask(stage, dragLibRef.current);
+      }
       dragLibRef.current = null;
     } else if (dragRef.current) {
       const { fromStage, fromIdx } = dragRef.current;
@@ -482,12 +504,19 @@ export default function WorkflowsTab({ showToast }: Props) {
         if (!task) return s;
         if (s[fromStage]?.length === 0) delete s[fromStage];
         if (!s[stage]) s[stage] = [];
-        s[stage]!.push(task);
+        if (insertIdx !== null) {
+          // Adjust index if removing from same stage before the insertion point
+          let adjustedIdx = insertIdx;
+          if (fromStage === stage && fromIdx < insertIdx) adjustedIdx--;
+          s[stage]!.splice(adjustedIdx, 0, task);
+        } else {
+          s[stage]!.push(task);
+        }
         return s;
       });
       dragRef.current = null;
     }
-  }, [addTask, updateStages]);
+  }, [addTask, updateStages, gatedTaskIds]);
 
   // Close add menu on outside click
   useEffect(() => {
@@ -523,6 +552,17 @@ export default function WorkflowsTab({ showToast }: Props) {
         return (<>
           <CfgField label="Min °C"><input className="cfg-input" type="number" value={c.minTemp ?? 0} onChange={e => upd('minTemp', +e.target.value)} /></CfgField>
           <CfgField label="Max °C"><input className="cfg-input" type="number" value={c.maxTemp ?? 8} onChange={e => upd('maxTemp', +e.target.value)} /></CfgField>
+        </>);
+      case 'instructionnote':
+        return (<>
+          <CfgField label="Label"><input className="cfg-input wide" maxLength={100} value={c.label ?? ''} onChange={e => upd('label', e.target.value)} onClick={e => e.stopPropagation()} /></CfgField>
+          <CfgField label="Note"><textarea className="cfg-input wide" maxLength={2000} rows={3} value={c.note ?? ''} onChange={e => upd('note', e.target.value)} onClick={e => e.stopPropagation()} style={{ resize: 'vertical' }} /></CfgField>
+          <CfgToggle label="Acknowledge" checked={!!c.acknowledge} onChange={v => upd('acknowledge', v)} />
+        </>);
+      case 'clientnote':
+        return (<>
+          <CfgToggle label="Acknowledge" checked={!!c.acknowledge} onChange={v => upd('acknowledge', v)} />
+          <span style={{ color: 'rgba(13,12,44,.35)', fontSize: 10 }}>Content pulled from booking Notes to Courier at runtime</span>
         </>);
       default:
         return <span style={{ color: 'rgba(13,12,44,.35)', fontSize: 11 }}>Click to configure</span>;
@@ -738,12 +778,26 @@ export default function WorkflowsTab({ showToast }: Props) {
                     if (!taskDef) return null;
                     const blockKey = `${stageName}-${ti}`;
                     const isExpanded = expandedBlocks.has(blockKey);
+                    const insertClass = dragInsert?.stage === stageName && dragInsert?.idx === ti
+                      ? ` drag-insert-${dragInsert.pos}` : '';
                     return (
                       <div
                         key={blockKey}
-                        className={`task-block${isExpanded ? ' expanded' : ''}`}
+                        className={`task-block${isExpanded ? ' expanded' : ''}${insertClass}`}
                         draggable
                         onDragStart={() => onDragStartBlock(stageName, ti)}
+                        onDragOver={e => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const midY = rect.top + rect.height / 2;
+                          const pos = e.clientY < midY ? 'before' : 'after';
+                          const insertAt = pos === 'before' ? ti : ti + 1;
+                          dragOverIdxRef.current = { stage: stageName, idx: insertAt };
+                          setDragInsert({ stage: stageName, idx: ti, pos });
+                        }}
+                        onDragLeave={() => setDragInsert(null)}
+                        onDragEnd={() => { dragRef.current = null; dragLibRef.current = null; dragOverIdxRef.current = null; setDragInsert(null); }}
                         onClick={() => toggleBlock(blockKey)}
                       >
                         <div className="tb-top">
@@ -752,12 +806,14 @@ export default function WorkflowsTab({ showToast }: Props) {
                           <button className="tb-remove" onClick={e => { e.stopPropagation(); removeTask(stageName, ti); }}>×</button>
                         </div>
                         <div className="tb-meta">
-                          <span
+                          <button
+                            type="button"
+                            draggable={false}
                             className={`tb-badge ${task.required ? 'required' : 'optional'}`}
                             onClick={e => { e.stopPropagation(); toggleRequired(stageName, ti); }}
                           >
                             {task.required ? 'Required' : 'Optional'}
-                          </span>
+                          </button>
                           <span className={`tb-context ctx-${task.context || 'both'}`}>
                             {task.context === 'app' ? 'App' : task.context === 'portal' ? 'Portal' : 'Both'}
                           </span>

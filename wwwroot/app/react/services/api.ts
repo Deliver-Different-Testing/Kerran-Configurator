@@ -74,8 +74,8 @@ export const eventTypeApi = {
   getEventTypeGroups: (eventTypeId: number) =>
     request<{ mappings: Array<{ id: number; eventTypeId: number; eventTypeGroupId: number; sequence: number; isActive: boolean }> }>(`/eventtype/${eventTypeId}/eventTypeGroups`),
   getByGroup: (groupName: string) =>
-    request<{ mappings: Array<{ id: number; eventTypeId: number; eventTypeGroupId: number; eventTypeName: string; groupName: string; sequence: number; isActive: boolean }> }>(`/eventtype/group/${encodeURIComponent(groupName)}`),
-  addEventTypeGroup: (eventTypeId: number, data: { eventTypeGroupId: number; sequence?: number }) =>
+    request<{ mappings: Array<{ id: number; eventTypeId: number; eventTypeGroupId: number; eventTypeName: string; groupName: string; sequence: number; isActive: boolean; kind: string; url: string | null; displayName: string | null; description: string | null; icon: string | null; color: string | null }> }>(`/eventtype/group/${encodeURIComponent(groupName)}`),
+  addEventTypeGroup: (eventTypeId: number, data: { eventTypeGroupId: number; sequence?: number; kind?: string; url?: string; displayName?: string; description?: string; icon?: string; color?: string }) =>
     request<{ mapping: { id: number } }>(`/eventtype/${eventTypeId}/eventTypeGroups`, {
       method: 'POST',
       body: JSON.stringify(data),

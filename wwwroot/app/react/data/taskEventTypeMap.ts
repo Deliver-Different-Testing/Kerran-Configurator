@@ -15,6 +15,7 @@ export const TASK_TO_EVENT_TYPE_NAME: Record<string, string> = {
   'docupload': 'Document Upload',
   'clientnote': 'Client Note',
   'coldchain': 'Cold Chain Check',
+  'instructionnote': 'Instruction Note',
 };
 
 // Reverse map: event type name → frontend task ID

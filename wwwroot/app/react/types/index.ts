@@ -60,6 +60,8 @@ export interface SupportType {
   desc: string;
   enabled: boolean;
   order: number;
+  kind: 'form' | 'link';
+  url?: string;
 }
 
 // ── Feature Flags ──
@@ -193,6 +195,8 @@ export interface EventTypeGroupMappingDto {
   groupName: string;
   sequence: number;
   isActive: boolean;
+  kind: string;
+  url: string | null;
 }
 
 // ── API Response Wrapper ──

@@ -553,6 +553,16 @@ export default function WorkflowsTab({ showToast }: Props) {
           <CfgField label="Min °C"><input className="cfg-input" type="number" value={c.minTemp ?? 0} onChange={e => upd('minTemp', +e.target.value)} /></CfgField>
           <CfgField label="Max °C"><input className="cfg-input" type="number" value={c.maxTemp ?? 8} onChange={e => upd('maxTemp', +e.target.value)} /></CfgField>
         </>);
+      case 'notes':
+        return (<>
+          <CfgField label="Label"><input className="cfg-input wide" maxLength={100} value={c.label ?? ''} onChange={e => upd('label', e.target.value)} onClick={e => e.stopPropagation()} /></CfgField>
+          <CfgToggle label="Required" checked={!!c.required} onChange={v => upd('required', v)} />
+        </>);
+      case 'prompt':
+        return (<>
+          <CfgField label="Message"><textarea className="cfg-input wide" maxLength={2000} rows={3} value={c.message ?? ''} onChange={e => upd('message', e.target.value)} onClick={e => e.stopPropagation()} style={{ resize: 'vertical' }} /></CfgField>
+          <CfgToggle label="Acknowledge" checked={!!c.acknowledge} onChange={v => upd('acknowledge', v)} />
+        </>);
       case 'instructionnote':
         return (<>
           <CfgField label="Label"><input className="cfg-input wide" maxLength={100} value={c.label ?? ''} onChange={e => upd('label', e.target.value)} onClick={e => e.stopPropagation()} /></CfgField>

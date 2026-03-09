@@ -239,11 +239,11 @@ namespace DfrntDriveConfigurator.Core.Application.Services
             // ── Step 1: Load job details (client, service type, accessorial group) ──
             var job = await Context.Database
                 .SqlQueryRaw<JobLookup>(
-                    @"SELECT TOP 1 
-                        j.ucjClientID AS ClientId, 
-                        j.ucjSpeedID AS SpeedId,
-                        j.ucjAccessorialChargeGroupId AS AccessorialChargeGroupId
-                      FROM tblJob j WHERE j.ucjID = {0}",
+                    @"SELECT TOP 1
+                        j.ClientID AS ClientId,
+                        j.Speed AS SpeedId,
+                        CAST(NULL AS int) AS AccessorialChargeGroupId
+                      FROM tblJob j WHERE j.JobID = {0}",
                     jobId)
                 .FirstOrDefaultAsync();
 

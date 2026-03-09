@@ -563,6 +563,21 @@ export default function WorkflowsTab({ showToast }: Props) {
           <CfgField label="Message"><textarea className="cfg-input wide" maxLength={2000} rows={3} value={c.message ?? ''} onChange={e => upd('message', e.target.value)} onClick={e => e.stopPropagation()} style={{ resize: 'vertical' }} /></CfgField>
           <CfgToggle label="Acknowledge" checked={!!c.acknowledge} onChange={v => upd('acknowledge', v)} />
         </>);
+      case 'dropdown':
+        return (<>
+          <CfgField label="Label"><input className="cfg-input wide" maxLength={100} value={c.label ?? ''} onChange={e => upd('label', e.target.value)} onClick={e => e.stopPropagation()} /></CfgField>
+          <CfgField label="Options">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+              {(c.options ?? []).map((opt, oi) => (
+                <div key={oi} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <input className="cfg-input wide" value={opt} onChange={e => { const next = [...(c.options ?? [])]; next[oi] = e.target.value; upd('options', next); }} onClick={e => e.stopPropagation()} />
+                  <button type="button" className="tb-remove" onClick={e => { e.stopPropagation(); const next = (c.options ?? []).filter((_, i) => i !== oi); upd('options', next); }} title="Remove">×</button>
+                </div>
+              ))}
+              <button type="button" className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px', alignSelf: 'flex-start' }} onClick={e => { e.stopPropagation(); upd('options', [...(c.options ?? []), '']); }}>+ Add option</button>
+            </div>
+          </CfgField>
+        </>);
       case 'instructionnote':
         return (<>
           <CfgField label="Label"><input className="cfg-input wide" maxLength={100} value={c.label ?? ''} onChange={e => upd('label', e.target.value)} onClick={e => e.stopPropagation()} /></CfgField>

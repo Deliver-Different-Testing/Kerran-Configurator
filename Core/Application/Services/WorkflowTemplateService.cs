@@ -159,8 +159,18 @@ namespace DfrntDriveConfigurator.Core.Application.Services
             template.UcetLastModified = DateTime.UtcNow;
             template.UcetLastModifiedBy = "admin"; // TODO: pull from HttpContext session
 
-            // Replace details: remove existing, add new
-            Context.TucEventTemplateDetails.RemoveRange(template.TucEventTemplateDetails);
+            // Replace details: soft-delete referenced rows, hard-delete unreferenced ones, then add new
+            var referencedDetailIds = await Context.Database
+                .SqlQueryRaw<int>("SELECT DISTINCT TemplateDetailId AS Value FROM JobWorkflowStep")
+                .ToListAsync();
+            var referencedSet = new HashSet<int>(referencedDetailIds);
+
+            var toHardDelete = template.TucEventTemplateDetails.Where(d => !referencedSet.Contains(d.UcetdId)).ToList();
+            var toSoftDelete = template.TucEventTemplateDetails.Where(d => referencedSet.Contains(d.UcetdId)).ToList();
+
+            Context.TucEventTemplateDetails.RemoveRange(toHardDelete);
+            foreach (var d in toSoftDelete)
+                d.UcetdIsActive = false;
 
             foreach (var detail in request.Details)
             {

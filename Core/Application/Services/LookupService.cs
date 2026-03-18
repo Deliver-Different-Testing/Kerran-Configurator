@@ -103,5 +103,41 @@ namespace DfrntDriveConfigurator.Core.Application.Services
                 Services = services
             };
         }
+
+        public async Task<SitesResponse> GetSites(Guid messageId)
+        {
+            var sites = await Context.TblSites
+                .OrderBy(s => s.Name)
+                .Select(s => new SiteLookupDto
+                {
+                    Id = s.SiteId,
+                    Name = s.Name ?? ""
+                })
+                .ToListAsync();
+
+            return new SitesResponse(messageId)
+            {
+                Success = true,
+                Sites = sites
+            };
+        }
+
+        public async Task<RegionsResponse> GetRegions(Guid messageId)
+        {
+            var regions = await Context.TucRegions
+                .OrderBy(r => r.UcreName)
+                .Select(r => new RegionLookupDto
+                {
+                    Id = r.UcreId,
+                    Name = r.UcreName ?? ""
+                })
+                .ToListAsync();
+
+            return new RegionsResponse(messageId)
+            {
+                Success = true,
+                Regions = regions
+            };
+        }
     }
 }

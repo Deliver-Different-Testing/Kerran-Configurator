@@ -5,6 +5,7 @@ interface NavChild {
   badge?: string;
   badgeType?: string;
   active?: boolean;
+  key?: string;
 }
 
 interface NavSectionData {
@@ -16,8 +17,13 @@ interface NavSectionData {
 
 const NAV_SECTIONS: NavSectionData[] = [
   {
+    icon: '⚡', label: 'Automation', defaultOpen: true, children: [
+      { label: 'Automations', active: true, key: 'automations' },
+    ],
+  },
+  {
     icon: '⚙️', label: 'Advanced', defaultOpen: true, children: [
-      { label: 'App Setup', active: true },
+      { label: 'App Setup', active: true, key: 'appsetup' },
     ],
   },
 ];
@@ -36,7 +42,12 @@ function getUserInfo(): { initials: string; name: string; role: string } {
   return { initials: 'U', name: 'User', role: 'Admin' };
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  activePage?: string;
+  onNavigate?: (key: string) => void;
+}
+
+export default function Sidebar({ activePage = 'appsetup', onNavigate }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(
     Object.fromEntries(NAV_SECTIONS.filter(s => s.defaultOpen).map(s => [s.label, true]))
@@ -77,8 +88,9 @@ export default function Sidebar() {
                 <div className={`sub-nav${openSections[section.label] ? ' open' : ''}`}>
                   {section.children.map(child => (
                     <div
-                      className={`nav-item${child.active ? ' active' : ''}`}
+                      className={`nav-item${child.key && activePage === child.key ? ' active' : ''}`}
                       key={child.label}
+                      onClick={child.active && child.key && onNavigate ? () => onNavigate(child.key!) : undefined}
                       style={!child.active ? { opacity: 0.35, cursor: 'default' } : undefined}
                     >
                       <span className="nav-label">{child.label}</span>

@@ -581,5 +581,11 @@ public partial class TucClient
 
     public bool ShowNwagent { get; set; }
 
+    public virtual TblSite Site { get; set; }
+
+    public virtual ICollection<TblSite> TblSiteDefaultDeliveryClients { get; set; } = new List<TblSite>();
+
+    public virtual ICollection<TblSite> TblSiteDefaultPickupClients { get; set; } = new List<TblSite>();
+
     public virtual ICollection<TucEventTemplate> TucEventTemplates { get; set; } = new List<TucEventTemplate>();
 }

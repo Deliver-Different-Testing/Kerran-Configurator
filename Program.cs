@@ -8,6 +8,7 @@ using Amazon.Runtime;
 using Amazon.Runtime.CredentialManagement;
 using Amazon.S3;
 using DfrntDriveConfigurator;
+using DfrntDriveConfigurator.Core.Application.Interfaces;
 using DfrntDriveConfigurator.Core.Application.Services;
 using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
@@ -154,6 +155,15 @@ builder.Services.AddScoped<AppConfigService>();
 builder.Services.AddScoped<WorkflowTemplateService>();
 builder.Services.AddScoped<EventTypeService>();
 builder.Services.AddScoped<LookupService>();
+
+// Automation engine services
+builder.Services.AddScoped<IAutomationRepository, AutomationRepository>();
+builder.Services.AddScoped<IAutomationEngineService, AutomationEngineService>();
+builder.Services.AddScoped<IAutomationAppConfigService, AutomationAppConfigService>();
+builder.Services.AddScoped<ISmsService, AutomationSmsService>();
+builder.Services.AddScoped<ITaskService, AutomationTaskService>();
+builder.Services.AddScoped<IEventService, AutomationEventService>();
+builder.Services.AddScoped<IPlaceholderResolver, AutomationPlaceholderResolver>();
 
 // Register DespatchContext with a placeholder connection string
 // The DynamicDespatchDbContextFactory resolves the real connection per-request via tenant claims

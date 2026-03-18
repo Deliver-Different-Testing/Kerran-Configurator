@@ -15,13 +15,25 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<AccessorialWorkflowTask> AccessorialWorkflowTasks { get; set; }
 
+    public virtual DbSet<ActionExecutionDetail> ActionExecutionDetails { get; set; }
+
     public virtual DbSet<AppConfig> AppConfigs { get; set; }
+
+    public virtual DbSet<AutomationAction> AutomationActions { get; set; }
+
+    public virtual DbSet<AutomationCondition> AutomationConditions { get; set; }
+
+    public virtual DbSet<AutomationExecutionLog> AutomationExecutionLogs { get; set; }
+
+    public virtual DbSet<AutomationRule> AutomationRules { get; set; }
 
     public virtual DbSet<JobBarcode> JobBarcodes { get; set; }
 
     public virtual DbSet<JobPhoto> JobPhotos { get; set; }
 
     public virtual DbSet<JobWorkflowStep> JobWorkflowSteps { get; set; }
+
+    public virtual DbSet<TblSite> TblSites { get; set; }
 
     public virtual DbSet<TblUser> TblUsers { get; set; }
 
@@ -40,6 +52,8 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<TucJobStatus> TucJobStatuses { get; set; }
 
     public virtual DbSet<TucJobType> TucJobTypes { get; set; }
+
+    public virtual DbSet<TucRegion> TucRegions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +74,24 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.EventTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_AWT_EventType");
+        });
+
+        modelBuilder.Entity<ActionExecutionDetail>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__ActionEx__3214EC077B52906F");
+
+            entity.ToTable("ActionExecutionDetail");
+
+            entity.HasIndex(e => e.ExecutionLogId, "IX_ActionExecDetail_LogId");
+
+            entity.Property(e => e.ActionType)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.HasOne(d => d.ExecutionLog).WithMany(p => p.ActionExecutionDetails)
+                .HasForeignKey(d => d.ExecutionLogId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ActionExecDetail_ExecLog");
         });
 
         modelBuilder.Entity<AppConfig>(entity =>
@@ -84,6 +116,133 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.Description).HasMaxLength(255);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.LastModifiedBy).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<AutomationAction>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Automati__3214EC07B295DC19");
+
+            entity.Property(e => e.ActionType)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.ClientContactIds).HasMaxLength(500);
+            entity.Property(e => e.CustomEmailAddresses).HasMaxLength(1000);
+            entity.Property(e => e.CustomSmsNumbers).HasMaxLength(500);
+            entity.Property(e => e.EmailRecipient).HasMaxLength(150);
+            entity.Property(e => e.EmailSubject).HasMaxLength(500);
+            entity.Property(e => e.EventMessage).HasMaxLength(500);
+            entity.Property(e => e.IsClientSpecific).HasDefaultValue(false);
+            entity.Property(e => e.ReplyToEmail).HasMaxLength(200);
+            entity.Property(e => e.SendEmailClientContactIds).HasMaxLength(500);
+            entity.Property(e => e.SmsFixedNumber).HasMaxLength(50);
+            entity.Property(e => e.SmsRecipientType).HasMaxLength(20);
+            entity.Property(e => e.Smsmessage)
+                .HasMaxLength(500)
+                .HasColumnName("SMSMessage");
+            entity.Property(e => e.Smsrecipient)
+                .HasMaxLength(50)
+                .HasColumnName("SMSRecipient");
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+            entity.Property(e => e.TargetValue).HasMaxLength(50);
+            entity.Property(e => e.TaskTitle).HasMaxLength(500);
+
+            entity.HasOne(d => d.EventType).WithMany(p => p.AutomationActions)
+                .HasForeignKey(d => d.EventTypeId)
+                .HasConstraintName("FK_AutomationActions_EventType");
+
+            entity.HasOne(d => d.Rule).WithMany(p => p.AutomationActions)
+                .HasForeignKey(d => d.RuleId)
+                .HasConstraintName("FK__Automatio__RuleI__072DC301");
+        });
+
+        modelBuilder.Entity<AutomationCondition>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Automati__3214EC07A21D00B1");
+
+            entity.Property(e => e.ClientFilter).HasMaxLength(500);
+            entity.Property(e => e.ConditionType)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.FromRegionFilter).HasMaxLength(200);
+            entity.Property(e => e.FromSiteFilter).HasMaxLength(200);
+            entity.Property(e => e.HasAdvancedOptions).HasDefaultValue(false);
+            entity.Property(e => e.JobTypeFilter)
+                .HasMaxLength(50)
+                .HasDefaultValue("ALL");
+            entity.Property(e => e.OffsetUnit).HasMaxLength(10);
+            entity.Property(e => e.PriorityFilter)
+                .HasMaxLength(50)
+                .HasDefaultValue("ALL");
+            entity.Property(e => e.ScanTypes).HasMaxLength(500);
+            entity.Property(e => e.ScheduleReference).HasMaxLength(50);
+            entity.Property(e => e.ScheduledTimeField).HasMaxLength(20);
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+            entity.Property(e => e.SpeedFilter).HasMaxLength(200);
+            entity.Property(e => e.StatusConditionMode).HasMaxLength(20);
+            entity.Property(e => e.StatusFilter).HasMaxLength(100);
+            entity.Property(e => e.ToRegionFilter).HasMaxLength(200);
+            entity.Property(e => e.ToSiteFilter).HasMaxLength(200);
+
+            entity.HasOne(d => d.Rule).WithMany(p => p.AutomationConditions)
+                .HasForeignKey(d => d.RuleId)
+                .HasConstraintName("FK__Automatio__RuleI__0174E9AB");
+        });
+
+        modelBuilder.Entity<AutomationExecutionLog>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Automati__3214EC0705C22358");
+
+            entity.ToTable("AutomationExecutionLog");
+
+            entity.HasIndex(e => e.JobId, "IX_AutoExecLog_JobId").HasFilter("([JobId] IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.RuleId, e.ExecutedDate }, "IX_AutoExecLog_RuleId").IsDescending(false, true);
+
+            entity.Property(e => e.ExecutedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.JobNumber).HasMaxLength(50);
+            entity.Property(e => e.RuleName)
+                .IsRequired()
+                .HasMaxLength(200)
+                .HasDefaultValue("");
+            entity.Property(e => e.TriggerType)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasDefaultValue("");
+        });
+
+        modelBuilder.Entity<AutomationRule>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Automati__3214EC07F5B252F7");
+
+            entity.HasIndex(e => new { e.IsActive, e.IsDeleted }, "IX_AutomationRules_Active");
+
+            entity.Property(e => e.AllCustomers).HasDefaultValue(true);
+            entity.Property(e => e.AllSpeeds).HasDefaultValue(true);
+            entity.Property(e => e.ConditionMatchMode)
+                .IsRequired()
+                .HasMaxLength(10)
+                .HasDefaultValue("All");
+            entity.Property(e => e.CreatedBy).HasMaxLength(100);
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CustomerIds).HasMaxLength(500);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.FromRegionIds).HasMaxLength(2000);
+            entity.Property(e => e.FromSiteIds).HasMaxLength(2000);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.JobStatusIds).HasMaxLength(2000);
+            entity.Property(e => e.ModifiedBy).HasMaxLength(100);
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime");
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(200);
+            entity.Property(e => e.PriorityIds).HasMaxLength(2000);
+            entity.Property(e => e.SpeedIds).HasMaxLength(500);
+            entity.Property(e => e.ToRegionIds).HasMaxLength(2000);
+            entity.Property(e => e.ToSiteIds).HasMaxLength(2000);
         });
 
         modelBuilder.Entity<JobBarcode>(entity =>
@@ -125,9 +284,14 @@ public partial class DespatchContext : DbContext
         {
             entity.ToTable("JobWorkflowStep");
 
+            entity.HasIndex(e => e.CompletionId, "IX_JobWorkflowStep_CompletionId")
+                .IsUnique()
+                .HasFilter("([CompletionId] IS NOT NULL)");
+
             entity.HasIndex(e => e.JobId, "IX_JobWorkflowStep_JobId");
 
             entity.Property(e => e.BlobUrl).HasMaxLength(500);
+            entity.Property(e => e.CompletionId).HasMaxLength(36);
             entity.Property(e => e.DataType).HasMaxLength(20);
             entity.Property(e => e.GpsLatitude).HasColumnType("decimal(9, 6)");
             entity.Property(e => e.GpsLongitude).HasColumnType("decimal(9, 6)");
@@ -136,6 +300,58 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.TemplateDetailId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_JobWorkflowStep_TemplateDetail");
+        });
+
+        modelBuilder.Entity<TblSite>(entity =>
+        {
+            entity.HasKey(e => e.SiteId)
+                .IsClustered(false)
+                .HasAnnotation("SqlServer:FillFactor", 80);
+
+            entity.ToTable("tblSite");
+
+            entity.HasIndex(e => e.DefaultDeliveryClientId, "DefaultDeliveryClientID");
+
+            entity.HasIndex(e => e.DefaultPickupClientId, "DefaultPickupClientID");
+
+            entity.HasIndex(e => e.XeroTrackingOption, "IX_XeroTrackingOption");
+
+            entity.HasIndex(e => e.Name, "IX_tblSite_Name")
+                .IsUnique()
+                .HasFillFactor(80);
+
+            entity.Property(e => e.SiteId).HasColumnName("SiteID");
+            entity.Property(e => e.AirportSuburbId).HasColumnName("AirportSuburbID");
+            entity.Property(e => e.AreaCode)
+                .IsRequired()
+                .HasMaxLength(2);
+            entity.Property(e => e.Created).HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.DefaultDeliveryClientId).HasColumnName("DefaultDeliveryClientID");
+            entity.Property(e => e.DefaultPickupClientId).HasColumnName("DefaultPickupClientID");
+            entity.Property(e => e.DefaultSalesAccountCode).HasMaxLength(50);
+            entity.Property(e => e.LastModified).HasColumnType("datetime");
+            entity.Property(e => e.LastModifiedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Notes).HasColumnType("ntext");
+            entity.Property(e => e.OldSalesAccountCode).HasMaxLength(50);
+            entity.Property(e => e.XeroTrackingOption).HasMaxLength(50);
+
+            entity.HasOne(d => d.DefaultDeliveryClient).WithMany(p => p.TblSiteDefaultDeliveryClients)
+                .HasForeignKey(d => d.DefaultDeliveryClientId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_tblSite_tucClient1");
+
+            entity.HasOne(d => d.DefaultPickupClient).WithMany(p => p.TblSiteDefaultPickupClients)
+                .HasForeignKey(d => d.DefaultPickupClientId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_tblSite_tucClient");
         });
 
         modelBuilder.Entity<TblUser>(entity =>
@@ -664,6 +880,11 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.WebServicePassword).HasMaxLength(100);
             entity.Property(e => e.WhenBookingJobDisplayFullName).HasAnnotation("Relational:DefaultConstraintName", "DF_tucClient_WhenBookingJobDisplayFullName");
             entity.Property(e => e.XeroId).HasMaxLength(50);
+
+            entity.HasOne(d => d.Site).WithMany(p => p.TucClients)
+                .HasForeignKey(d => d.SiteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_tucClient_tblSite");
         });
 
         modelBuilder.Entity<TucEventTemplate>(entity =>
@@ -679,6 +900,9 @@ public partial class DespatchContext : DbContext
             entity.HasIndex(e => e.UcetSpeedId, "IX_tucEventTemplate_Speed");
 
             entity.Property(e => e.UcetId).HasColumnName("ucetID");
+            entity.Property(e => e.UcetCategory)
+                .HasMaxLength(50)
+                .HasColumnName("ucetCategory");
             entity.Property(e => e.UcetClientId).HasColumnName("ucetClientID");
             entity.Property(e => e.UcetCreated)
                 .HasDefaultValueSql("(getdate())")
@@ -729,6 +953,7 @@ public partial class DespatchContext : DbContext
             entity.HasIndex(e => e.UcetdTemplateId, "IX_tucEventTemplateDetail_Template");
 
             entity.Property(e => e.UcetdId).HasColumnName("ucetdID");
+            entity.Property(e => e.UcetdConfig).HasColumnName("ucetdConfig");
             entity.Property(e => e.UcetdConfigJson).HasColumnName("ucetdConfigJson");
             entity.Property(e => e.UcetdContext)
                 .IsRequired()
@@ -795,14 +1020,17 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => new { e.EventTypeId, e.EventTypeGroupId }, "UQ_TucEventType_EventTypeGroups").IsUnique();
 
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.Sequence).HasDefaultValue(1);
-            entity.Property(e => e.Kind).HasMaxLength(10).HasDefaultValue("form");
-            entity.Property(e => e.Url).HasMaxLength(500);
-            entity.Property(e => e.DisplayName).HasMaxLength(100);
-            entity.Property(e => e.Description).HasMaxLength(500);
-            entity.Property(e => e.Icon).HasMaxLength(10);
             entity.Property(e => e.Color).HasMaxLength(10);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.DisplayName).HasMaxLength(100);
+            entity.Property(e => e.Icon).HasMaxLength(10);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.Kind)
+                .IsRequired()
+                .HasMaxLength(10)
+                .HasDefaultValue("form");
+            entity.Property(e => e.Sequence).HasDefaultValue(1);
+            entity.Property(e => e.Url).HasMaxLength(500);
 
             entity.HasOne(d => d.EventTypeGroup).WithMany(p => p.TucEventTypeEventTypeGroups)
                 .HasForeignKey(d => d.EventTypeGroupId)
@@ -922,6 +1150,25 @@ public partial class DespatchContext : DbContext
                 .HasColumnName("ucjtUnitRate");
             entity.Property(e => e.WebJobEntry).HasAnnotation("Relational:DefaultConstraintName", "DF_tucJobType_WebJobEntry");
             entity.Property(e => e.WebServiceEntry).HasAnnotation("Relational:DefaultConstraintName", "DF_tucJobType_WebServiceEntry");
+        });
+
+        modelBuilder.Entity<TucRegion>(entity =>
+        {
+            entity.HasKey(e => e.UcreId)
+                .IsClustered(false)
+                .HasAnnotation("SqlServer:FillFactor", 80);
+
+            entity.ToTable("tucRegion");
+
+            entity.Property(e => e.UcreId).HasColumnName("ucreID");
+            entity.Property(e => e.UcreDescription)
+                .HasMaxLength(150)
+                .IsUnicode(false)
+                .HasColumnName("ucreDescription");
+            entity.Property(e => e.UcreName)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("ucreName");
         });
 
         OnModelCreatingPartial(modelBuilder);

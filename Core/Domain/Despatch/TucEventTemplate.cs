@@ -29,6 +29,10 @@ public partial class TucEventTemplate
 
     public bool UcetMirrorToAgentPortal { get; set; }
 
+    public string UcetCategory { get; set; }
+
+    public bool MirrorToAgentPortal { get; set; }
+
     public virtual ICollection<TucEventTemplateDetail> TucEventTemplateDetails { get; set; } = new List<TucEventTemplateDetail>();
 
     public virtual TucClient UcetClient { get; set; }

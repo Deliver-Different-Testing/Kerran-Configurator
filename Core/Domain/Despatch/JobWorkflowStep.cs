@@ -27,5 +27,7 @@ public partial class JobWorkflowStep
 
     public decimal? GpsLongitude { get; set; }
 
+    public string CompletionId { get; set; }
+
     public virtual TucEventTemplateDetail TemplateDetail { get; set; }
 }

@@ -23,7 +23,27 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[ActionExecutionDetail]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[AppConfig]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[AutomationActions]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[AutomationConditions]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[AutomationExecutionLog]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[AutomationRules]",
          "ObjectType": 0
       },
       {
@@ -36,6 +56,10 @@
       },
       {
          "Name": "[dbo].[JobWorkflowStep]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblSite]",
          "ObjectType": 0
       },
       {
@@ -72,6 +96,10 @@
       },
       {
          "Name": "[dbo].[tucJobType]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucRegion]",
          "ObjectType": 0
       }
    ],

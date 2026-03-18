@@ -29,4 +29,28 @@ namespace DfrntDriveConfigurator.Core.Application.Dtos.Lookup
         public ServicesResponse(Guid messageId) : base(messageId) { }
         public List<ServiceLookupDto> Services { get; set; } = new();
     }
+
+    public class SiteLookupDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+
+    public class RegionLookupDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+
+    public class SitesResponse : BaseResponse
+    {
+        public SitesResponse(Guid messageId) : base(messageId) { }
+        public List<SiteLookupDto> Sites { get; set; } = new();
+    }
+
+    public class RegionsResponse : BaseResponse
+    {
+        public RegionsResponse(Guid messageId) : base(messageId) { }
+        public List<RegionLookupDto> Regions { get; set; } = new();
+    }
 }

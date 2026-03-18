@@ -90,6 +90,8 @@ export const eventTypeApi = {
 export const lookupApi = {
   getClients: () => request<{ clients: ClientLookupDto[] }>('/lookup/clients'),
   getServices: () => request<{ services: ServiceLookupDto[] }>('/lookup/services'),
+  getSites: () => request<{ sites: Array<{ id: number; name: string }> }>('/lookup/sites'),
+  getRegions: () => request<{ regions: Array<{ id: number; name: string }> }>('/lookup/regions'),
   searchClients: (q?: string, limit?: number) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);

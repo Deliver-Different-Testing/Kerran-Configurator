@@ -62,5 +62,37 @@ namespace DfrntDriveConfigurator.Api.Controllers
                 throw;
             }
         }
+
+        [HttpGet("sites")]
+        public async Task<IActionResult> GetSites()
+        {
+            try
+            {
+                Guid messageId = Guid.NewGuid();
+                Log.Information($"({Request.Method} {Request.Path}): {messageId}");
+                return HandleResponseNoLogging(await _lookupService.GetSites(messageId));
+            }
+            catch (Exception e)
+            {
+                Log.Error(e.InnerException == null ? e.ToString() : e + Environment.NewLine + e.InnerException);
+                throw;
+            }
+        }
+
+        [HttpGet("regions")]
+        public async Task<IActionResult> GetRegions()
+        {
+            try
+            {
+                Guid messageId = Guid.NewGuid();
+                Log.Information($"({Request.Method} {Request.Path}): {messageId}");
+                return HandleResponseNoLogging(await _lookupService.GetRegions(messageId));
+            }
+            catch (Exception e)
+            {
+                Log.Error(e.InnerException == null ? e.ToString() : e + Environment.NewLine + e.InnerException);
+                throw;
+            }
+        }
     }
 }

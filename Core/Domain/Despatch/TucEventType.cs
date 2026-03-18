@@ -15,6 +15,8 @@ public partial class TucEventType
 
     public virtual ICollection<AccessorialWorkflowTask> AccessorialWorkflowTasks { get; set; } = new List<AccessorialWorkflowTask>();
 
+    public virtual ICollection<AutomationAction> AutomationActions { get; set; } = new List<AutomationAction>();
+
     public virtual ICollection<TucEventTemplateDetail> TucEventTemplateDetails { get; set; } = new List<TucEventTemplateDetail>();
 
     public virtual ICollection<TucEventTypeEventTypeGroup> TucEventTypeEventTypeGroups { get; set; } = new List<TucEventTypeEventTypeGroup>();

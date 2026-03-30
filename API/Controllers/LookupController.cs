@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -33,6 +34,26 @@ namespace DfrntDriveConfigurator.Api.Controllers
                 }
 
                 return HandleResponseNoLogging(await _lookupService.GetClients(messageId));
+            }
+            catch (Exception e)
+            {
+                Log.Error(e.InnerException == null ? e.ToString() : e + Environment.NewLine + e.InnerException);
+                throw;
+            }
+        }
+
+        [HttpGet("clients/by-ids")]
+        public async Task<IActionResult> GetClientsByIds([FromQuery] string ids)
+        {
+            try
+            {
+                Guid messageId = Guid.NewGuid();
+                var idList = (ids ?? "")
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(s => int.TryParse(s, out _))
+                    .Select(int.Parse)
+                    .ToList();
+                return HandleResponseNoLogging(await _lookupService.GetClientsByIds(idList, messageId));
             }
             catch (Exception e)
             {

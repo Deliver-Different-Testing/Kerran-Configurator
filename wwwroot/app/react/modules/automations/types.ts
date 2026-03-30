@@ -27,11 +27,21 @@ export interface RegionOption {
   name: string;
 }
 
+export type JobRelationshipFilter = 'all' | 'parent_only' | 'child_only' | 'standalone_only';
+
+export const JOB_RELATIONSHIP_OPTIONS: { value: JobRelationshipFilter; label: string; description: string }[] = [
+  { value: 'all', label: 'All jobs', description: 'Applies to parent, child, and standalone jobs' },
+  { value: 'parent_only', label: 'Parent jobs only', description: 'Only applies to parent jobs (jobs that have children)' },
+  { value: 'child_only', label: 'Child jobs only', description: 'Only applies to child jobs (pickup, flight, delivery legs)' },
+  { value: 'standalone_only', label: 'Standalone jobs only', description: 'Only applies to jobs that are not part of a parent/child relationship' },
+];
+
 export interface AutomationScope {
   allCustomers: boolean;
   customerIds: string[];
   allSpeeds: boolean;
   speedIds: string[];
+  jobRelationship: JobRelationshipFilter;
   // Advanced scope filters — all use "apply to all" + multi-select pattern
   allJobStatuses: boolean;
   jobStatusIds: string[];
@@ -206,7 +216,9 @@ export type ActionType =
   | 'create_task'
   | 'complete_task'
   | 'trigger_notification'
-  | 'send_sms';
+  | 'send_sms'
+  | 'send_email'
+  | 'wait_for_condition';
 
 export const ACTION_TYPE_OPTIONS: { value: ActionType; label: string; icon: string }[] = [
   { value: 'update_job_status', label: 'Update job status', icon: '📊' },
@@ -214,7 +226,11 @@ export const ACTION_TYPE_OPTIONS: { value: ActionType; label: string; icon: stri
   { value: 'complete_task', label: 'Complete task', icon: '✅' },
   { value: 'trigger_notification', label: 'Trigger notification', icon: '🔔' },
   { value: 'send_sms', label: 'Send text message (SMS)', icon: '💬' },
+  { value: 'send_email', label: 'Send email', icon: '📧' },
 ];
+
+/** Shown in a separate "Add Wait Condition" button, not in the main action dropdown */
+export const WAIT_CONDITION_OPTION = { value: 'wait_for_condition' as const, label: 'Wait for condition', icon: '⏳' };
 
 export type SmsRecipientType = 'customer_contact' | 'driver' | 'fixed_number';
 
@@ -222,6 +238,74 @@ export const SMS_RECIPIENT_OPTIONS: { value: SmsRecipientType; label: string }[]
   { value: 'customer_contact', label: 'Customer contact' },
   { value: 'driver', label: 'Driver' },
   { value: 'fixed_number', label: 'Fixed phone number' },
+];
+
+export type EmailRecipientType = 'tracking_email' | 'pod_email' | 'client_contact_email' | 'agent_email' | 'custom';
+
+export const EMAIL_RECIPIENT_OPTIONS: { value: EmailRecipientType; label: string }[] = [
+  { value: 'tracking_email', label: 'Tracking email' },
+  { value: 'pod_email', label: 'Proof of delivery email' },
+  { value: 'client_contact_email', label: 'Client contact email' },
+  { value: 'agent_email', label: 'Agent email' },
+  { value: 'custom', label: 'Custom email address(es)' },
+];
+
+export interface ReportOption {
+  key: string;
+  name: string;
+  description?: string;
+}
+
+/** All available merge fields grouped by category — matches AdminManager's 63+ fields */
+export const TEMPLATE_FIELDS: { category: string; fields: string[] }[] = [
+  {
+    category: 'Job',
+    fields: [
+      'JobNumber', 'ClientName', 'Contact', 'ClientRefA', 'ClientRefB', 'ClientRefC',
+      'Date', 'Time', 'Quantity', 'Weight', 'JobSpeed', 'ConNote',
+      'EncryptedID', 'EncryptedParentID', 'CompletedDate', 'CompletedTime',
+    ],
+  },
+  {
+    category: 'Pickup',
+    fields: [
+      'FromAddress', 'FromSuburbCity', 'FromCityState',
+      'PickupCompany', 'PickupSuite', 'PickupStreetNumber', 'PickupStreetName',
+      'PickupCity', 'PickupState', 'PickupZip',
+      'PickupContactName', 'PickupContactPhone', 'PickupNotes',
+    ],
+  },
+  {
+    category: 'Delivery',
+    fields: [
+      'ToAddress', 'ToSuburbCity', 'ToCityState',
+      'DeliveryCompany', 'DeliverySuite', 'DeliveryStreetNumber', 'DeliveryStreetName',
+      'DeliveryCity', 'DeliveryState', 'DeliveryZip',
+      'DeliveryContactName', 'DeliveryContactPhone', 'DeliveryNotes', 'DeliverByTime',
+    ],
+  },
+  {
+    category: 'Parent Job',
+    fields: [
+      'ParentJobNumber',
+      'ParentPickupCompany', 'ParentPickupSuite', 'ParentPickupStreetNumber',
+      'ParentPickupStreetName', 'ParentPickupCity', 'ParentPickupState', 'ParentPickupZip',
+      'ParentDeliveryCompany', 'ParentDeliverySuite', 'ParentDeliveryStreetNumber',
+      'ParentDeliveryStreetName', 'ParentDeliveryCity', 'ParentDeliveryState', 'ParentDeliveryZip',
+    ],
+  },
+  {
+    category: 'Flight',
+    fields: ['Airline', 'FlightNumber', 'FlightETD', 'FlightETA', 'ToAirport'],
+  },
+  {
+    category: 'Users',
+    fields: ['CourierName', 'AgentName'],
+  },
+  {
+    category: 'Other',
+    fields: ['InboundUrl', 'PODName'],
+  },
 ];
 
 interface BaseAction {
@@ -267,12 +351,39 @@ export interface SendSmsAction extends BaseAction {
   templateId?: string;
 }
 
+/**
+ * A "wait for condition" step inserted between actions in a workflow.
+ * Pauses execution until the specified condition is met before proceeding.
+ */
+export interface WaitForConditionAction extends BaseAction {
+  type: 'wait_for_condition';
+  waitConditionType: ConditionType;
+  waitStatusMode?: StatusConditionMode;
+  waitStatusId?: string;
+  waitScheduledTimeField?: ScheduledTimeField;
+  waitOffsetValue?: number;
+  waitOffsetUnit?: TimeUnit;
+  waitScanTypes?: ScanType[];
+}
+
+export interface SendEmailAction extends BaseAction {
+  type: 'send_email';
+  emailRecipient: EmailRecipientType;
+  emailSubject: string;
+  emailTemplate: string;
+  replyToEmail?: string;
+  customEmailAddresses?: string;
+  attachReportKey?: string;
+}
+
 export type Action =
   | UpdateJobStatusAction
   | CreateTaskAction
   | CompleteTaskAction
   | TriggerNotificationAction
-  | SendSmsAction;
+  | SendSmsAction
+  | SendEmailAction
+  | WaitForConditionAction;
 
 // ============================================
 // AUTOMATION RULE
@@ -345,6 +456,12 @@ export function getAutomationIcons(rule: AutomationRule): string {
       case 'send_sms':
         if (!icons.includes('💬')) icons.push('💬');
         break;
+      case 'send_email':
+        if (!icons.includes('📧')) icons.push('📧');
+        break;
+      case 'wait_for_condition':
+        if (!icons.includes('⏳')) icons.push('⏳');
+        break;
     }
   }
   return icons.join(' ');
@@ -395,7 +512,7 @@ export function getScopeSummary(
 
   if (!scope.allCustomers && scope.customerIds.length > 0) {
     const names = scope.customerIds
-      .map(id => customers.find(c => c.id === id)?.shortName ?? id)
+      .map(id => customers.find(c => c.id === id)?.name ?? id)
       .slice(0, 3);
     customerText = scope.customerIds.length > 3
       ? `${names.join(', ')} +${scope.customerIds.length - 3} more`
@@ -439,6 +556,8 @@ export function createEmptyAction(type: ActionType): Action {
     case 'complete_task': return { ...base, type: 'complete_task', taskTemplateId: '' };
     case 'trigger_notification': return { ...base, type: 'trigger_notification', notificationTemplateId: '' };
     case 'send_sms': return { ...base, type: 'send_sms', recipientType: 'customer_contact', messageContent: '' };
+    case 'send_email': return { ...base, type: 'send_email', emailRecipient: 'tracking_email', emailSubject: '', emailTemplate: '' };
+    case 'wait_for_condition': return { ...base, type: 'wait_for_condition', waitConditionType: 'status' };
     default: return { ...base, type: 'update_job_status', statusId: '' };
   }
 }
@@ -452,6 +571,7 @@ export function createEmptyAutomation(): Omit<AutomationRule, 'id' | 'createdAt'
       customerIds: [],
       allSpeeds: true,
       speedIds: [],
+      jobRelationship: 'all',
       allJobStatuses: false,
       jobStatusIds: [],
       allPriorities: false,
@@ -537,6 +657,15 @@ export function getNaturalLanguageSummary(
           : `${a.fixedPhoneNumber || 'a fixed number'}`;
         const msg = a.messageContent ? ` saying "${a.messageContent.slice(0, 60)}${a.messageContent.length > 60 ? '...' : ''}"` : '';
         return `send an SMS to ${recipient}${msg}`;
+      }
+      case 'send_email': {
+        const emailRecip = EMAIL_RECIPIENT_OPTIONS.find(o => o.value === a.emailRecipient)?.label ?? 'recipient';
+        const subj = a.emailSubject ? ` with subject "${a.emailSubject.slice(0, 40)}${a.emailSubject.length > 40 ? '...' : ''}"` : '';
+        return `send an email to ${emailRecip}${subj}`;
+      }
+      case 'wait_for_condition': {
+        const condLabel = CONDITION_TYPE_OPTIONS.find(o => o.value === a.waitConditionType)?.label ?? 'a condition';
+        return `wait for ${condLabel}`;
       }
       default: return 'perform an unknown action';
     }

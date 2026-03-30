@@ -17,8 +17,7 @@ namespace DfrntDriveConfigurator.Api.Controllers;
 [Route("api/automations")]
 [Authorize(Policy = "AdminOnly")]
 public class AutomationController(
-    IAutomationRepository repository,
-    IAutomationEngineService engineService) : ControllerBase
+    IAutomationRepository repository) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<AutomationRuleDto>>> GetAll(
@@ -53,6 +52,7 @@ public class AutomationController(
             CustomerIds = request.Scope.CustomerIds.Any() ? string.Join(",", request.Scope.CustomerIds) : null,
             AllSpeeds = request.Scope.AllSpeeds,
             SpeedIds = request.Scope.SpeedIds.Any() ? string.Join(",", request.Scope.SpeedIds) : null,
+            JobRelationship = request.Scope.JobRelationship,
             AllJobStatuses = request.Scope.AllJobStatuses,
             JobStatusIds = request.Scope.JobStatusIds.Any() ? string.Join(",", request.Scope.JobStatusIds) : null,
             AllPriorities = request.Scope.AllPriorities,
@@ -98,7 +98,20 @@ public class AutomationController(
                 NotificationTemplateId = a.NotificationTemplateId,
                 SmsRecipientType = a.SmsRecipientType,
                 SmsFixedNumber = a.SmsFixedNumber,
-                SmsMessageContent = a.SmsMessageContent
+                SmsMessageContent = a.SmsMessageContent,
+                EmailSubject = a.EmailSubject,
+                EmailTemplate = a.EmailTemplate,
+                ReplyToEmail = a.ReplyToEmail,
+                EmailRecipient = a.EmailRecipient,
+                CustomEmailAddresses = a.CustomEmailAddresses,
+                AttachReportKey = a.AttachReportKey,
+                WaitConditionType = a.WaitConditionType,
+                WaitStatusMode = a.WaitStatusMode,
+                WaitStatusId = a.WaitStatusId,
+                WaitScheduledTimeField = a.WaitScheduledTimeField,
+                WaitOffsetValue = a.WaitOffsetValue,
+                WaitOffsetUnit = a.WaitOffsetUnit,
+                WaitScanTypes = a.WaitScanTypes is not null ? string.Join(",", a.WaitScanTypes) : null,
             });
         }
 
@@ -170,7 +183,20 @@ public class AutomationController(
                 NotificationTemplateId = a.NotificationTemplateId,
                 SmsRecipientType = a.SmsRecipientType,
                 SmsFixedNumber = a.SmsFixedNumber,
-                SmsMessageContent = a.SmsMessageContent
+                SmsMessageContent = a.SmsMessageContent,
+                EmailSubject = a.EmailSubject,
+                EmailTemplate = a.EmailTemplate,
+                ReplyToEmail = a.ReplyToEmail,
+                EmailRecipient = a.EmailRecipient,
+                CustomEmailAddresses = a.CustomEmailAddresses,
+                AttachReportKey = a.AttachReportKey,
+                WaitConditionType = a.WaitConditionType,
+                WaitStatusMode = a.WaitStatusMode,
+                WaitStatusId = a.WaitStatusId,
+                WaitScheduledTimeField = a.WaitScheduledTimeField,
+                WaitOffsetValue = a.WaitOffsetValue,
+                WaitOffsetUnit = a.WaitOffsetUnit,
+                WaitScanTypes = a.WaitScanTypes is not null ? string.Join(",", a.WaitScanTypes) : null,
             });
         }
 
@@ -192,18 +218,58 @@ public class AutomationController(
         return Ok();
     }
 
-    [HttpPost("{id:int}/test")]
-    public async Task<ActionResult<AutomationExecutionLogDto>> Test(int id, [FromQuery] int jobId, CancellationToken ct)
+    [HttpGet("merge-fields")]
+    public ActionResult<Dictionary<string, string[]>> GetMergeFields()
     {
-        var result = await engineService.TestRuleAsync(id, jobId, ct);
-        return Ok(result);
+        // Matches AdminManager's 63+ template fields, grouped by category
+        var fields = new Dictionary<string, string[]>
+        {
+            ["Job"] = [
+                "JobNumber", "ClientName", "Contact", "ClientRefA", "ClientRefB", "ClientRefC",
+                "Date", "Time", "Quantity", "Weight", "JobSpeed", "ConNote",
+                "EncryptedID", "EncryptedParentID", "CompletedDate", "CompletedTime"
+            ],
+            ["Pickup"] = [
+                "FromAddress", "FromSuburbCity", "FromCityState",
+                "PickupCompany", "PickupSuite", "PickupStreetNumber", "PickupStreetName",
+                "PickupCity", "PickupState", "PickupZip",
+                "PickupContactName", "PickupContactPhone", "PickupNotes"
+            ],
+            ["Delivery"] = [
+                "ToAddress", "ToSuburbCity", "ToCityState",
+                "DeliveryCompany", "DeliverySuite", "DeliveryStreetNumber", "DeliveryStreetName",
+                "DeliveryCity", "DeliveryState", "DeliveryZip",
+                "DeliveryContactName", "DeliveryContactPhone", "DeliveryNotes", "DeliverByTime"
+            ],
+            ["Parent Job"] = [
+                "ParentJobNumber",
+                "ParentPickupCompany", "ParentPickupSuite", "ParentPickupStreetNumber",
+                "ParentPickupStreetName", "ParentPickupCity", "ParentPickupState", "ParentPickupZip",
+                "ParentDeliveryCompany", "ParentDeliverySuite", "ParentDeliveryStreetNumber",
+                "ParentDeliveryStreetName", "ParentDeliveryCity", "ParentDeliveryState", "ParentDeliveryZip"
+            ],
+            ["Flight"] = [
+                "Airline", "FlightNumber", "FlightETD", "FlightETA", "ToAirport"
+            ],
+            ["Users"] = [
+                "CourierName", "AgentName"
+            ],
+            ["Other"] = [
+                "InboundUrl", "PODName"
+            ],
+        };
+        return Ok(fields);
     }
 
-    [HttpPost("evaluate")]
-    public async Task<IActionResult> Evaluate([FromBody] AutomationEvent automationEvent, CancellationToken ct)
+    [HttpGet("available-reports")]
+    public ActionResult<List<object>> GetAvailableReports()
     {
-        await engineService.EvaluateEventAsync(automationEvent, ct);
-        return Accepted();
+        // Hardcoded for now — will integrate with DeliverDifferentReporting catalog API later
+        var reports = new[]
+        {
+            new { key = "pod", name = "POD Report", description = "Proof of delivery report" }
+        };
+        return Ok(reports);
     }
 
     private static AutomationRuleDto MapToDto(AutomationRule rule) => new()
@@ -219,6 +285,7 @@ public class AutomationController(
             CustomerIds = ParseIntList(rule.CustomerIds),
             AllSpeeds = rule.AllSpeeds,
             SpeedIds = ParseIntList(rule.SpeedIds),
+            JobRelationship = rule.JobRelationship,
             AllJobStatuses = rule.AllJobStatuses,
             JobStatusIds = ParseIntList(rule.JobStatusIds),
             AllPriorities = rule.AllPriorities,
@@ -259,7 +326,20 @@ public class AutomationController(
             NotificationTemplateId = a.NotificationTemplateId,
             SmsRecipientType = a.SmsRecipientType,
             SmsFixedNumber = a.SmsFixedNumber,
-            SmsMessageContent = a.SmsMessageContent
+            SmsMessageContent = a.SmsMessageContent,
+            EmailSubject = a.EmailSubject,
+            EmailTemplate = a.EmailTemplate,
+            ReplyToEmail = a.ReplyToEmail,
+            EmailRecipient = a.EmailRecipient,
+            CustomEmailAddresses = a.CustomEmailAddresses,
+            AttachReportKey = a.AttachReportKey,
+            WaitConditionType = a.WaitConditionType,
+            WaitStatusMode = a.WaitStatusMode,
+            WaitStatusId = a.WaitStatusId,
+            WaitScheduledTimeField = a.WaitScheduledTimeField,
+            WaitOffsetValue = a.WaitOffsetValue,
+            WaitOffsetUnit = a.WaitOffsetUnit,
+            WaitScanTypes = a.WaitScanTypes?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
         }).ToList(),
         CreatedDate = rule.CreatedDate,
         ModifiedDate = rule.ModifiedDate

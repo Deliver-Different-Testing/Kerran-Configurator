@@ -61,6 +61,8 @@ public partial class AutomationRule
 
     public int? TimeThreshold { get; set; }
 
+    public string JobRelationship { get; set; }
+
     public virtual ICollection<AutomationAction> AutomationActions { get; set; } = new List<AutomationAction>();
 
     public virtual ICollection<AutomationCondition> AutomationConditions { get; set; } = new List<AutomationCondition>();

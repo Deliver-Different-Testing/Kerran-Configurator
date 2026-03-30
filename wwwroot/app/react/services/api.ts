@@ -98,6 +98,8 @@ export const lookupApi = {
     if (limit) params.set('limit', String(limit));
     return request<{ clients: ClientLookupDto[] }>(`/lookup/clients?${params}`);
   },
+  getClientsByIds: (ids: number[]) =>
+    request<{ clients: ClientLookupDto[] }>(`/lookup/clients/by-ids?ids=${ids.join(',')}`),
   searchServices: (q?: string, limit?: number) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);

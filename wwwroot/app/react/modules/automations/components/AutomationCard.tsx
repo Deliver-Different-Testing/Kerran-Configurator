@@ -7,6 +7,7 @@ import type {
   JobStatus,
   TaskTemplate,
   NotificationTemplate,
+  ReportOption,
 } from '../types';
 import {
   getAutomationIcons,
@@ -25,6 +26,8 @@ interface AutomationCardProps {
   jobStatuses: JobStatus[];
   taskTemplates: TaskTemplate[];
   notificationTemplates: NotificationTemplate[];
+  availableReports: ReportOption[];
+  onSearchCustomers?: (query: string) => Promise<import('../types').CustomerOption[]>;
   isExpanded: boolean;
   isNew?: boolean;
   onToggle: () => void;
@@ -42,6 +45,8 @@ export function AutomationCard({
   jobStatuses,
   taskTemplates,
   notificationTemplates,
+  availableReports,
+  onSearchCustomers,
   isExpanded,
   isNew = false,
   onToggle,
@@ -69,6 +74,8 @@ export function AutomationCard({
           jobStatuses={jobStatuses}
           taskTemplates={taskTemplates}
           notificationTemplates={notificationTemplates}
+          availableReports={availableReports}
+          onSearchCustomers={onSearchCustomers}
           onSave={onSave}
           onCancel={onCancel || onToggle}
           isNew={true}
@@ -123,6 +130,8 @@ export function AutomationCard({
           jobStatuses={jobStatuses}
           taskTemplates={taskTemplates}
           notificationTemplates={notificationTemplates}
+          availableReports={availableReports}
+          onSearchCustomers={onSearchCustomers}
           onSave={onSave}
           onCancel={onToggle}
         />

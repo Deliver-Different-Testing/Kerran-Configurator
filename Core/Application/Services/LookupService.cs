@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Lookup;
@@ -55,6 +56,24 @@ namespace DfrntDriveConfigurator.Core.Application.Services
                 Success = true,
                 Clients = clients
             };
+        }
+
+        public async Task<ClientsResponse> GetClientsByIds(List<int> ids, Guid messageId)
+        {
+            if (ids.Count == 0)
+                return new ClientsResponse(messageId) { Success = true, Clients = [] };
+
+            var clients = await Context.TucClients
+                .Where(c => ids.Contains(c.UcclId))
+                .Select(c => new ClientLookupDto
+                {
+                    Id = c.UcclId,
+                    Name = c.UcclName ?? "",
+                    Code = c.UcclCode ?? ""
+                })
+                .ToListAsync();
+
+            return new ClientsResponse(messageId) { Success = true, Clients = clients };
         }
 
         public async Task<ServicesResponse> GetServices(Guid messageId)

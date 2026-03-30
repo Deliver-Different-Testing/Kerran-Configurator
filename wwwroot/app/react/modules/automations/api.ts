@@ -18,6 +18,9 @@ import type {
   Action,
   ConditionMatchMode,
   AutomationScope,
+  EmailRecipientType,
+  ReportOption,
+  JobRelationshipFilter,
 } from './types';
 import { lookupApi, workflowApi, eventTypeApi } from '../../services/api';
 
@@ -58,6 +61,7 @@ export interface ApiAutomationRule {
     customerIds: number[];
     allSpeeds: boolean;
     speedIds: number[];
+    jobRelationship: string | null;
     allJobStatuses: boolean;
     jobStatusIds: number[];
     allPriorities: boolean;
@@ -105,6 +109,20 @@ export interface ApiAction {
   smsRecipientType: string | null;
   smsFixedNumber: string | null;
   smsMessageContent: string | null;
+  emailSubject: string | null;
+  emailTemplate: string | null;
+  replyToEmail: string | null;
+  emailRecipient: string | null;
+  customEmailAddresses: string | null;
+  attachReportKey: string | null;
+  // Wait condition fields (for workflow chaining)
+  waitConditionType: string | null;
+  waitStatusMode: string | null;
+  waitStatusId: number | null;
+  waitScheduledTimeField: string | null;
+  waitOffsetValue: number | null;
+  waitOffsetUnit: string | null;
+  waitScanTypes: string[] | null;
 }
 
 export interface ApiExecutionLog {
@@ -222,8 +240,39 @@ export async function fetchExecutionLogs(params?: {
 // ---------------------------------------------------------------------------
 
 export async function fetchCustomers(): Promise<CustomerOption[]> {
+  // NOTE: This loads ALL customers. Use searchCustomers() for large datasets.
   try {
     const data = await lookupApi.getClients();
+    return data.clients.map(c => ({
+      id: String(c.id),
+      name: c.name,
+      shortName: c.code || c.name,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Server-side customer search — returns up to `limit` matches for the query. */
+export async function searchCustomers(query: string, limit = 20): Promise<CustomerOption[]> {
+  try {
+    const data = await lookupApi.searchClients(query, limit);
+    return data.clients.map(c => ({
+      id: String(c.id),
+      name: c.name,
+      shortName: c.code || c.name,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch specific customers by ID — for resolving selected IDs to display names. */
+export async function fetchCustomersByIds(ids: string[]): Promise<CustomerOption[]> {
+  if (ids.length === 0) return [];
+  try {
+    const numericIds = ids.map(Number).filter(n => !isNaN(n));
+    const data = await lookupApi.getClientsByIds(numericIds);
     return data.clients.map(c => ({
       id: String(c.id),
       name: c.name,
@@ -309,6 +358,14 @@ export async function fetchRegions(): Promise<RegionOption[]> {
   }
 }
 
+export async function fetchAvailableReports(): Promise<ReportOption[]> {
+  try {
+    return await request<ReportOption[]>('/automations/available-reports');
+  } catch {
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // DTO <-> Frontend type mappers
 // ---------------------------------------------------------------------------
@@ -325,6 +382,7 @@ export function apiRuleToFrontend(api: ApiAutomationRule): AutomationRule {
       customerIds: api.scope.customerIds.map(String),
       allSpeeds: api.scope.allSpeeds,
       speedIds: api.scope.speedIds.map(String),
+      jobRelationship: (api.scope.jobRelationship as JobRelationshipFilter) ?? 'all',
       allJobStatuses: api.scope.allJobStatuses ?? false,
       jobStatusIds: (api.scope.jobStatusIds ?? []).map(String),
       allPriorities: api.scope.allPriorities ?? false,
@@ -427,6 +485,29 @@ function mapStatusMode(s: string | null): 'any_change' | 'changes_to' | 'leaves'
   }
 }
 
+function mapEmailRecipient(s: string | null): string {
+  if (!s) return 'tracking_email';
+  switch (s) {
+    case 'TrackingEmail': return 'tracking_email';
+    case 'ProofOfDeliveryEmail': return 'pod_email';
+    case 'ClientContactEmail': return 'client_contact_email';
+    case 'AgentEmail': return 'agent_email';
+    case 'Custom': return 'custom';
+    default: return 'tracking_email';
+  }
+}
+
+function mapEmailRecipientToApi(s: string): string {
+  switch (s) {
+    case 'tracking_email': return 'TrackingEmail';
+    case 'pod_email': return 'ProofOfDeliveryEmail';
+    case 'client_contact_email': return 'ClientContactEmail';
+    case 'agent_email': return 'AgentEmail';
+    case 'custom': return 'Custom';
+    default: return 'TrackingEmail';
+  }
+}
+
 function apiActionToFrontend(a: ApiAction): Action {
   const base = {
     id: a.id != null ? String(a.id) : `action-${Date.now()}-${Math.random()}`,
@@ -471,6 +552,31 @@ function apiActionToFrontend(a: ApiAction): Action {
         fixedPhoneNumber: a.smsFixedNumber ?? undefined,
         messageContent: a.smsMessageContent ?? '',
       };
+    case 'waitforcondition':
+    case 'wait_for_condition':
+      return {
+        ...base,
+        type: 'wait_for_condition',
+        waitConditionType: (a.waitConditionType?.toLowerCase().replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase() ?? 'status') as any,
+        waitStatusMode: a.waitStatusMode ? mapStatusMode(a.waitStatusMode) : undefined,
+        waitStatusId: a.waitStatusId != null ? String(a.waitStatusId) : undefined,
+        waitScheduledTimeField: a.waitScheduledTimeField?.toLowerCase() as any,
+        waitOffsetValue: a.waitOffsetValue ?? undefined,
+        waitOffsetUnit: a.waitOffsetUnit as any,
+        waitScanTypes: (a.waitScanTypes ?? []) as any,
+      };
+    case 'sendemail':
+    case 'send_email':
+      return {
+        ...base,
+        type: 'send_email',
+        emailRecipient: mapEmailRecipient(a.emailRecipient) as EmailRecipientType,
+        emailSubject: a.emailSubject ?? '',
+        emailTemplate: a.emailTemplate ?? '',
+        replyToEmail: a.replyToEmail ?? undefined,
+        customEmailAddresses: a.customEmailAddresses ?? undefined,
+        attachReportKey: a.attachReportKey ?? undefined,
+      };
     default:
       return { ...base, type: 'update_job_status', statusId: '' };
   }
@@ -489,6 +595,7 @@ export function frontendRuleToApi(
       customerIds: rule.scope.customerIds.map(Number).filter((n) => !isNaN(n)),
       allSpeeds: rule.scope.allSpeeds,
       speedIds: rule.scope.speedIds.map(Number).filter((n) => !isNaN(n)),
+      jobRelationship: rule.scope.jobRelationship !== 'all' ? rule.scope.jobRelationship : null,
       allJobStatuses: rule.scope.allJobStatuses,
       jobStatusIds: rule.scope.jobStatusIds.map(Number).filter((n) => !isNaN(n)),
       allPriorities: rule.scope.allPriorities,
@@ -569,6 +676,19 @@ function frontendActionToApi(a: Action, index: number): ApiAction {
     smsRecipientType: null,
     smsFixedNumber: null,
     smsMessageContent: null,
+    emailSubject: null,
+    emailTemplate: null,
+    replyToEmail: null,
+    emailRecipient: null,
+    customEmailAddresses: null,
+    attachReportKey: null,
+    waitConditionType: null,
+    waitStatusMode: null,
+    waitStatusId: null,
+    waitScheduledTimeField: null,
+    waitOffsetValue: null,
+    waitOffsetUnit: null,
+    waitScanTypes: null,
   };
 
   switch (a.type) {
@@ -592,6 +712,23 @@ function frontendActionToApi(a: Action, index: number): ApiAction {
       base.smsRecipientType = a.recipientType.split('_').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
       base.smsFixedNumber = a.fixedPhoneNumber ?? null;
       base.smsMessageContent = a.messageContent;
+      break;
+    case 'send_email':
+      base.emailRecipient = mapEmailRecipientToApi(a.emailRecipient);
+      base.emailSubject = a.emailSubject;
+      base.emailTemplate = a.emailTemplate;
+      base.replyToEmail = a.replyToEmail ?? null;
+      base.customEmailAddresses = a.customEmailAddresses ?? null;
+      base.attachReportKey = a.attachReportKey ?? null;
+      break;
+    case 'wait_for_condition':
+      base.waitConditionType = a.waitConditionType.split('_').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+      base.waitStatusMode = a.waitStatusMode ? a.waitStatusMode.split('_').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('') : null;
+      base.waitStatusId = a.waitStatusId ? Number(a.waitStatusId) : null;
+      base.waitScheduledTimeField = a.waitScheduledTimeField ? a.waitScheduledTimeField.charAt(0).toUpperCase() + a.waitScheduledTimeField.slice(1) : null;
+      base.waitOffsetValue = a.waitOffsetValue ?? null;
+      base.waitOffsetUnit = a.waitOffsetUnit ?? null;
+      base.waitScanTypes = a.waitScanTypes ?? null;
       break;
   }
 

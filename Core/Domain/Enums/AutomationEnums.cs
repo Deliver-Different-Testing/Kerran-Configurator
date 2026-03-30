@@ -7,7 +7,17 @@ public enum ActionType
     CompleteTask,
     TriggerNotification,
     SendSms,
-    ChangeStatus
+    ChangeStatus,
+    SendEmail
+}
+
+public enum EmailRecipientType
+{
+    TrackingEmail,
+    ProofOfDeliveryEmail,
+    ClientContactEmail,
+    AgentEmail,
+    Custom
 }
 
 public enum ConditionType

@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import type { AutomationScope, CustomerOption, SpeedOption, SiteOption, RegionOption, JobStatus } from '../types';
+import { useState, useRef } from 'react';
+import type { AutomationScope, CustomerOption, SpeedOption, SiteOption, RegionOption, JobStatus, JobRelationshipFilter } from '../types';
+import { JOB_RELATIONSHIP_OPTIONS } from '../types';
 
 interface ScopeSelectorProps {
   scope: AutomationScope;
@@ -9,6 +10,7 @@ interface ScopeSelectorProps {
   regions: RegionOption[];
   jobStatuses: JobStatus[];
   onChange: (scope: AutomationScope) => void;
+  onSearchCustomers?: (query: string) => Promise<CustomerOption[]>;
 }
 
 const PRIORITY_OPTIONS = [
@@ -28,6 +30,8 @@ function ScopeFilterSection({
   onAllChange,
   onToggle,
   onClearAll,
+  searchable = false,
+  onSearch,
 }: {
   id: string;
   label: string;
@@ -37,13 +41,24 @@ function ScopeFilterSection({
   onAllChange: (checked: boolean) => void;
   onToggle: (optionId: string) => void;
   onClearAll: () => void;
+  searchable?: boolean;
+  onSearch?: (query: string) => Promise<{ id: string; name?: string; shortName?: string }[]>;
 }) {
   const [expanded, setExpanded] = useState(allChecked);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [serverResults, setServerResults] = useState<{ id: string; name?: string; shortName?: string }[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  // Cache of options selected via server-side search (not in the preloaded options array)
+  const [searchSelectedCache, setSearchSelectedCache] = useState<{ id: string; name?: string; shortName?: string }[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Merge preloaded options with search-selected cache for lookups
+  const allKnownOptions = [...options, ...searchSelectedCache.filter((c) => !options.find((o) => o.id === c.id))];
 
   const selectedNames = selectedIds
     .map((sid) => {
-      const opt = options.find((o) => o.id === sid);
-      return opt ? (opt.shortName || opt.name) : null;
+      const opt = allKnownOptions.find((o) => o.id === sid);
+      return opt ? (opt.name || opt.shortName) : null;
     })
     .filter(Boolean);
 
@@ -128,16 +143,16 @@ function ScopeFilterSection({
               </div>
               <div className="auto-chip-list">
                 {selectedIds.map((selId) => {
-                  const opt = options.find((o) => o.id === selId);
+                  const opt = allKnownOptions.find((o) => o.id === selId);
                   if (!opt) return null;
                   return (
                     <span key={selId} className="auto-chip selected">
-                      {opt.shortName || opt.name}
+                      {opt.name || opt.shortName}
                       <button
                         type="button"
                         onClick={() => onToggle(selId)}
                         className="auto-chip-remove"
-                        title={`Remove ${opt.shortName || opt.name}`}
+                        title={`Remove ${opt.name || opt.shortName}`}
                       >
                         ✕
                       </button>
@@ -148,31 +163,114 @@ function ScopeFilterSection({
             </div>
           )}
 
-          {/* Available items to add */}
-          <div className="auto-scope-chips-label">
-            {selectedIds.length > 0 ? 'Add more:' : `Select ${label.toLowerCase()}:`}
-          </div>
-          <div className="auto-chip-list">
-            {options
-              .filter((opt) => !selectedIds.includes(opt.id))
-              .map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => onToggle(opt.id)}
-                  className="auto-chip"
-                >
-                  + {opt.shortName || opt.name}
-                </button>
-              ))}
-            {options.filter((opt) => !selectedIds.includes(opt.id)).length === 0 && (
-              <span className="auto-label-xs" style={{ fontStyle: 'italic' }}>All {label.toLowerCase()} selected</span>
-            )}
-          </div>
-          {selectedIds.length === 0 && (
-            <div className="auto-label-xs" style={{ marginTop: 6 }}>
-              Select specific {label.toLowerCase()} to restrict this automation, or check "Apply to all" above.
+          {/* Searchable mode: search input only, no chips until user types */}
+          {searchable ? (
+            <div>
+              <input
+                type="text"
+                className="input auto-input-sm"
+                value={searchQuery}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSearchQuery(val);
+                  if (onSearch && val.length >= 2) {
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    setIsSearching(true);
+                    debounceRef.current = setTimeout(() => {
+                      onSearch(val).then((results) => {
+                        setServerResults(results);
+                        setIsSearching(false);
+                      });
+                    }, 250);
+                  } else if (onSearch) {
+                    setServerResults([]);
+                  }
+                }}
+                placeholder={`Search ${label.toLowerCase()} by name...`}
+                style={{ width: '100%', marginBottom: 8 }}
+              />
+              {searchQuery.length >= 2 ? (
+                <div className="auto-chip-list">
+                  {(() => {
+                    const results = (onSearch ? serverResults : options.filter((opt) => {
+                      const q = searchQuery.toLowerCase();
+                      return !selectedIds.includes(opt.id) &&
+                        (opt.name?.toLowerCase().includes(q) || opt.shortName?.toLowerCase().includes(q));
+                    })).filter((opt) => !selectedIds.includes(opt.id));
+                    return (
+                      <>
+                        {isSearching && (
+                          <span className="auto-label-xs">Searching...</span>
+                        )}
+                        {!isSearching && results.slice(0, 20).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              // Cache this option so it can be displayed as a selected chip
+                              setSearchSelectedCache((prev) =>
+                                prev.find((c) => c.id === opt.id) ? prev : [...prev, opt]
+                              );
+                              onToggle(opt.id);
+                              setSearchQuery('');
+                              setServerResults([]);
+                            }}
+                            className="auto-chip"
+                            title={opt.name}
+                          >
+                            + {opt.name || opt.shortName}
+                          </button>
+                        ))}
+                        {!isSearching && results.length === 0 && (
+                          <span className="auto-label-xs" style={{ fontStyle: 'italic' }}>No matches for "{searchQuery}"</span>
+                        )}
+                        {!isSearching && results.length > 20 && (
+                          <span className="auto-label-xs" style={{ fontStyle: 'italic' }}>
+                            {results.length - 20} more — keep typing to narrow results
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : searchQuery.length > 0 ? (
+                <div className="auto-label-xs">Type at least 2 characters to search</div>
+              ) : selectedIds.length === 0 ? (
+                <div className="auto-label-xs">
+                  Type to search and select specific {label.toLowerCase()}, or check "Apply to all" above.
+                </div>
+              ) : null}
             </div>
+          ) : (
+            <>
+              {/* Non-searchable: show all chips */}
+              <div className="auto-scope-chips-label">
+                {selectedIds.length > 0 ? 'Add more:' : `Select ${label.toLowerCase()}:`}
+              </div>
+              <div className="auto-chip-list">
+                {options
+                  .filter((opt) => !selectedIds.includes(opt.id))
+                  .map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => onToggle(opt.id)}
+                      className="auto-chip"
+                      title={opt.name}
+                    >
+                      + {opt.name || opt.shortName}
+                    </button>
+                  ))}
+                {options.filter((opt) => !selectedIds.includes(opt.id)).length === 0 && (
+                  <span className="auto-label-xs" style={{ fontStyle: 'italic' }}>All {label.toLowerCase()} selected</span>
+                )}
+              </div>
+              {selectedIds.length === 0 && (
+                <div className="auto-label-xs" style={{ marginTop: 6 }}>
+                  Select specific {label.toLowerCase()} to restrict this automation, or check "Apply to all" above.
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -188,6 +286,7 @@ export function ScopeSelector({
   regions,
   jobStatuses,
   onChange,
+  onSearchCustomers,
 }: ScopeSelectorProps) {
   // Generic helpers
   const makeAllHandler = (allKey: keyof AutomationScope, idsKey: keyof AutomationScope) => (checked: boolean) => {
@@ -234,6 +333,8 @@ export function ScopeSelector({
         onAllChange={makeAllHandler('allCustomers', 'customerIds')}
         onToggle={makeToggleHandler('customerIds')}
         onClearAll={makeClearHandler('customerIds')}
+        searchable
+        onSearch={onSearchCustomers}
       />
 
       {/* Speeds */}
@@ -247,6 +348,24 @@ export function ScopeSelector({
         onToggle={makeToggleHandler('speedIds')}
         onClearAll={makeClearHandler('speedIds')}
       />
+
+      {/* Job Relationship (Parent/Child) */}
+      <div className="auto-scope-group">
+        <label className="auto-label-text" style={{ fontWeight: 500 }}>Job relationship</label>
+        <select
+          value={scope.jobRelationship || 'all'}
+          onChange={(e) => onChange({ ...scope, jobRelationship: e.target.value as JobRelationshipFilter })}
+          className="auto-select-sm"
+          style={{ width: '100%', marginTop: 4 }}
+        >
+          {JOB_RELATIONSHIP_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <div className="auto-label-xs" style={{ marginTop: 2 }}>
+          {JOB_RELATIONSHIP_OPTIONS.find((o) => o.value === (scope.jobRelationship || 'all'))?.description}
+        </div>
+      </div>
 
       {/* Job Statuses */}
       <ScopeFilterSection

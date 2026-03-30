@@ -53,6 +53,8 @@ public partial class AutomationAction
 
     public string CustomEmailAddresses { get; set; }
 
+    public string AttachReportKey { get; set; }
+
     public string CustomSmsNumbers { get; set; }
 
     public bool? IsCustomEmailClientSpecific { get; set; }
@@ -86,6 +88,21 @@ public partial class AutomationAction
     public string SmsFixedNumber { get; set; }
 
     public string SmsMessageContent { get; set; }
+
+    // Wait condition fields (for workflow chaining)
+    public string WaitConditionType { get; set; }
+
+    public string WaitStatusMode { get; set; }
+
+    public int? WaitStatusId { get; set; }
+
+    public string WaitScheduledTimeField { get; set; }
+
+    public int? WaitOffsetValue { get; set; }
+
+    public string WaitOffsetUnit { get; set; }
+
+    public string WaitScanTypes { get; set; }
 
     public virtual TucEventType EventType { get; set; }
 

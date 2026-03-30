@@ -16,6 +16,7 @@ import type {
   JobStatus,
   TaskTemplate,
   NotificationTemplate,
+  ReportOption,
 } from '../types';
 import {
   CONDITION_TYPE_OPTIONS,
@@ -34,6 +35,8 @@ interface AutomationEditFormProps {
   jobStatuses: JobStatus[];
   taskTemplates: TaskTemplate[];
   notificationTemplates: NotificationTemplate[];
+  availableReports: ReportOption[];
+  onSearchCustomers?: (query: string) => Promise<import('../types').CustomerOption[]>;
   onSave: (automation: AutomationRule) => void;
   onCancel: () => void;
   isNew?: boolean;
@@ -48,6 +51,8 @@ export function AutomationEditForm({
   jobStatuses,
   taskTemplates,
   notificationTemplates,
+  availableReports,
+  onSearchCustomers,
   onSave,
   onCancel,
   isNew = false,
@@ -177,6 +182,7 @@ export function AutomationEditForm({
           regions={regions}
           jobStatuses={jobStatuses}
           onChange={(scope) => updateField('scope', scope)}
+          onSearchCustomers={onSearchCustomers}
         />
       </div>
 
@@ -253,9 +259,17 @@ export function AutomationEditForm({
             <h4 className="auto-section-title">Actions (THEN)</h4>
             <div className="auto-section-subtitle">Define what happens when conditions are met</div>
           </div>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', display: 'flex', gap: 6 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setShowActionDropdown(!showActionDropdown)}>
               + Add Action
+            </button>
+            <button
+              className="btn btn-sm"
+              style={{ background: 'rgba(59,199,244,.1)', color: 'var(--cyan)', border: '1px solid rgba(59,199,244,.3)' }}
+              onClick={() => addAction('wait_for_condition' as ActionType)}
+              title="Insert a wait step — pauses the workflow until a condition is met"
+            >
+              + Wait Condition
             </button>
             {showActionDropdown && (
               <div className="auto-dropdown">
@@ -278,6 +292,7 @@ export function AutomationEditForm({
                 jobStatuses={jobStatuses}
                 taskTemplates={taskTemplates}
                 notificationTemplates={notificationTemplates}
+                availableReports={availableReports}
                 onChange={(a) => updateAction(index, a)}
                 onRemove={() => removeAction(index)}
               />

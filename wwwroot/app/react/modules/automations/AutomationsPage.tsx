@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { AutomationCard } from './components/AutomationCard';
+import { SearchableSelect } from './components/SearchableSelect';
 import type {
   AutomationRule,
   AutomationFilterState,
@@ -10,11 +11,13 @@ import type {
   JobStatus,
   TaskTemplate,
   NotificationTemplate,
+  ReportOption,
 } from './types';
 import { createEmptyAutomation } from './types';
 import {
   fetchAutomations,
-  fetchCustomers,
+  fetchCustomersByIds,
+  searchCustomers,
   fetchSpeeds,
   fetchSites,
   fetchRegions,
@@ -24,6 +27,7 @@ import {
   createAutomation,
   updateAutomation,
   deleteAutomation as deleteAutomationApi,
+  fetchAvailableReports,
   apiRuleToFrontend,
   frontendRuleToApi,
 } from './api';
@@ -41,6 +45,7 @@ function useAutomationsData() {
   const [jobStatuses, setJobStatuses] = useState<JobStatus[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
   const [notificationTemplates, setNotificationTemplates] = useState<NotificationTemplate[]>([]);
+  const [availableReports, setAvailableReports] = useState<ReportOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,25 +53,36 @@ function useAutomationsData() {
     setLoading(true);
     setError(null);
     try {
-      const [rulesData, custData, speedData, siteData, regionData, statusData, taskData, notifData] =
+      const [rulesData, speedData, siteData, regionData, statusData, taskData, notifData, reportsData] =
         await Promise.all([
           fetchAutomations(),
-          fetchCustomers(),
           fetchSpeeds(),
           fetchSites(),
           fetchRegions(),
           fetchJobStatuses(),
           fetchTaskTemplates(),
           fetchNotificationTemplates(),
+          fetchAvailableReports(),
         ]);
-      setAutomations(rulesData.map(apiRuleToFrontend));
-      setCustomers(custData);
+      const rules = rulesData.map(apiRuleToFrontend);
+      setAutomations(rules);
       setSpeeds(speedData);
       setSites(siteData);
       setRegions(regionData);
       setJobStatuses(statusData);
       setTaskTemplates(taskData);
       setNotificationTemplates(notifData);
+      setAvailableReports(reportsData);
+
+      // Resolve only the customer IDs referenced by existing rules (not all customers)
+      const allCustomerIds = new Set<string>();
+      for (const rule of rules) {
+        for (const id of rule.scope.customerIds) allCustomerIds.add(id);
+      }
+      if (allCustomerIds.size > 0) {
+        const resolvedCustomers = await fetchCustomersByIds([...allCustomerIds]);
+        setCustomers(resolvedCustomers);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -78,7 +94,7 @@ function useAutomationsData() {
 
   return {
     automations, setAutomations,
-    customers, speeds, sites, regions, jobStatuses, taskTemplates, notificationTemplates,
+    customers, setCustomers, speeds, sites, regions, jobStatuses, taskTemplates, notificationTemplates, availableReports,
     loading, error, reload: loadAll,
   };
 }
@@ -94,7 +110,7 @@ interface AutomationsPageProps {
 export function AutomationsPage({ showToast }: AutomationsPageProps) {
   const {
     automations, setAutomations,
-    customers, speeds, sites, regions, jobStatuses, taskTemplates, notificationTemplates,
+    customers, setCustomers, speeds, sites, regions, jobStatuses, taskTemplates, notificationTemplates, availableReports,
     loading, error, reload,
   } = useAutomationsData();
 
@@ -122,6 +138,19 @@ export function AutomationsPage({ showToast }: AutomationsPageProps) {
     });
   }, [automations, filters]);
 
+  // Ensure all customer IDs referenced by a rule are resolved in local state
+  const ensureCustomersResolved = async (rule: AutomationRule) => {
+    const missingIds = rule.scope.customerIds.filter(
+      (id) => !customers.find((c) => c.id === id),
+    );
+    if (missingIds.length > 0) {
+      const resolved = await fetchCustomersByIds(missingIds);
+      if (resolved.length > 0) {
+        setCustomers((prev) => [...prev, ...resolved]);
+      }
+    }
+  };
+
   const handleNewAutomation = () => {
     const empty = createEmptyAutomation();
     setNewAutomation({ ...empty, id: `auto-new-${Date.now()}`, createdAt: '', updatedAt: '' });
@@ -133,7 +162,9 @@ export function AutomationsPage({ showToast }: AutomationsPageProps) {
     setSaving(true);
     try {
       const created = await createAutomation(frontendRuleToApi(automation));
-      setAutomations((prev) => [apiRuleToFrontend(created), ...prev]);
+      const frontendRule = apiRuleToFrontend(created);
+      setAutomations((prev) => [frontendRule, ...prev]);
+      await ensureCustomersResolved(frontendRule);
       setIsCreating(false);
       setNewAutomation(null);
       showToast?.('Automation created');
@@ -153,7 +184,9 @@ export function AutomationsPage({ showToast }: AutomationsPageProps) {
     setSaving(true);
     try {
       const updated = await updateAutomation(Number(automation.id), frontendRuleToApi(automation));
-      setAutomations((prev) => prev.map((a) => (a.id === automation.id ? apiRuleToFrontend(updated) : a)));
+      const frontendRule = apiRuleToFrontend(updated);
+      setAutomations((prev) => prev.map((a) => (a.id === automation.id ? frontendRule : a)));
+      await ensureCustomersResolved(frontendRule);
       setExpandedId(null);
       showToast?.('Automation saved');
     } catch (err) {
@@ -230,15 +263,16 @@ export function AutomationsPage({ showToast }: AutomationsPageProps) {
             placeholder="Search automations..."
             style={{ flex: 1, maxWidth: 360 }}
           />
-          <select
+          <SearchableSelect
+            onSearch={(q) => searchCustomers(q, 20)}
             value={filters.customerId}
-            onChange={(e) => setFilters((prev) => ({ ...prev, customerId: e.target.value }))}
-          >
-            <option value="all">All Customers</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.shortName}</option>
-            ))}
-          </select>
+            selectedLabel={customers.find((c) => c.id === filters.customerId)?.name}
+            onChange={(val) => {
+              setFilters((prev) => ({ ...prev, customerId: val }));
+            }}
+            placeholder="Search customers..."
+            allLabel="All Customers"
+          />
           <select
             value={filters.speedId}
             onChange={(e) => setFilters((prev) => ({ ...prev, speedId: e.target.value }))}
@@ -273,6 +307,8 @@ export function AutomationsPage({ showToast }: AutomationsPageProps) {
             jobStatuses={jobStatuses}
             taskTemplates={taskTemplates}
             notificationTemplates={notificationTemplates}
+            availableReports={availableReports}
+            onSearchCustomers={(q) => searchCustomers(q, 20)}
             isExpanded={true}
             isNew={true}
             onToggle={() => {}}
@@ -294,6 +330,8 @@ export function AutomationsPage({ showToast }: AutomationsPageProps) {
             jobStatuses={jobStatuses}
             taskTemplates={taskTemplates}
             notificationTemplates={notificationTemplates}
+            availableReports={availableReports}
+            onSearchCustomers={(q) => searchCustomers(q, 20)}
             isExpanded={expandedId === automation.id}
             onToggle={() => setExpandedId(expandedId === automation.id ? null : automation.id)}
             onSave={handleUpdate}

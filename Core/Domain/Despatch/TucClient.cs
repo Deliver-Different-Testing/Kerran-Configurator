@@ -581,11 +581,31 @@ public partial class TucClient
 
     public bool ShowNwagent { get; set; }
 
+    public string DefaultJobListFilter { get; set; }
+
+    public int ClientTypeId { get; set; }
+
+    public int? NpAgentId { get; set; }
+
+    public virtual ClientType ClientType { get; set; }
+
+    public virtual TucAgent NpAgent { get; set; }
+
     public virtual TblSite Site { get; set; }
+
+    public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();
 
     public virtual ICollection<TblSite> TblSiteDefaultDeliveryClients { get; set; } = new List<TblSite>();
 
     public virtual ICollection<TblSite> TblSiteDefaultPickupClients { get; set; } = new List<TblSite>();
 
+    public virtual ICollection<TucClientContact> TucClientContacts { get; set; } = new List<TucClientContact>();
+
     public virtual ICollection<TucEventTemplate> TucEventTemplates { get; set; } = new List<TucEventTemplate>();
+
+    public virtual ICollection<TucJobBooking> TucJobBookings { get; set; } = new List<TucJobBooking>();
+
+    public virtual ICollection<TucJob> TucJobs { get; set; } = new List<TucJob>();
+
+    public virtual TucSuburb UcclSuburb { get; set; }
 }

@@ -17,5 +17,9 @@ public partial class TucJobStatus
 
     public int? JobStatusNotificationId { get; set; }
 
+    public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();
+
     public virtual ICollection<TucEventTemplateDetail> TucEventTemplateDetails { get; set; } = new List<TucEventTemplateDetail>();
+
+    public virtual ICollection<TucJob> TucJobs { get; set; } = new List<TucJob>();
 }

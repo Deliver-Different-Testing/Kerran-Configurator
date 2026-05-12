@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root{--ink:#0d0c2c;--cyan:#3bc7f4;--grey-bg:#f4f2f1;--white:#ffffff;--green:#13b964;--orange:#fe811a;--red:#dc3246;--purple:#824ae0;--blue:#2a4eff;--shadow:0 2px 8px rgba(13,12,44,.08);--radius:8px;--sidebar-w:260px}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Roboto',sans-serif;background:var(--grey-bg);color:var(--ink);display:flex;height:100vh;overflow:hidden}

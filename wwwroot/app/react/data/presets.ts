@@ -1,4 +1,4 @@
-import type { PresetWorkflow } from '../types';
+import type { PresetWorkflow } from '../types/configurator';
 
 export const PRESETS: Record<string, PresetWorkflow> = {
   standard: {

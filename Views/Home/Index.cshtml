@@ -1,9 +1,21 @@
+@using Newtonsoft.Json
+@model DfrntDriveConfigurator.Controllers.AppUserBootstrap
 @{
     Layout = "_Layout";
+    var serializerSettings = new JsonSerializerSettings
+    {
+        ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
+    };
+    var userJson = Model != null
+        ? JsonConvert.SerializeObject(Model, serializerSettings)
+        : "null";
 }
 
 <div id="configurator-root"></div>
 
 @section Scripts {
-    <script src="/dist/app.js"></script>
+    <script>
+        window.__APP_USER__ = @Html.Raw(userJson);
+    </script>
+    <script src="/dist/app.js" asp-append-version="true"></script>
 }

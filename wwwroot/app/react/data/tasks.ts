@@ -1,4 +1,4 @@
-import type { TaskType } from '../types';
+import type { TaskType } from '../types/configurator';
 
 export const TASKS: TaskType[] = [
   { id: 'photo', icon: '📸', name: 'Photo Capture', desc: 'Take photo(s) as proof', cat: 'Capture', config: { minPhotos: 1, maxPhotos: 5, label: 'Delivery Photo', mandatory: 'delivery' } },

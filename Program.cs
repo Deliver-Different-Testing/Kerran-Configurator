@@ -145,6 +145,29 @@ builder.Services.AddAuthorization(options =>
             var userGroupId = context.User.FindFirst("UserGroupID")?.Value;
             return userGroupId == "1";
         }));
+
+    // NP-scope endpoints (`/api/v1/np/*`) are accessible to Network Partner
+    // users and to DF Admins (DF Admins can read/write across all tenants).
+    options.AddPolicy("NetworkPartnerOrAdmin", policy =>
+        policy.RequireAssertion(context =>
+        {
+            var userGroupId = context.User.FindFirst("UserGroupID")?.Value;
+            var isNp = context.User.FindFirst("IsNetworkPartner")?.Value;
+            return userGroupId == "1"
+                || string.Equals(isNp, "True", StringComparison.OrdinalIgnoreCase);
+        }));
+
+    // Tenant-scope endpoints (`/api/v1/tenant/*`) — agents directory, quotes
+    // marketplace, etc. — are visible to any tenant staff member (anyone
+    // whose tblUser row was enriched at HomeController.Index, i.e. has a
+    // UserGroupID claim) plus DF Admins. NPs also get in via this policy
+    // because they're staff at their own tenant.
+    options.AddPolicy("TenantStaffOrAdmin", policy =>
+        policy.RequireAssertion(context =>
+        {
+            var userGroupId = context.User.FindFirst("UserGroupID")?.Value;
+            return !string.IsNullOrEmpty(userGroupId);
+        }));
 });
 
 builder.Services.AddHttpClient();
@@ -155,6 +178,24 @@ builder.Services.AddScoped<AppConfigService>();
 builder.Services.AddScoped<WorkflowTemplateService>();
 builder.Services.AddScoped<EventTypeService>();
 builder.Services.AddScoped<LookupService>();
+
+// Phase 4 — Network Partner services
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpUserService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpDashboardService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpComplianceService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpReportService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpFleetService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpLookupService>();
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Np.INpScopeResolver,
+    DfrntDriveConfigurator.Core.Application.Services.Np.NpScopeResolver>();
+
+// Phase 5+1 — Tenant scope services
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantAgentService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantQuotesService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantDashboardService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantLookupService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantProspectService>();
 
 // Automation repository (CRUD for configurator UI — engine execution lives in separate AutomationEngine service)
 builder.Services.AddScoped<IAutomationRepository, AutomationRepository>();
@@ -345,6 +386,9 @@ app.UseAuthorization();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+// SPA fallback: any unmatched non-API path hands off to HomeController so React Router can resolve it.
+app.MapFallbackToController("Index", "Home");
 
 app.Run();
 return;

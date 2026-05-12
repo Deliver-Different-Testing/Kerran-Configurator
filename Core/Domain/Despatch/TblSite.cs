@@ -39,6 +39,8 @@ public partial class TblSite
 
     public string XeroTrackingOption { get; set; }
 
+    public virtual TucSuburb AirportSuburb { get; set; }
+
     public virtual TucClient DefaultDeliveryClient { get; set; }
 
     public virtual TucClient DefaultPickupClient { get; set; }

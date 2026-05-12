@@ -10,7 +10,7 @@ import type {
   StageName,
   StepContext,
   LookupItem,
-} from '../types';
+} from '../types/configurator';
 import { getTaskId, getEventTypeId } from '../data/taskEventTypeMap';
 import { TASK_MAP } from '../data/tasks';
 

@@ -1,31 +1,235 @@
-import { useState, useCallback } from 'react';
-import Sidebar from './components/Sidebar';
-import AppSetupPage from './components/AppSetupPage';
-import { AutomationsPage } from './modules/automations';
-import Toast from './components/Toast';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useAuth } from './context/AuthContext';
+import { TenantConfigProvider } from './context/TenantConfigContext';
+import DfDriveConfigShell from './pages/DfDriveConfigShell';
+import RolePlaceholder from './pages/RolePlaceholder';
+import AppLayout from './components/Layout/AppLayout';
+import UpgradeModal from './components/common/UpgradeModal';
 
-export type ToastFn = (msg: string) => void;
+// NP pages — full second-wave wiring. Underlying services are Phase-3 sync
+// stubs (see np_dashboardService.ts pattern); pages will swap to real data
+// in Phase 4.
+import NpDashboard from './pages/np/Dashboard';
+import FleetOverview from './pages/np/FleetOverview';
+import AddCourier from './pages/np/AddCourier';
+import CourierImport from './pages/np/CourierImport';
+import CourierPortalLinks from './pages/np/CourierPortalLinks';
+import CourierSetup from './pages/np/CourierSetup';
+import Users from './pages/np/Users';
+import UserImport from './pages/np/UserImport';
+import Reports from './pages/np/Reports';
+import ComplianceHub from './pages/np/ComplianceHub';
+import RecruitmentPipeline from './pages/np/RecruitmentPipeline';
+import ApplicantDetail from './pages/np/ApplicantDetail';
+import RecruitmentStageSettings from './pages/np/RecruitmentStageSettings';
+import ContractSettings from './pages/np/ContractSettings';
+import RecruitmentAdvertising from './pages/np/RecruitmentAdvertising';
+import RegistrationSettings from './pages/np/RegistrationSettings';
+import PortalUrl from './pages/np/PortalUrl';
+import FleetManagement from './pages/np/FleetManagement';
+import Scheduling from './pages/np/Scheduling';
+import Operations from './pages/np/Operations';
+import QuizBuilderPage from './pages/np/QuizBuilderPage';
+import NpSettings from './pages/np/Settings';
+import OpenforceSettings from './pages/settings/OpenforceSettings';
+
+// Tenant pages — agent-management lane.
+import { Dashboard as TenantDashboard } from './pages/tenant/Dashboard';
+import { AgentList } from './pages/tenant/AgentList';
+import { AgentDetail } from './pages/tenant/AgentDetail';
+import { AgentDiscovery } from './pages/tenant/AgentDiscovery';
+import { AgentOnboarding } from './pages/tenant/AgentOnboarding';
+import { AgentImport } from './pages/tenant/AgentImport';
+import { QuoteRequests } from './pages/tenant/QuoteRequests';
+import { AssociationStats } from './pages/tenant/AssociationStats';
+import { TenantSettings } from './pages/tenant/Settings';
+
+// DF Admin–only page.
+import TenantConfigPage from './pages/settings/TenantConfig';
 
 export default function App() {
-  const [toastMsg, setToastMsg] = useState('');
-  const [toastVisible, setToastVisible] = useState(false);
-  const [activePage, setActivePage] = useState('appsetup');
+  const { role } = useAuth();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [selectedCourierId, setSelectedCourierId] = useState<number | null>(null);
 
-  const showToast: ToastFn = useCallback((msg: string) => {
-    setToastMsg(msg);
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 2500);
-  }, []);
+  if (role === 'dfadmin') {
+    // DF Admin sees everything: full NP page set + DF Admin-only TenantConfig
+    // page + the legacy DF Drive config (Workflows / Supports / Feature Flags
+    // / Automations) preserved at /df-drive-config.
+    return (
+      <TenantConfigProvider>
+        <Routes>
+          <Route path="/df-drive-config" element={<DfDriveConfigShell />} />
+          <Route element={<AppLayout onUpgrade={() => setUpgradeOpen(true)} selectedCourierId={selectedCourierId} />}>
+            <Route index element={<NpDashboard onUpgrade={() => setUpgradeOpen(true)} />} />
+            <Route path="fleet" element={<FleetOverview onSelectCourier={setSelectedCourierId} />} />
+            <Route path="fleet/add" element={<AddCourier />} />
+            <Route path="fleet/import" element={<CourierImport />} />
+            <Route path="fleet/links" element={<CourierPortalLinks />} />
+            <Route path="courier/:id" element={<CourierSetup onSelectCourier={setSelectedCourierId} />} />
+            <Route path="users" element={<Users />} />
+            <Route path="users/import" element={<UserImport />} />
+            <Route path="reports" element={<Reports />} />
+            {/* Agent / NP management — DF Admin sees the same surface as Tenant. */}
+            <Route path="agents" element={<AgentList />} />
+            <Route path="agents/find" element={<AgentList />} />
+            <Route path="agents/import" element={<AgentImport />} />
+            <Route path="agents/new" element={<Navigate to="/agents/find" replace />} />
+            <Route path="agents/onboarding" element={<AgentOnboarding />} />
+            <Route path="agents/onboarding/new" element={<AgentOnboarding />} />
+            <Route path="agents/onboarding/:id" element={<AgentOnboarding />} />
+            <Route path="agents/:id" element={<AgentDetail />} />
+            <Route path="discovery" element={<Navigate to="/agents/find" replace />} />
+            <Route path="onboarding" element={<Navigate to="/agents/onboarding" replace />} />
+            <Route path="np-management" element={<Navigate to="/agents" replace />} />
+            <Route path="quotes" element={<QuoteRequests />} />
+            <Route path="associations" element={<AssociationStats />} />
+            <Route path="compliance" element={<ComplianceHub />} />
+            <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
+            <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
+            <Route path="recruitment" element={<RecruitmentPipeline />} />
+            <Route path="recruitment/:id" element={<ApplicantDetail />} />
+            <Route path="recruitment/portal-url" element={<PortalUrl />} />
+            <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} isDfAdmin />} />
+            <Route path="settings/tenant-config" element={<TenantConfigPage />} />
+            <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
+            <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />
+            <Route path="settings/contracts" element={<ContractSettings />} />
+            <Route path="settings/recruitment-ads" element={<RecruitmentAdvertising />} />
+            <Route path="settings/registration" element={<RegistrationSettings />} />
+            <Route path="settings/openforce" element={<OpenforceSettings />} />
+            <Route path="settings/quizzes" element={<QuizBuilderPage />} />
+            <Route path="fleet-management" element={<FleetManagement />} />
+            <Route path="fleet-management/:id" element={<FleetManagement />} />
+            <Route path="scheduling" element={<Scheduling />} />
+            <Route path="operations" element={<Operations />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+        <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      </TenantConfigProvider>
+    );
+  }
 
+  if (role === 'np') {
+    return (
+      <TenantConfigProvider>
+        <Routes>
+          <Route element={<AppLayout onUpgrade={() => setUpgradeOpen(true)} selectedCourierId={selectedCourierId} />}>
+            <Route index element={<NpDashboard onUpgrade={() => setUpgradeOpen(true)} />} />
+            <Route path="fleet" element={<FleetOverview onSelectCourier={setSelectedCourierId} />} />
+            <Route path="fleet/add" element={<AddCourier />} />
+            <Route path="fleet/import" element={<CourierImport />} />
+            <Route path="fleet/links" element={<CourierPortalLinks />} />
+            <Route path="courier/:id" element={<CourierSetup onSelectCourier={setSelectedCourierId} />} />
+            <Route path="users" element={<Users />} />
+            <Route path="users/import" element={<UserImport />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="compliance" element={<ComplianceHub />} />
+            <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
+            <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
+            <Route path="recruitment" element={<RecruitmentPipeline />} />
+            <Route path="recruitment/:id" element={<ApplicantDetail />} />
+            <Route path="recruitment/portal-url" element={<PortalUrl />} />
+            <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} />} />
+            <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
+            <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />
+            <Route path="settings/contracts" element={<ContractSettings />} />
+            <Route path="settings/recruitment-ads" element={<RecruitmentAdvertising />} />
+            <Route path="settings/registration" element={<RegistrationSettings />} />
+            <Route path="settings/openforce" element={<OpenforceSettings />} />
+            <Route path="settings/quizzes" element={<QuizBuilderPage />} />
+            <Route path="fleet-management" element={<FleetManagement />} />
+            <Route path="fleet-management/:id" element={<FleetManagement />} />
+            <Route path="scheduling" element={<Scheduling />} />
+            <Route path="operations" element={<Operations />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+        <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      </TenantConfigProvider>
+    );
+  }
+
+  if (role === 'tenant') {
+    return (
+      <TenantConfigProvider>
+        <Routes>
+          <Route element={<AppLayout onUpgrade={() => setUpgradeOpen(true)} selectedCourierId={selectedCourierId} />}>
+            <Route index element={<TenantDashboard />} />
+            <Route path="agents" element={<AgentList />} />
+            <Route path="agents/find" element={<AgentList />} />
+            <Route path="agents/import" element={<AgentImport />} />
+            <Route path="agents/new" element={<Navigate to="/agents/find" replace />} />
+            <Route path="agents/onboarding" element={<AgentOnboarding />} />
+            <Route path="agents/onboarding/new" element={<AgentOnboarding />} />
+            <Route path="agents/onboarding/:id" element={<AgentOnboarding />} />
+            <Route path="agents/:id" element={<AgentDetail />} />
+            <Route path="discovery" element={<Navigate to="/agents/find" replace />} />
+            <Route path="onboarding" element={<Navigate to="/agents/onboarding" replace />} />
+            <Route path="np-management" element={<Navigate to="/agents" replace />} />
+            <Route path="import" element={<Navigate to="/agents/import" replace />} />
+            <Route path="fleet" element={<FleetOverview onSelectCourier={setSelectedCourierId} />} />
+            <Route path="fleet/add" element={<AddCourier />} />
+            <Route path="fleet/import" element={<CourierImport />} />
+            <Route path="courier/:id" element={<CourierSetup onSelectCourier={setSelectedCourierId} />} />
+            <Route path="compliance" element={<ComplianceHub />} />
+            <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
+            <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
+            <Route path="recruitment" element={<RecruitmentPipeline />} />
+            <Route path="recruitment/:id" element={<ApplicantDetail />} />
+            <Route path="recruitment/portal-url" element={<PortalUrl />} />
+            <Route path="quotes" element={<QuoteRequests />} />
+            <Route path="associations" element={<AssociationStats />} />
+            <Route path="fleet-management" element={<FleetManagement />} />
+            <Route path="fleet-management/:id" element={<FleetManagement />} />
+            <Route path="scheduling" element={<Scheduling />} />
+            <Route path="settings" element={<TenantSettings />} />
+            <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
+            <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />
+            <Route path="settings/contracts" element={<ContractSettings />} />
+            <Route path="settings/recruitment-ads" element={<RecruitmentAdvertising />} />
+            <Route path="settings/registration" element={<RegistrationSettings />} />
+            <Route path="settings/quizzes" element={<QuizBuilderPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+        <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      </TenantConfigProvider>
+    );
+  }
+
+  if (role === 'courier') {
+    return (
+      <Routes>
+        <Route
+          path="/portal/*"
+          element={
+            <RolePlaceholder
+              roleLabel="Courier Portal"
+              description="Today's runs, schedule, and documents will live here."
+            />
+          }
+        />
+        <Route path="*" element={<Navigate to="/portal" replace />} />
+      </Routes>
+    );
+  }
+
+  // Fallback — should be unreachable since AuthContext always resolves a role.
   return (
-    <>
-      <Sidebar activePage={activePage} onNavigate={setActivePage} />
-      {activePage === 'automations' ? (
-        <AutomationsPage showToast={showToast} />
-      ) : (
-        <AppSetupPage showToast={showToast} />
-      )}
-      <Toast message={toastMsg} visible={toastVisible} />
-    </>
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <RolePlaceholder
+            roleLabel="Unknown role"
+            description="No role could be derived from your login claims."
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

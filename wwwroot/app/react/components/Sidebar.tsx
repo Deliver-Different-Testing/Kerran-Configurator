@@ -66,6 +66,17 @@ export default function Sidebar({ activePage = 'appsetup', onNavigate }: Sidebar
         <span><em>Deliver</em> Different</span>
       </div>
 
+      {/* Back-to-admin link — DfDriveConfigShell is reached from the new
+          DF Admin sidebar; this gives a way back to the main admin tree. */}
+      <a
+        href="/"
+        className="nav-item"
+        style={{ borderBottom: '1px solid rgba(255,255,255,.08)', textDecoration: 'none' }}
+      >
+        <span className="nav-icon">←</span>
+        <span className="nav-label">Back to DF Admin</span>
+      </a>
+
       <div className="sidebar-nav">
         {NAV_SECTIONS.map(section => {
           const hasActiveChild = section.children?.some(c => c.active);

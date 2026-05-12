@@ -13,6 +13,17 @@ using Serilog;
 
 namespace DfrntDriveConfigurator.Controllers;
 
+public record AppUserBootstrap(
+    bool IsAdmin,
+    bool IsCourier,
+    bool IsNetworkPartner,
+    bool Internal,
+    int? CurrentTenantId,
+    int? StaffId,
+    string? FullName,
+    string? Email,
+    string? TenantCode);
+
 [Authorize]
 public class HomeController(
     IConnectionStringManager connectionStringManager,
@@ -22,6 +33,14 @@ public class HomeController(
     {
         try
         {
+            // SPA fallback runs HomeController.Index for any unmatched route so React Router
+            // can resolve deep links. But /api/* paths reaching this point are unmatched API
+            // calls — return 404 so axios consumers see a real failure instead of HTML.
+            if (HttpContext.Request.Path.StartsWithSegments("/api"))
+            {
+                return NotFound();
+            }
+
             // Check if claims already enriched (e.g. page refresh) — skip re-querying
             var existingGroupClaim = HttpContext.User.Claims.FirstOrDefault(x => x.Type == "UserGroupID")?.Value;
             if (!string.IsNullOrEmpty(existingGroupClaim))
@@ -29,7 +48,7 @@ public class HomeController(
                 Log.Debug("UserGroupID claim already present ({GroupId}), skipping enrichment", existingGroupClaim);
                 // Still need to ensure connection string is cached
                 await EnsureConnectionString();
-                return View();
+                return View(BuildBootstrap(HttpContext.User));
             }
 
             var connectionString = HttpContext.User.Claims.FirstOrDefault(x => x.Type == "Connection")?.Value;
@@ -57,6 +76,7 @@ public class HomeController(
                 connectionString + credentials);
 
             // Query user details and add extra claims (matching AdminManager pattern)
+            ClaimsPrincipal principalForBootstrap = HttpContext.User;
             if (!string.IsNullOrEmpty(staffIdClaim) && int.TryParse(staffIdClaim, out var staffId))
             {
                 Log.Debug("Querying tblUser for StaffID {StaffId}", staffId);
@@ -80,11 +100,17 @@ public class HomeController(
 
                     var allClaims = existingClaims.Concat(newClaims).ToList();
                     var newIdentity = new ClaimsIdentity(allClaims, "Identity.Application");
+                    var newPrincipal = new ClaimsPrincipal(newIdentity);
 
                     await HttpContext.SignInAsync(
                         "Identity.Application",
-                        new ClaimsPrincipal(newIdentity),
+                        newPrincipal,
                         new AuthenticationProperties { IsPersistent = true });
+
+                    // SignInAsync writes the cookie for the *next* request but doesn't mutate
+                    // HttpContext.User for this one — use the freshly-built principal so the
+                    // bootstrap blob the SPA reads on first paint reflects the enriched claims.
+                    principalForBootstrap = newPrincipal;
 
                     Log.Information("Claims enriched and cookie updated for StaffID {StaffId}", staffId);
                 }
@@ -100,13 +126,39 @@ public class HomeController(
                 Log.Warning("StaffID claim missing or not a valid integer: '{StaffIdClaim}'", staffIdClaim ?? "null");
             }
 
-            return View();
+            return View(BuildBootstrap(principalForBootstrap));
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Error in {Controller}/{Action}", nameof(HomeController), nameof(Index));
             return Redirect(Environment.GetEnvironmentVariable("PublicPath") ?? "https://deliverdifferent.com/");
         }
+    }
+
+    private static AppUserBootstrap BuildBootstrap(ClaimsPrincipal principal)
+    {
+        var claims = principal.Claims.ToList();
+        string? Get(string type) => claims.FirstOrDefault(c => c.Type == type)?.Value;
+
+        bool ParseBool(string? v) =>
+            !string.IsNullOrEmpty(v) && bool.TryParse(v, out var b) && b;
+
+        int? ParseInt(string? v) =>
+            int.TryParse(v, out var i) ? i : null;
+
+        var userGroupId = Get("UserGroupID");
+        var isAdmin = userGroupId == "1";
+
+        return new AppUserBootstrap(
+            IsAdmin: isAdmin,
+            IsCourier: ParseBool(Get("IsCourier")),
+            IsNetworkPartner: ParseBool(Get("IsNetworkPartner")),
+            Internal: ParseBool(Get("Internal")),
+            CurrentTenantId: ParseInt(Get("CurrentTenantID")),
+            StaffId: ParseInt(Get("StaffID")),
+            FullName: Get("fullName"),
+            Email: Get(ClaimTypes.Name),
+            TenantCode: Get("TenantCode"));
     }
 
     private async Task EnsureConnectionString()

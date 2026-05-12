@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { StageName, StagesMap, StageTask, StepContext, AppliesToScope, TaskConfig, WorkflowTemplateDto, AppConfigDto, ClientLookupDto, ServiceLookupDto } from '../types';
+import type { StageName, StagesMap, StageTask, StepContext, AppliesToScope, TaskConfig, WorkflowTemplateDto, AppConfigDto, ClientLookupDto, ServiceLookupDto } from '../types/configurator';
 import { TASKS, TASK_MAP } from '../data/tasks';
 import { PRESETS } from '../data/presets';
 import { workflowApi, lookupApi, appConfigApi } from '../services/api';
 import { buildIdMaps } from '../data/taskEventTypeMap';
 import { TASK_TO_FEATURE_KEY } from '../data/featuresMeta';
 import { detailsToStagesMap, stagesMapToDetails, buildStatusIdMap, countStageTasks } from '../services/transformers';
-import type { ToastFn } from '../App';
+import type { ToastFn } from '../pages/DfDriveConfigShell';
 
 const JOB_STAGES: StageName[] = ['Enroute to Pickup', 'Pickup', 'Enroute to Delivery', 'Delivery'];
 

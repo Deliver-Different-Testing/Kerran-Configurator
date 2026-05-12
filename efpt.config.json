@@ -27,6 +27,14 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[AgentCourierRate]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[AgentOnboarding]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[AppConfig]",
          "ObjectType": 0
       },
@@ -47,6 +55,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[ClientType]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[JobBarcode]",
          "ObjectType": 0
       },
@@ -59,6 +71,30 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[NpFeatureConfig]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ProspectAgent]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[QuotesPosting]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[QuotesQuote]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblBulkJob]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblContactRole]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tblSite]",
          "ObjectType": 0
       },
@@ -67,7 +103,27 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tucAgentRanking]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucAgents]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucAgentStatus]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tucClient]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucClientContact]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucCourier]",
          "ObjectType": 0
       },
       {
@@ -91,6 +147,22 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tucInsuranceCompany]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucJob]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucJobArchive]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucJobBooking]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tucJobStatus]",
          "ObjectType": 0
       },
@@ -99,7 +171,19 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tucNote]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tucRegion]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucSuburb]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucVehicleMake]",
          "ObjectType": 0
       }
    ],

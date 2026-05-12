@@ -9,7 +9,7 @@ import type {
   WorkflowLookupsResponse,
   ClientLookupDto,
   ServiceLookupDto,
-} from '../types';
+} from '../types/configurator';
 
 const BASE_URL = '/api';
 
@@ -65,7 +65,10 @@ export const workflowApi = {
 
 // --- EventType ---
 export const eventTypeApi = {
-  getAll: () => request<{ eventTypes: Array<{ id: number; name: string; group: string }> }>('/eventtype'),
+  getAll: (group?: string) =>
+    request<{ eventTypes: Array<{ id: number; name: string; group: string }> }>(
+      '/eventtype' + (group ? `?group=${encodeURIComponent(group)}` : '')
+    ),
   search: (searchText?: string) =>
     request<{ eventTypes: Array<{ id: number; name: string; group: string }> }>('/eventtype/Search', {
       method: 'POST',

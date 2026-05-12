@@ -12,9 +12,14 @@ namespace DfrntDriveConfigurator.Core.Application.Services;
 
 public class EventTypeService(IDbContextFactory<DynamicDespatchDbContext> contextFactory) : BaseService(contextFactory)
 {
-    public async Task<EventTypesResponse> GetAll(Guid messageId)
+    public async Task<EventTypesResponse> GetAll(Guid messageId, string? group = null)
     {
-        var types = await Context.TucEventTypes
+        var query = Context.TucEventTypes.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(group))
+            query = query.Where(e => e.UcetGroup == group);
+
+        var types = await query
             .OrderBy(e => e.UcetName)
             .Select(e => new EventTypeItemDto { Id = e.UcetId, Name = e.UcetName ?? "" })
             .ToListAsync();
@@ -22,9 +27,12 @@ public class EventTypeService(IDbContextFactory<DynamicDespatchDbContext> contex
         return new EventTypesResponse(messageId) { Success = true, EventTypes = types };
     }
 
-    public async Task<EventTypesResponse> Search(SearchRequest request)
+    public async Task<EventTypesResponse> Search(SearchRequest request, string? group = null)
     {
         var query = Context.TucEventTypes.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(group))
+            query = query.Where(e => e.UcetGroup == group);
 
         if (!string.IsNullOrWhiteSpace(request.SearchText))
             query = query.Where(e => EF.Functions.Like(e.UcetName, $"%{request.SearchText}%"));

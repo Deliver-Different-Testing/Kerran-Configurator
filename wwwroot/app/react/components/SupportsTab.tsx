@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { SupportType } from '../types';
+import type { SupportType } from '../types/configurator';
 import { eventTypeApi } from '../services/api';
 import { SUPPORTS_META, SUPPORT_CATEGORIES } from '../data/supportsMeta';
-import type { ToastFn } from '../App';
+import type { ToastFn } from '../pages/DfDriveConfigShell';
 
 interface Props { showToast: ToastFn }
 
@@ -173,7 +173,7 @@ export default function SupportsTab({ showToast }: Props) {
     setAddModal({ open: true, availableTypes: [], loading: true });
     setAddSearch('');
     try {
-      const res = await eventTypeApi.getAll();
+      const res = await eventTypeApi.getAll('CS');
       const allTypes: Array<{ id: number; name: string }> = res.eventTypes || [];
       const existingIds = new Set(supports.map(s => s.id));
       const available = allTypes.filter(t => !existingIds.has(String(t.id)));

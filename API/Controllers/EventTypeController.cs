@@ -15,12 +15,12 @@ namespace DfrntDriveConfigurator.Api.Controllers;
 public class EventTypeController(EventTypeService eventTypeService) : BaseController
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] string? group = null)
     {
         try
         {
             Log.Information($"({Request.Method} {Request.Path})");
-            return HandleResponseNoLogging(await eventTypeService.GetAll(Guid.NewGuid()));
+            return HandleResponseNoLogging(await eventTypeService.GetAll(Guid.NewGuid(), group));
         }
         catch (Exception e)
         {
@@ -30,13 +30,13 @@ public class EventTypeController(EventTypeService eventTypeService) : BaseContro
     }
 
     [HttpPost("Search")]
-    public async Task<IActionResult> Search([FromBody] SearchRequest request)
+    public async Task<IActionResult> Search([FromBody] SearchRequest request, [FromQuery] string? group = null)
     {
         try
         {
             Log.Information($"({Request.Method} {Request.Path}): {JsonConvert.SerializeObject(request)}");
             if (!ModelState.IsValid) return HandleInvalidModelState(request.MessageId);
-            return HandleResponseNoLogging(await eventTypeService.Search(request));
+            return HandleResponseNoLogging(await eventTypeService.Search(request, group));
         }
         catch (Exception e)
         {

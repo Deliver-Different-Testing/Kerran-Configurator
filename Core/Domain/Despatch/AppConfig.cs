@@ -28,4 +28,6 @@ public partial class AppConfig
     public DateTime? LastModified { get; set; }
 
     public string LastModifiedBy { get; set; }
+
+    public bool IsOverridable { get; set; }
 }

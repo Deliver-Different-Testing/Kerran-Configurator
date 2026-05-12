@@ -2,7 +2,7 @@ import { useState } from 'react';
 import WorkflowsTab from './WorkflowsTab';
 import SupportsTab from './SupportsTab';
 import FeatureFlagsTab from './FeatureFlagsTab';
-import type { ToastFn } from '../App';
+import type { ToastFn } from '../pages/DfDriveConfigShell';
 
 type TabId = 'workflows' | 'supports' | 'flags';
 

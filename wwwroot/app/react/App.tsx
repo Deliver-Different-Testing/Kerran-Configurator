@@ -31,6 +31,7 @@ import FleetManagement from './pages/np/FleetManagement';
 import Scheduling from './pages/np/Scheduling';
 import Operations from './pages/np/Operations';
 import QuizBuilderPage from './pages/np/QuizBuilderPage';
+import NpQuotes from './pages/np/Quotes';
 import NpSettings from './pages/np/Settings';
 import OpenforceSettings from './pages/settings/OpenforceSettings';
 
@@ -126,6 +127,7 @@ export default function App() {
             <Route path="users" element={<Users />} />
             <Route path="users/import" element={<UserImport />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="quotes" element={<NpQuotes />} />
             <Route path="compliance" element={<ComplianceHub />} />
             <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
             <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />

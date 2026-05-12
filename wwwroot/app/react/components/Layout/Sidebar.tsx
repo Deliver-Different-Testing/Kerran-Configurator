@@ -236,6 +236,10 @@ function buildNpSections(): NavSection[] {
       ],
     },
     {
+      id: 'quotes', label: 'Quote Invites', icon: icons.quotes,
+      items: [{ id: '/quotes', label: 'Quote Invites', implemented: true }],
+    },
+    {
       id: 'recruitment', label: 'Recruitment', icon: icons.recruitment,
       items: [
         { id: '/recruitment', label: 'Pipeline', implemented: true },

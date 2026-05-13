@@ -14,7 +14,8 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Tenant;
 
 public class TenantQuotesService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
-    IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
+    IHttpContextAccessor httpContextAccessor,
+    QuoteNotificationService notificationService) : BaseService(contextFactory)
 {
     public async Task<TenantQuotePostingsResponse> GetPostings(Guid messageId)
     {
@@ -244,6 +245,11 @@ public class TenantQuotesService(
         };
         Context.QuotesQuotes.Add(quote);
         await Context.SaveChangesAsync();
+
+        // Phase 5+13 — best-effort notification to the carrier. Failure logs
+        // a warning but does not block the invite (the invite row is source
+        // of truth; email delivery is downstream).
+        await notificationService.TryNotifyCarrierAsync(quote.Id);
 
         // Round-trip the full list of quotes for this posting so the modal
         // refresh on close picks up the new row.

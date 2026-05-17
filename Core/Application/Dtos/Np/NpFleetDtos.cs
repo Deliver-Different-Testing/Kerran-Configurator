@@ -200,6 +200,22 @@ public class NpFleetCourierUpdateDto
     public string Notes { get; set; } = string.Empty;
 }
 
+// Payload for POST /api/v1/np/fleet — the lean "Quick Add" courier-create
+// flow. Only the essentials are captured; the remaining ~45 fields on
+// NpFleetCourierDto are filled afterwards from the CourierSetup edit screen.
+// Code is user-supplied (matches AdminManager's CourierService.Create) — the
+// service validates it's non-empty and not already in use before insert.
+public class NpFleetCourierCreateDto
+{
+    public string Code { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string SurName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Mobile { get; set; } = string.Empty;       // personal mobile
+    public string VehicleType { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
+}
+
 public class NpFleetCourierResponse : BaseResponse
 {
     public NpFleetCourierResponse(Guid messageId) : base(messageId) { }

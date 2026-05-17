@@ -359,8 +359,23 @@ export const courierService = {
     });
   },
 
-  async create(_courier: Partial<Courier>): Promise<Courier> {
-    throw new Error('create() not yet wired to backend');
+  // Quick-add create — POST /api/v1/np/fleet. Sends the lean field set the
+  // backend NpFleetCourierCreateDto accepts; the remaining ~45 Courier fields
+  // are filled afterwards via CourierSetup (Edit). Courier.phone holds the
+  // personal mobile (see toCourier), so it maps to the DTO's `mobile`.
+  async create(courier: Partial<Courier>): Promise<Courier> {
+    const payload = {
+      code: (courier.code ?? '').trim(),
+      firstName: (courier.firstName ?? '').trim(),
+      surName: (courier.surName ?? '').trim(),
+      email: (courier.email ?? '').trim(),
+      mobile: courier.phone ?? '',
+      vehicleType: courier.vehicle ?? '',
+      notes: courier.notes ?? '',
+    };
+    const { data } = await api.post<NpFleetCourierApi>('/fleet', payload);
+    if (!data) throw new Error('Server returned no courier');
+    return toCourier(data);
   },
 
   async update(id: number, courier: Partial<Courier>): Promise<Courier> {

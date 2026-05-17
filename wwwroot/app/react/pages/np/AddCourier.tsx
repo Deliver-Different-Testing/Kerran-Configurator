@@ -62,75 +62,97 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
+// Pull the backend's BaseResponse error message out of an axios error so the
+// quick-add form can show the real reason (duplicate code, name clash, …).
+function extractCourierError(e: unknown): string {
+  const ax = e as { response?: { data?: { messages?: { message?: string }[] } } };
+  return ax.response?.data?.messages?.[0]?.message
+    ?? 'Could not save the courier. Please try again.';
+}
+
+// Quick Add — the lean courier-create path, wired to POST /api/v1/np/fleet.
+// Captures only the essentials; the remaining ~45 fields are filled in
+// afterwards from CourierSetup (Edit). The full 5-step wizard below is a
+// separate, still-mock path.
 function QuickAddForm({ onCancel }: { onCancel: () => void }) {
   const navigate = useNavigate();
-  const fleets = fleetService.getAll();
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    firstName: '', surname: '', email: '', mobile: '', company: '',
-    vehicleType: '', notes: '', fleet: '', location: '',
+    code: '', firstName: '', surname: '', email: '', mobile: '',
+    vehicleType: '', notes: '',
   });
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
-  const handleSave = () => {
+  const canSave = !!form.code.trim() && !!form.firstName.trim()
+    && !!form.surname.trim() && !!form.mobile.trim();
+
+  const handleSave = async () => {
+    setError(null);
     setSaving(true);
-    setTimeout(() => { navigate('/fleet'); }, 600);
+    try {
+      await courierService.create({
+        code: form.code,
+        firstName: form.firstName,
+        surName: form.surname,
+        email: form.email,
+        phone: form.mobile,        // Courier.phone is the personal mobile
+        vehicle: form.vehicleType,
+        notes: form.notes,
+      });
+      navigate('/fleet');
+    } catch (e) {
+      setError(extractCourierError(e));
+      setSaving(false);
+    }
   };
 
   return (
     <>
-      <h2 className="text-xl font-bold mb-1">Add Agent — Self-Found Lead</h2>
-      <p className="text-sm text-text-secondary mb-5">Enter the details you have. The agent will be created in your fleet and can complete compliance later.</p>
+      <h2 className="text-xl font-bold mb-1">Add Courier — Quick Add</h2>
+      <p className="text-sm text-text-secondary mb-5">Enter the essentials to create the courier. Vehicle, licensing, insurance and compliance details can be completed afterwards from the Courier Setup screen.</p>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-2.5 text-sm mb-4">
+          {error}
+        </div>
+      )}
 
       <div className="bg-white border border-border rounded-lg p-5 space-y-5">
         <div>
           <div className="text-sm font-bold text-brand-cyan mb-3 pb-1.5 border-b border-border">Contact Details</div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary uppercase tracking-wide">First Name <span className="text-red-500">*</span></label>
-              <input value={form.firstName} onChange={e => set('firstName', e.target.value)} placeholder="e.g. John" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary uppercase tracking-wide">Surname <span className="text-red-500">*</span></label>
-              <input value={form.surname} onChange={e => set('surname', e.target.value)} placeholder="e.g. Smith" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary uppercase tracking-wide">Email</label>
-              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="john@example.com" />
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Courier Code <span className="text-red-500">*</span></label>
+              <input value={form.code} onChange={e => set('code', e.target.value)} maxLength={50} placeholder="e.g. JSMITH" />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-text-secondary uppercase tracking-wide">Mobile <span className="text-red-500">*</span></label>
-              <input value={form.mobile} onChange={e => set('mobile', e.target.value)} placeholder="+1 555 123 4567" />
+              <input value={form.mobile} onChange={e => set('mobile', e.target.value)} maxLength={50} placeholder="+1 555 123 4567" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">First Name <span className="text-red-500">*</span></label>
+              <input value={form.firstName} onChange={e => set('firstName', e.target.value)} maxLength={50} placeholder="e.g. John" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Surname <span className="text-red-500">*</span></label>
+              <input value={form.surname} onChange={e => set('surname', e.target.value)} maxLength={50} placeholder="e.g. Smith" />
             </div>
             <div className="flex flex-col gap-1 col-span-full">
-              <label className="text-xs text-text-secondary uppercase tracking-wide">Company / Trading Name</label>
-              <input value={form.company} onChange={e => set('company', e.target.value)} placeholder="Optional — sole trader or company name" />
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Email</label>
+              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} maxLength={100} placeholder="john@example.com" />
             </div>
           </div>
         </div>
 
         <div>
-          <div className="text-sm font-bold text-brand-cyan mb-3 pb-1.5 border-b border-border">Assignment</div>
+          <div className="text-sm font-bold text-brand-cyan mb-3 pb-1.5 border-b border-border">Vehicle</div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs text-text-secondary uppercase tracking-wide">Vehicle Type</label>
               <select value={form.vehicleType} onChange={e => set('vehicleType', e.target.value)}>
                 <option value="">Select…</option>
                 <option>Car</option><option>Van</option><option>Truck</option><option>Motorcycle</option><option>Bicycle</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary uppercase tracking-wide">Fleet</label>
-              <select value={form.fleet} onChange={e => set('fleet', e.target.value)}>
-                <option value="">— Select Fleet —</option>
-                {fleets.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary uppercase tracking-wide">Location / Depot</label>
-              <select value={form.location} onChange={e => set('location', e.target.value)}>
-                <option value="">— Select —</option>
-                <option>Chicago</option><option>Dallas</option><option>Houston</option><option>Los Angeles</option><option>Miami</option>
               </select>
             </div>
           </div>
@@ -140,18 +162,18 @@ function QuickAddForm({ onCancel }: { onCancel: () => void }) {
           <div className="text-sm font-bold text-brand-cyan mb-3 pb-1.5 border-b border-border">Notes</div>
           <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
             className="w-full border border-border rounded-md px-3 py-2 text-sm" rows={3}
-            placeholder="How did you find this lead? Any context for the NP team…" />
+            placeholder="Any context for the team…" />
         </div>
 
         <div className="bg-blue-50 border border-blue-200 text-blue-700 rounded-lg px-4 py-2.5 text-xs">
-          💡 Once saved, the agent will appear in your fleet. They'll need to complete compliance documents and training before being approved for client work.
+          💡 Once saved, the courier appears in your fleet. Open Courier Setup to add vehicle, licensing, insurance and compliance details.
         </div>
       </div>
 
       <div className="flex gap-2.5 mt-4">
-        <button onClick={handleSave} disabled={saving || !form.firstName.trim() || !form.surname.trim() || !form.mobile.trim()}
+        <button onClick={handleSave} disabled={saving || !canSave}
           className="bg-brand-cyan text-brand-dark border-none font-medium px-5 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50">
-          {saving ? 'Saving…' : 'Save Agent'}
+          {saving ? 'Saving…' : 'Save Courier'}
         </button>
         <button onClick={onCancel} className="bg-transparent border border-border text-text-primary px-4 py-2 rounded-md text-sm hover:border-brand-cyan hover:text-brand-cyan transition-all">
           Cancel

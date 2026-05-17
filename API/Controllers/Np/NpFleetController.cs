@@ -34,6 +34,25 @@ public class NpFleetController(NpFleetService npFleetService) : BaseController
         }
     }
 
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] NpFleetCourierCreateDto dto)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await npFleetService.CreateAsync(dto, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Courier);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to create NP courier");
+            throw;
+        }
+    }
+
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] NpFleetCourierUpdateDto dto)
     {

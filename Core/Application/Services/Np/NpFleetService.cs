@@ -102,6 +102,100 @@ public class NpFleetService(
         };
     }
 
+    public async Task<NpFleetCourierResponse> CreateAsync(NpFleetCourierCreateDto dto, Guid messageId)
+    {
+        var scope = await scopeResolver.ResolveAsync();
+
+        if (!scope.IsAdmin && scope.NpAgentId is null)
+        {
+            return Fail(messageId, "No NP scope configured for this user.");
+        }
+
+        var code = (dto.Code ?? string.Empty).Trim();
+        var firstName = (dto.FirstName ?? string.Empty).Trim();
+        var surName = (dto.SurName ?? string.Empty).Trim();
+        var email = (dto.Email ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return Fail(messageId, "Courier code is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(surName))
+        {
+            return Fail(messageId, "First name and surname are required.");
+        }
+
+        // Code, name and email pre-checks — tenant-wide. tucCourier has a
+        // UNIQUE index on (uccrName, uccrSurname), so a name clash would
+        // otherwise surface as a raw DbUpdateException; the explicit check
+        // turns it into a clean message. Code/email aren't DB-unique but a
+        // duplicate is almost always a mistake worth flagging.
+        if (await Context.TucCouriers.AsNoTracking().AnyAsync(c => c.Code == code))
+        {
+            return Fail(messageId, $"Courier code \"{code}\" is already in use.");
+        }
+
+        if (await Context.TucCouriers.AsNoTracking()
+                .AnyAsync(c => c.UccrName == firstName && c.UccrSurname == surName))
+        {
+            return Fail(messageId, $"A courier named \"{firstName} {surName}\" already exists.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(email) &&
+            await Context.TucCouriers.AsNoTracking().AnyAsync(c => c.UccrEmail == email))
+        {
+            return Fail(messageId, $"Courier email \"{email}\" is already in use.");
+        }
+
+        var userEmail = httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.Name)?.Value
+                        ?? httpContextAccessor.HttpContext?.User.FindFirst("name")?.Value
+                        ?? "system";
+        var now = DateTime.UtcNow;
+
+        var courier = new TucCourier
+        {
+            Code = code,
+            UccrName = firstName,
+            UccrSurname = surName,
+            UccrEmail = email,
+            PersonalMobile = (dto.Mobile ?? string.Empty).Trim(),
+            UccrVehicle = (dto.VehicleType ?? string.Empty).Trim(),
+            UccrNotes = dto.Notes ?? string.Empty,
+
+            // Quick-add couriers are standalone Master couriers (CourierType
+            // 2). A Sub courier (type 3) would need a master assigned, which
+            // the lean quick-add form doesn't capture.
+            CourierTypeId = 2,
+            Active = true,
+
+            // NP users' new couriers belong to their own NP scope; couriers
+            // created by an admin stay unassigned (NpAgentId null) until an
+            // NP picks them up.
+            NpAgentId = scope.IsAdmin ? null : scope.NpAgentId,
+
+            Created = now,
+            CreatedBy = userEmail,
+            LastModified = now,
+            LastModifiedBy = userEmail,
+        };
+
+        Context.TucCouriers.Add(courier);
+        await Context.SaveChangesAsync();
+
+        // Re-project so the response shape exactly matches GetAll's read model.
+        var read = await Context.TucCouriers.AsNoTracking()
+            .Where(c => c.UccrId == courier.UccrId)
+            .Select(ProjectToDto)
+            .FirstOrDefaultAsync();
+
+        return new NpFleetCourierResponse(messageId)
+        {
+            Success = true,
+            Courier = read,
+        };
+    }
+
     private static NpFleetCourierResponse Fail(Guid messageId, string message) => new(messageId)
     {
         Success = false,

@@ -193,8 +193,10 @@ builder.Services.AddScoped<
 
 // Phase 5+1 — Tenant scope services
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantAgentService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.QuoteInviteTokenService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.QuoteNotificationService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantQuotesService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Public.PublicQuotesService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantDashboardService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantLookupService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantProspectService>();

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from './context/AuthContext';
 import { TenantConfigProvider } from './context/TenantConfigContext';
@@ -49,10 +49,30 @@ import { TenantSettings } from './pages/tenant/Settings';
 // DF Admin–only page.
 import TenantConfigPage from './pages/settings/TenantConfig';
 
+// Public (anonymous) routes — slice 2b external-carrier flow.
+import QuoteResponse from './pages/public/QuoteResponse';
+
 export default function App() {
+  // All hooks first (Rules of Hooks — same call order every render).
+  // AuthProvider wraps the app even for public routes; AuthContext returns
+  // ANONYMOUS when window.__APP_USER__ is null, but we just ignore the role
+  // for the public branch below.
+  const location = useLocation();
   const { role } = useAuth();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState<number | null>(null);
+
+  // Public routes — slice 2b external-carrier flow. PublicController (the
+  // Razor entry) serves the SPA with window.__APP_USER__ = null and
+  // [AllowAnonymous] so logged-out prospect agents can reach the form.
+  if (location.pathname.startsWith('/p/')) {
+    return (
+      <Routes>
+        <Route path="/p/quote/:token" element={<QuoteResponse />} />
+        <Route path="/p/*" element={<Navigate to="/p/" replace />} />
+      </Routes>
+    );
+  }
 
   if (role === 'dfadmin') {
     // DF Admin sees everything: full NP page set + DF Admin-only TenantConfig

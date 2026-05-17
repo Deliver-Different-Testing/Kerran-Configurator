@@ -22,7 +22,8 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Tenant;
 // best-effort delivery.
 public class QuoteNotificationService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
-    IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
+    IHttpContextAccessor httpContextAccessor,
+    QuoteInviteTokenService tokenService) : BaseService(contextFactory)
 {
     private const string FeatureFlagCategory = "NP";
     private const string FeatureFlagKey = "QuoteInviteEmailEnabled";
@@ -194,12 +195,36 @@ public class QuoteNotificationService(
 
     private QuoteInviteEmailTemplates.TemplateData BuildTemplateData(QuoteInviteInfo info)
     {
+        var request = httpContextAccessor.HttpContext?.Request;
+        var baseUrl = request is not null ? $"{request.Scheme}://{request.Host}" : null;
+
         string? portalLink = null;
-        if (info.AgentPortalEnabled)
+        if (baseUrl is not null)
         {
-            var request = httpContextAccessor.HttpContext?.Request;
-            if (request is not null)
-                portalLink = $"{request.Scheme}://{request.Host}/quotes";
+            if (info.AgentPortalEnabled)
+            {
+                // Known NP agent with portal access — link straight to the
+                // logged-in inbox at /quotes (slice 2a's NpQuotes page).
+                portalLink = $"{baseUrl}/quotes";
+            }
+            else if (info.ProspectAgentId is not null)
+            {
+                // External (CLDA/ECA) prospect — issue a 30-day signed token
+                // (encodes both tenantId + quoteId so the anonymous public
+                // endpoint can resolve the per-tenant DB without a claim)
+                // and link to the public-form route (slice 2b).
+                var tenantId = request?.HttpContext?.User.Claims
+                    .FirstOrDefault(c => c.Type == "CurrentTenantID")?.Value;
+                if (!string.IsNullOrEmpty(tenantId))
+                {
+                    var token = tokenService.Issue(tenantId, info.QuoteId);
+                    portalLink = $"{baseUrl}/p/quote/{token}";
+                }
+                else
+                {
+                    Serilog.Log.Warning("Cannot issue prospect-invite token for quoteId={QuoteId}: CurrentTenantID claim missing", info.QuoteId);
+                }
+            }
         }
 
         return new QuoteInviteEmailTemplates.TemplateData

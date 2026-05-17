@@ -17,30 +17,49 @@ public class DynamicDespatchDbContextFactory(
 {
     private readonly DbContextOptions<DespatchContext> _options = options.Value;
 
+    // Items key set by anonymous public flows (slice 2b external-carrier
+    // public-link, etc) — they decode tenantId from a signed token and stash
+    // it here so the factory can resolve the connection string without a
+    // CurrentTenantID claim. Per-request only.
+    public const string OverrideTenantIdItemsKey = "OverrideTenantId";
+
     public DespatchContext CreateDbContext()
     {
         var httpContext = contextAccessor.HttpContext;
-        var isAuthenticated = httpContext?.User.Identity?.IsAuthenticated ?? false;
-        var tenantId = httpContext?.User.Claims.FirstOrDefault(x => x.Type == "CurrentTenantID")?.Value;
+        string? tenantId;
+        bool isAuthenticated;
+
+        // Public-flow override takes priority over claim-based resolution.
+        var overrideTenantId = httpContext?.Items[OverrideTenantIdItemsKey] as string;
+        if (!string.IsNullOrEmpty(overrideTenantId))
+        {
+            tenantId = overrideTenantId;
+            isAuthenticated = true;   // suppresses the unauthenticated warnings below
+        }
+        else
+        {
+            isAuthenticated = httpContext?.User.Identity?.IsAuthenticated ?? false;
+            tenantId = httpContext?.User.Claims.FirstOrDefault(x => x.Type == "CurrentTenantID")?.Value;
+
+            // Diagnostic logging for troubleshooting authentication issues
+            if (httpContext == null)
+            {
+                Log.Warning("CreateDbContext called without HttpContext - no authentication context available");
+            }
+            else if (!isAuthenticated)
+            {
+                Log.Warning("CreateDbContext called with unauthenticated request. Path: {Path}",
+                    httpContext.Request.Path);
+            }
+            else if (string.IsNullOrEmpty(tenantId))
+            {
+                Log.Warning("CreateDbContext called with authenticated user but missing CurrentTenantID claim. Path: {Path}, User: {User}",
+                    httpContext.Request.Path,
+                    httpContext.User.Identity?.Name ?? "unknown");
+            }
+        }
+
         var cacheKey = $"{tenantId}-ClientManager-Connection";
-
-        // Diagnostic logging for troubleshooting authentication issues
-        if (httpContext == null)
-        {
-            Log.Warning("CreateDbContext called without HttpContext - no authentication context available");
-        }
-        else if (!isAuthenticated)
-        {
-            Log.Warning("CreateDbContext called with unauthenticated request. Path: {Path}",
-                httpContext.Request.Path);
-        }
-        else if (string.IsNullOrEmpty(tenantId))
-        {
-            Log.Warning("CreateDbContext called with authenticated user but missing CurrentTenantID claim. Path: {Path}, User: {User}",
-                httpContext.Request.Path,
-                httpContext.User.Identity?.Name ?? "unknown");
-        }
-
         var connectionString = connectionStringManager.GetConnectionStringAsync(cacheKey).GetAwaiter().GetResult();
 
         if (string.IsNullOrEmpty(connectionString))

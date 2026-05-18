@@ -91,6 +91,18 @@ public partial class TucAgent
 
     public byte NpTier { get; set; }
 
+    public string Association { get; set; }
+
+    public string AssociationMemberId { get; set; }
+
+    public string ContactName { get; set; }
+
+    public string ContactEmail { get; set; }
+
+    public decimal? DefaultCourierPayPercent { get; set; }
+
+    public virtual ICollection<AgentCoverageArea> AgentCoverageAreas { get; set; } = new List<AgentCoverageArea>();
+
     public virtual TucAgentRanking Ranking { get; set; }
 
     public virtual TucAgentStatus Status { get; set; }

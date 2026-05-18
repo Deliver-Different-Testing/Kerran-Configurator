@@ -19,6 +19,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<AgentCourierRate> AgentCourierRates { get; set; }
 
+    public virtual DbSet<AgentCoverageArea> AgentCoverageAreas { get; set; }
+
     public virtual DbSet<AgentOnboarding> AgentOnboardings { get; set; }
 
     public virtual DbSet<AppConfig> AppConfigs { get; set; }
@@ -154,6 +156,26 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.Notes).HasMaxLength(500);
             entity.Property(e => e.PayPercentage).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.UpdatedDate).HasDefaultValueSql("(getutcdate())");
+        });
+
+        modelBuilder.Entity<AgentCoverageArea>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__AgentCov__3214EC07B28F9978");
+
+            entity.ToTable("AgentCoverageArea");
+
+            entity.HasIndex(e => e.AgentId, "IX_AgentCoverageArea_AgentId");
+
+            entity.Property(e => e.AreaName)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.CreatedBy).HasMaxLength(100);
+            entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getutcdate())");
+
+            entity.HasOne(d => d.Agent).WithMany(p => p.AgentCoverageAreas)
+                .HasForeignKey(d => d.AgentId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_AgentCoverageArea_Agent");
         });
 
         modelBuilder.Entity<AgentOnboarding>(entity =>
@@ -603,7 +625,7 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => new { e.JobNumber, e.ClientId }, "IX_tblBulkJob_JobNumber_ClientID").HasFilter("([JobNumber] IS NOT NULL)");
 
-            entity.HasIndex(e => e.NpAgentId, "IX_tblBulkJob_NpAgentId").HasFilter("([NpAgentId] IS NOT NULL)");
+            entity.HasIndex(e => e.NpAgentId, "IX_tblBulkJob_NpAgentId");
 
             entity.HasIndex(e => new { e.ShopRef1, e.ShopRef2, e.ClientId }, "IX_tblBulkJob_ShopRef1_ShopRef2_ClientID").HasFilter("([ShopRef1] IS NOT NULL)");
 
@@ -881,10 +903,15 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.AddressLine7).HasMaxLength(255);
             entity.Property(e => e.AddressLine8).HasMaxLength(255);
             entity.Property(e => e.AgentRateMarkup).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.Association).HasMaxLength(50);
+            entity.Property(e => e.AssociationMemberId).HasMaxLength(100);
+            entity.Property(e => e.ContactEmail).HasMaxLength(200);
+            entity.Property(e => e.ContactName).HasMaxLength(200);
             entity.Property(e => e.Created).HasColumnType("datetime");
             entity.Property(e => e.CreatedBy)
                 .IsRequired()
                 .HasMaxLength(50);
+            entity.Property(e => e.DefaultCourierPayPercent).HasColumnType("decimal(9, 4)");
             entity.Property(e => e.Flagfall).HasColumnType("money");
             entity.Property(e => e.IsNetworkPartner).HasAnnotation("Relational:DefaultConstraintName", "DF_tucAgents_IsNetworkPartner");
             entity.Property(e => e.ItemRate).HasColumnType("money");
@@ -996,7 +1023,7 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => e.ClientTypeId, "IX_tucClient_ClientTypeId");
 
-            entity.HasIndex(e => e.NpAgentId, "IX_tucClient_NpAgentId").HasFilter("([NpAgentId] IS NOT NULL)");
+            entity.HasIndex(e => e.NpAgentId, "IX_tucClient_NpAgentId");
 
             entity.HasIndex(e => e.UcclName, "Name").IsUnique();
 
@@ -1606,7 +1633,7 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => new { e.UccrName, e.UccrSurname }, "IX_tucCourier_FullName").IsUnique();
 
-            entity.HasIndex(e => e.NpAgentId, "IX_tucCourier_NpAgentId").HasFilter("([NpAgentId] IS NOT NULL)");
+            entity.HasIndex(e => e.NpAgentId, "IX_tucCourier_NpAgentId");
 
             entity.HasIndex(e => e.UccrInsuranceId, "InsuranceID");
 
@@ -2193,7 +2220,7 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => e.FromAirportId, "IX_tucJob_FromAirportId");
 
-            entity.HasIndex(e => e.NpAgentId, "IX_tucJob_NpAgentId").HasFilter("([NpAgentId] IS NOT NULL)");
+            entity.HasIndex(e => e.NpAgentId, "IX_tucJob_NpAgentId");
 
             entity.HasIndex(e => e.PartnerJobGuid, "IX_tucJob_PartnerJobGuid");
 
@@ -2670,7 +2697,7 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => e.FromAirportId, "IX_tucJobArchive_FromAirportId");
 
-            entity.HasIndex(e => e.NpAgentId, "IX_tucJobArchive_NpAgentId").HasFilter("([NpAgentId] IS NOT NULL)");
+            entity.HasIndex(e => e.NpAgentId, "IX_tucJobArchive_NpAgentId");
 
             entity.HasIndex(e => e.ToAirportId, "IX_tucJobArchive_ToAirportId");
 
@@ -3082,7 +3109,7 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => e.FromAirportId, "IX_tucJobBooking_FromAirportID");
 
-            entity.HasIndex(e => e.NpAgentId, "IX_tucJobBooking_NpAgentId").HasFilter("([NpAgentId] IS NOT NULL)");
+            entity.HasIndex(e => e.NpAgentId, "IX_tucJobBooking_NpAgentId");
 
             entity.HasIndex(e => e.ToAirportId, "IX_tucJobBooking_ToAirportID");
 
@@ -3508,7 +3535,7 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => new { e.JobId, e.JobBookingId }, "IX_TucNotes_JobLookup").HasFillFactor(90);
 
-            entity.HasIndex(e => e.NpAgentId, "IX_tucNote_NpAgentId").HasFilter("([NpAgentId] IS NOT NULL)");
+            entity.HasIndex(e => e.NpAgentId, "IX_tucNote_NpAgentId");
 
             entity.HasIndex(e => new { e.ProcessedNotificationDate, e.CreatedDate }, "IX_tucNote_ProcessedNotificationDate");
 

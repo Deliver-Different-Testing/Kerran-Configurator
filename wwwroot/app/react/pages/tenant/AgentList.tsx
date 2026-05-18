@@ -40,6 +40,8 @@ export function AgentList() {
   const [rankings, setRankings] = useState<LookupItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Text buffer for the coverage-area chip editor in the Edit Agent modal.
+  const [coverageInput, setCoverageInput] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -87,6 +89,11 @@ export function AgentList() {
     isNetworkPartner: false,
     npPortalEnabled: false,
     npTierByte: 1,
+    contactName: '',
+    email: '',
+    association: 'None',
+    associationMemberId: '',
+    defaultCourierPayPercent: null,
   };
 
   function openEdit(agent: Agent) {
@@ -108,6 +115,20 @@ export function AgentList() {
     setDraft(null);
     setCreateMode(false);
     setSaveError(null);
+    setCoverageInput('');
+  }
+
+  // Adds the typed coverage area to the draft (trimmed, case-insensitively
+  // de-duped) and clears the input.
+  function addCoverageArea() {
+    if (!draft) return;
+    const area = coverageInput.trim();
+    if (!area) return;
+    const current = draft.coverageAreas ?? [];
+    if (!current.some((a) => a.toLowerCase() === area.toLowerCase())) {
+      setDraft({ ...draft, coverageAreas: [...current, area] });
+    }
+    setCoverageInput('');
   }
 
   async function handleSave() {
@@ -549,6 +570,53 @@ export function AgentList() {
                 ))}
               </select>
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Contact Name</label>
+              <input
+                type="text"
+                value={draft.contactName ?? ''}
+                onChange={(e) => setDraft({ ...draft, contactName: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Contact Email</label>
+              <input
+                type="email"
+                value={draft.email ?? ''}
+                onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Association</label>
+              <select
+                value={draft.association ?? 'None'}
+                onChange={(e) => setDraft({ ...draft, association: e.target.value as Agent['association'] })}
+              >
+                <option value="None">None</option>
+                <option value="ECA">ECA</option>
+                <option value="CLDA">CLDA</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Association Member ID</label>
+              <input
+                type="text"
+                value={draft.associationMemberId ?? ''}
+                onChange={(e) => setDraft({ ...draft, associationMemberId: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Default Courier Pay %</label>
+              <input
+                type="number"
+                step="0.01"
+                value={draft.defaultCourierPayPercent ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setDraft({ ...draft, defaultCourierPayPercent: raw === '' ? null : Number(raw) });
+                }}
+              />
+            </div>
             <div className="flex items-center gap-2 col-span-2 pt-2">
               <input
                 type="checkbox"
@@ -583,6 +651,44 @@ export function AgentList() {
                 </div>
               </>
             )}
+            <div className="flex flex-col gap-1 col-span-2">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Coverage Areas</label>
+              <div className="flex flex-wrap gap-1.5">
+                {(draft.coverageAreas ?? []).map((area) => (
+                  <span key={area} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
+                    {area}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${area}`}
+                      onClick={() => setDraft({ ...draft, coverageAreas: (draft.coverageAreas ?? []).filter((a) => a !== area) })}
+                      className="text-slate-400 hover:text-red-500"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {(draft.coverageAreas ?? []).length === 0 && (
+                  <span className="text-xs text-text-muted">No coverage areas yet.</span>
+                )}
+              </div>
+              <div className="mt-1 flex gap-2">
+                <input
+                  type="text"
+                  className="flex-1"
+                  placeholder="Add a city or territory…"
+                  value={coverageInput}
+                  onChange={(e) => setCoverageInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCoverageArea(); } }}
+                />
+                <button
+                  type="button"
+                  onClick={addCoverageArea}
+                  className="bg-brand-cyan text-brand-dark border-none font-medium px-3 py-2 rounded-md text-sm hover:shadow-cyan-glow"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
             <div className="flex flex-col gap-1 col-span-2">
               <label className="text-xs text-text-secondary uppercase tracking-wide">Notes</label>
               <textarea

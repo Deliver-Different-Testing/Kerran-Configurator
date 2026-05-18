@@ -1,14 +1,16 @@
 import api from './tenant_api';
-import type { Agent, AgentStatus, NpTier } from '@/types';
+import type { Agent, AgentStatus, AssociationType, NpTier } from '@/types';
 
 // Backend shape — kept in sync with TenantAgentDto. Pass 3 added city,
-// statusName, rankingName via lookup joins.
+// statusName, rankingName via lookup joins; Pass 4 added state plus the
+// association / contact / pay-percent columns (migration 029).
 interface TenantAgentApi {
   id: number;
   name: string;
   phone: string;
   addressLine1: string;
   city: string;
+  state: string;
   postCode: string;
   statusId: number | null;
   statusName: string;
@@ -18,8 +20,22 @@ interface TenantAgentApi {
   npPortalEnabled: boolean;
   npTier: number;
   notes: string;
+  association: string;
+  associationMemberId: string;
+  contactName: string;
+  contactEmail: string;
+  defaultCourierPayPercent: number | null;
+  coverageAreas: string[];
   created: string;
   lastModified: string;
+}
+
+// '' / unknown → 'None'; otherwise pass through the known association codes.
+function normaliseAssociation(value: string): AssociationType {
+  const v = (value ?? '').trim().toUpperCase();
+  if (v === 'ECA') return 'ECA';
+  if (v === 'CLDA') return 'CLDA';
+  return 'None';
 }
 
 function npTierFromByte(value: number, isNp: boolean): NpTier | null {
@@ -42,32 +58,33 @@ function normaliseStatus(name: string): AgentStatus {
 }
 
 // Map the lean backend shape into the rich Agent type the React pages consume.
-// Pass 3: city/status/ranking populated from real lookups. ContactName,
-// state, association, otdRate, clientsServiced, approvedPrograms still on
-// safe defaults — those need separate sources or schema additions.
+// Pass 3: city/status/ranking from real lookups. Pass 4: state, association,
+// contact name/email and default courier pay % all populated from migration-029
+// columns. coverageAreas still [] — pending the AgentCoverageArea table scaffold;
+// otdRate/clientsServiced/approvedPrograms still need their own sources.
 function toAgent(dto: TenantAgentApi): Agent {
   return {
     id: dto.id,
     name: dto.name,
-    contactName: '',
+    contactName: dto.contactName ?? '',
     phone: dto.phone,
-    email: '',
+    email: dto.contactEmail ?? '',
     address: dto.addressLine1,
     city: dto.city,
-    state: '',
+    state: dto.state ?? '',
     postCode: dto.postCode,
     country: 'US',
     gps: null,
     status: normaliseStatus(dto.statusName),
     ranking: dto.rankingId ?? 0,
     notes: dto.notes,
-    association: 'None',
-    associationMemberId: '',
+    association: normaliseAssociation(dto.association),
+    associationMemberId: dto.associationMemberId ?? '',
     isNetworkPartner: dto.isNetworkPartner,
     npTier: npTierFromByte(dto.npTier, dto.isNetworkPartner),
     npActivatedDate: null,
-    coverageAreas: [],
-    defaultCourierPayPercent: null,
+    coverageAreas: dto.coverageAreas ?? [],
+    defaultCourierPayPercent: dto.defaultCourierPayPercent ?? null,
     createdDate: dto.created,
     updatedDate: dto.lastModified,
     statusId: dto.statusId ?? undefined,
@@ -97,6 +114,13 @@ function toUpsertPayload(a: Partial<Agent>) {
     npPortalEnabled: !!a.npPortalEnabled,
     npTier: a.npTierByte ?? 1,
     notes: a.notes ?? '',
+    // Pass-4 fields. 'None' is stored as an empty string server-side.
+    association: a.association && a.association !== 'None' ? a.association : '',
+    associationMemberId: a.associationMemberId ?? '',
+    contactName: a.contactName ?? '',
+    contactEmail: a.email ?? '',
+    defaultCourierPayPercent: a.defaultCourierPayPercent ?? null,
+    coverageAreas: a.coverageAreas ?? [],
   };
 }
 

@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCouriers } from '@/hooks/useCouriers';
 import StatusBadge from '@/components/common/StatusBadge';
 import ComplianceBadge from '@/components/common/ComplianceBadge';
 import { complianceProfileService } from '@/services/np_complianceProfileService';
 import { driverApprovalService } from '@/services/np_driverApprovalService';
 import { fleetService } from '@/services/np_fleetService';
+import type { ComplianceProfile } from '@/types';
 
 interface Props {
   onSelectCourier: (id: number) => void;
@@ -26,7 +27,10 @@ export default function FleetOverview({ onSelectCourier }: Props) {
   const [roleModal, setRoleModal] = useState<number | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
 
-  const allProfiles = complianceProfileService.getAll().filter(p => p.active);
+  const [allProfiles, setAllProfiles] = useState<ComplianceProfile[]>([]);
+  useEffect(() => {
+    complianceProfileService.getAll().then(ps => setAllProfiles(ps.filter(p => p.active)));
+  }, []);
   const driverStatuses = complianceProfileService.getDriverStatuses();
   const allWithApproval = driverApprovalService.getAllCouriersWithApproval();
   const depots = fleetService.getDepots();

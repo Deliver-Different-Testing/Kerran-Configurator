@@ -19,14 +19,14 @@ export function DriverApproval() {
   const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [toast, setToast] = useState<string | null>(null);
 
-  const reload = () => {
+  const reload = async () => {
     const all = driverApprovalService.getAllCouriersWithApproval();
     setDrivers(all);
-    setProfiles(complianceProfileService.getAll());
+    setProfiles(await complianceProfileService.getAll());
     setDriverStatuses(complianceProfileService.getDriverStatuses());
   };
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { void reload(); }, []);
 
   const showToast = (msg: string) => {
     setToast(msg);

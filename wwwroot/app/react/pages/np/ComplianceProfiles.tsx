@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { complianceProfileService } from '@/services/np_complianceProfileService';
 import { documentTypeService } from '@/services/np_documentService';
@@ -347,23 +347,31 @@ export default function ComplianceProfiles() {
   const [duplicateSource, setDuplicateSource] = useState<Partial<ComplianceProfile> | null>(null);
   const [docTypes, setDocTypes] = useState<DocumentType[]>([]);
 
-  useEffect(() => {
-    setProfiles(complianceProfileService.getAll());
-    setDocTypes(documentTypeService.getAll());
+  const reload = useCallback(async () => {
+    const [p, d] = await Promise.all([
+      complianceProfileService.getAll(),
+      documentTypeService.getAll(),
+    ]);
+    setProfiles(p);
+    setDocTypes(d);
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const eligibleCounts = profiles.reduce((acc, p) => {
     acc[p.id] = complianceProfileService.getEligibleDriverCount(p.id);
     return acc;
   }, {} as Record<number, number>);
 
-  const handleSave = (data: Partial<ComplianceProfile>) => {
+  const handleSave = async (data: Partial<ComplianceProfile>) => {
     if (editingProfile === 'new' || editingProfile === 'duplicate') {
-      complianceProfileService.create(data as Omit<ComplianceProfile, 'id' | 'createdDate'>);
+      await complianceProfileService.create(data);
     } else if (editingProfile && typeof editingProfile === 'object') {
-      complianceProfileService.update(editingProfile.id, data);
+      await complianceProfileService.update(editingProfile.id, data);
     }
-    setProfiles(complianceProfileService.getAll());
+    await reload();
     setEditingProfile(null);
   };
 

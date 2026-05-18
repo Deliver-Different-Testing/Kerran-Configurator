@@ -125,7 +125,7 @@ export default function ComplianceDashboard() {
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
 
   useEffect(() => {
-    setProfiles(complianceProfileService.getAll().filter(p => p.active));
+    complianceProfileService.getAll().then(ps => setProfiles(ps.filter(p => p.active)));
   }, []);
 
   // Build alert filters from drilldown

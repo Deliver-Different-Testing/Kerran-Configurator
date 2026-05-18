@@ -187,6 +187,7 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.N
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpFleetService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpLookupService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpQuotesService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpDocumentTypeService>();
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpScopeResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpScopeResolver>();

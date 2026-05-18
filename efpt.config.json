@@ -63,11 +63,35 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[ComplianceProfileClient]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ComplianceProfileRequirements]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ComplianceProfiles]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[DocumentTypes]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[JobApplications]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[JobBarcode]",
          "ObjectType": 0
       },
       {
          "Name": "[dbo].[JobPhoto]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[JobPostings]",
          "ObjectType": 0
       },
       {

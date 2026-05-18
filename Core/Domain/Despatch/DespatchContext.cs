@@ -35,9 +35,21 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<ClientType> ClientTypes { get; set; }
 
+    public virtual DbSet<ComplianceProfile> ComplianceProfiles { get; set; }
+
+    public virtual DbSet<ComplianceProfileClient> ComplianceProfileClients { get; set; }
+
+    public virtual DbSet<ComplianceProfileRequirement> ComplianceProfileRequirements { get; set; }
+
+    public virtual DbSet<DocumentType> DocumentTypes { get; set; }
+
+    public virtual DbSet<JobApplication> JobApplications { get; set; }
+
     public virtual DbSet<JobBarcode> JobBarcodes { get; set; }
 
     public virtual DbSet<JobPhoto> JobPhotos { get; set; }
+
+    public virtual DbSet<JobPosting> JobPostings { get; set; }
 
     public virtual DbSet<JobWorkflowStep> JobWorkflowSteps { get; set; }
 
@@ -398,6 +410,103 @@ public partial class DespatchContext : DbContext
                 .HasMaxLength(50);
         });
 
+        modelBuilder.Entity<ComplianceProfile>(entity =>
+        {
+            entity.HasIndex(e => e.IsActive, "IX_ComplianceProfiles_IsActive");
+
+            entity.Property(e => e.Created).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<ComplianceProfileClient>(entity =>
+        {
+            entity.ToTable("ComplianceProfileClient");
+
+            entity.HasIndex(e => e.ProfileId, "IX_ComplianceProfileClient_ProfileId");
+
+            entity.Property(e => e.ClientName)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.HasOne(d => d.Profile).WithMany(p => p.ComplianceProfileClients)
+                .HasForeignKey(d => d.ProfileId)
+                .HasConstraintName("FK_ComplianceProfileClient_Profile");
+        });
+
+        modelBuilder.Entity<ComplianceProfileRequirement>(entity =>
+        {
+            entity.HasIndex(e => e.DocumentTypeId, "IX_ComplianceProfileReq_DocTypeId");
+
+            entity.HasIndex(e => e.ProfileId, "IX_ComplianceProfileReq_ProfileId");
+
+            entity.Property(e => e.Mandatory).HasDefaultValue(true);
+
+            entity.HasOne(d => d.DocumentType).WithMany(p => p.ComplianceProfileRequirements)
+                .HasForeignKey(d => d.DocumentTypeId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ComplianceProfileReq_DocType");
+
+            entity.HasOne(d => d.Profile).WithMany(p => p.ComplianceProfileRequirements)
+                .HasForeignKey(d => d.ProfileId)
+                .HasConstraintName("FK_ComplianceProfileReq_Profile");
+        });
+
+        modelBuilder.Entity<DocumentType>(entity =>
+        {
+            entity.HasIndex(e => e.Category, "IX_DocumentTypes_Category");
+
+            entity.HasIndex(e => e.IsActive, "IX_DocumentTypes_IsActive");
+
+            entity.HasIndex(e => e.Purpose, "IX_DocumentTypes_Purpose");
+
+            entity.Property(e => e.AppliesTo)
+                .IsRequired()
+                .HasMaxLength(20)
+                .HasDefaultValue("Both");
+            entity.Property(e => e.Category)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasDefaultValue("Other");
+            entity.Property(e => e.ContentUrl).HasMaxLength(500);
+            entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.ExpiryWarningDays).HasDefaultValue(30);
+            entity.Property(e => e.Instructions).HasMaxLength(1000);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(200);
+            entity.Property(e => e.Purpose)
+                .IsRequired()
+                .HasMaxLength(20)
+                .HasDefaultValue("Compliance");
+            entity.Property(e => e.TemplateFileName).HasMaxLength(255);
+            entity.Property(e => e.TemplateMimeType).HasMaxLength(100);
+            entity.Property(e => e.TemplateS3key)
+                .HasMaxLength(500)
+                .HasColumnName("TemplateS3Key");
+        });
+
+        modelBuilder.Entity<JobApplication>(entity =>
+        {
+            entity.HasIndex(e => e.ApplicantId, "IX_JobApplications_ApplicantId");
+
+            entity.HasIndex(e => e.PostingId, "IX_JobApplications_PostingId");
+
+            entity.Property(e => e.AppliedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Status)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasDefaultValue("applied");
+
+            entity.HasOne(d => d.Posting).WithMany(p => p.JobApplications)
+                .HasForeignKey(d => d.PostingId)
+                .HasConstraintName("FK_JobApplications_Posting");
+        });
+
         modelBuilder.Entity<JobBarcode>(entity =>
         {
             entity.ToTable("JobBarcode");
@@ -431,6 +540,22 @@ public partial class DespatchContext : DbContext
                 .HasMaxLength(50)
                 .HasDefaultValue("delivery");
             entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<JobPosting>(entity =>
+        {
+            entity.HasIndex(e => e.Status, "IX_JobPostings_Status");
+
+            entity.Property(e => e.Location).HasMaxLength(200);
+            entity.Property(e => e.PayRate).HasColumnType("decimal(10, 2)");
+            entity.Property(e => e.Status)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasDefaultValue("draft");
+            entity.Property(e => e.Title)
+                .IsRequired()
+                .HasMaxLength(300);
+            entity.Property(e => e.VehicleType).HasMaxLength(100);
         });
 
         modelBuilder.Entity<JobWorkflowStep>(entity =>

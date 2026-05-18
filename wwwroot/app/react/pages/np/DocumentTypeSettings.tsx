@@ -35,6 +35,7 @@ function PurposeBadge({ purpose }: { purpose: DocumentPurpose }) {
 interface EditState {
   mode: 'create' | 'edit';
   id?: number;
+  active: boolean;
   name: string;
   instructions: string;
   category: DocumentCategory;
@@ -52,6 +53,7 @@ interface EditState {
 
 const emptyEdit: EditState = {
   mode: 'create',
+  active: true,
   name: '',
   instructions: '',
   category: 'Other',
@@ -78,6 +80,7 @@ export default function DocumentTypeSettings() {
     setEditing({
       mode: 'edit',
       id: dt.id,
+      active: dt.active,
       name: dt.name,
       instructions: dt.instructions || '',
       category: dt.category,
@@ -100,6 +103,7 @@ export default function DocumentTypeSettings() {
     try {
       const payload: any = {
         name: editing.name,
+        active: editing.active,
         instructions: editing.instructions || undefined,
         category: editing.category,
         mandatory: editing.mandatory,
@@ -132,6 +136,11 @@ export default function DocumentTypeSettings() {
   const handleDeactivate = async (id: number) => {
     if (!confirm('Deactivate this document type?')) return;
     await documentTypeService.deactivate(id);
+    await refresh();
+  };
+
+  const handleReactivate = async (dt: DocumentType) => {
+    await documentTypeService.update(dt.id, { ...dt, active: true });
     await refresh();
   };
 
@@ -203,10 +212,13 @@ export default function DocumentTypeSettings() {
             </thead>
             <tbody>
               {types.map((dt) => (
-                <tr key={dt.id} className="border-b border-border last:border-b-0 hover:bg-surface-light/50">
+                <tr key={dt.id} className={`border-b border-border last:border-b-0 hover:bg-surface-light/50 ${dt.active ? '' : 'opacity-55'}`}>
                   <td className="px-4 py-2.5 text-text-secondary">{dt.sortOrder}</td>
                   <td className="px-4 py-2.5 font-medium text-brand-dark">
                     {dt.name}
+                    {!dt.active && (
+                      <span className="ml-2 align-middle text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 font-semibold">Inactive</span>
+                    )}
                     {dt.instructions && (
                       <div className="text-xs text-text-secondary mt-0.5 truncate max-w-[200px]">{dt.instructions}</div>
                     )}
@@ -264,12 +276,21 @@ export default function DocumentTypeSettings() {
                       >
                         Edit
                       </button>
-                      <button
-                        onClick={() => handleDeactivate(dt.id)}
-                        className="text-xs text-red-500 hover:underline"
-                      >
-                        Remove
-                      </button>
+                      {dt.active ? (
+                        <button
+                          onClick={() => handleDeactivate(dt.id)}
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          Deactivate
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleReactivate(dt)}
+                          className="text-xs text-green-600 hover:underline"
+                        >
+                          Reactivate
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -68,7 +68,9 @@ type SortDir = 'asc' | 'desc';
 
 export default function RecruitmentPipeline() {
   const navigate = useNavigate();
-  const { applicants, approveApplicant, resubmitApplicant, refresh } = useRecruitment();
+  // Read-only pipeline (Slice A) — only the applicant list is consumed;
+  // approve/resubmit actions land in a later slice.
+  const { applicants } = useRecruitment();
   const [searchInput, setSearchInput] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('');
   const [complianceFilter, setComplianceFilter] = useState<string>('');
@@ -175,13 +177,13 @@ export default function RecruitmentPipeline() {
 
   const handleActivate = () => {
     if (!activateModal) return;
-    approveApplicant(activateModal.id);
-    setToast(`${activateModal.firstName} ${activateModal.lastName} activated as courier`);
-    setTimeout(() => setToast(null), 3000);
+    // Approve → courier promotion is a later recruitment slice; the read-only
+    // pipeline shows the applicant's completed requirements but can't activate.
+    setToast('Activating an applicant as a courier is coming in the next update.');
+    setTimeout(() => setToast(null), 3500);
     setActivateModal(null);
     setActivateFleetId(null);
     setActivateDepotId(null);
-    refresh();
   };
 
   const handleSendToOpenforce = () => {
@@ -341,9 +343,9 @@ export default function RecruitmentPipeline() {
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => {
-                          resubmitApplicant(a.id);
-                          setToast(`${a.firstName} ${a.lastName} resubmitted to pipeline`);
-                          setTimeout(() => setToast(null), 3000);
+                          // Resubmit is a later recruitment slice (stage actions).
+                          setToast('Re-submitting an applicant is coming in the next update.');
+                          setTimeout(() => setToast(null), 3500);
                         }}
                         className="text-xs px-3 py-1.5 rounded-md bg-amber-500 text-white hover:bg-amber-600 font-medium transition-colors whitespace-nowrap"
                       >

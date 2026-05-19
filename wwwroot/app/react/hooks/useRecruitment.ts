@@ -1,43 +1,44 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { recruitmentService } from '@/services/np_recruitmentService';
-import type { ApplicantFilter } from '@/types';
+import type { ApplicantFilter, CourierApplicant, PipelineSummary } from '@/types';
 
 export function useRecruitment() {
   const [filters, setFilters] = useState<ApplicantFilter>({});
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [applicants, setApplicants] = useState<CourierApplicant[]>([]);
+  const [pipelineSummary, setPipelineSummary] = useState<PipelineSummary[]>([]);
 
-  const applicants = useMemo(
-    () => recruitmentService.getApplicants(filters),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, refreshKey]
-  );
+  const reload = useCallback(async () => {
+    const [a, s] = await Promise.all([
+      recruitmentService.getApplicants(filters),
+      recruitmentService.getPipelineSummary(),
+    ]);
+    setApplicants(a);
+    setPipelineSummary(s);
+  }, [filters]);
 
-  const pipelineSummary = useMemo(
-    () => recruitmentService.getPipelineSummary(),
-    [refreshKey]
-  );
+  useEffect(() => { void reload(); }, [reload]);
 
-  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
-
+  // Mutating actions are not wired yet (Slice B/C) — the service methods are
+  // no-ops; the wrappers stay so the pipeline page's hook contract is stable.
   const advanceStage = useCallback((id: number) => {
     recruitmentService.advanceStage(id);
-    refresh();
-  }, [refresh]);
+    void reload();
+  }, [reload]);
 
   const rejectApplicant = useCallback((id: number, reason: string) => {
     recruitmentService.rejectApplicant(id, reason);
-    refresh();
-  }, [refresh]);
+    void reload();
+  }, [reload]);
 
   const approveApplicant = useCallback((id: number) => {
     recruitmentService.approveApplicant(id);
-    refresh();
-  }, [refresh]);
+    void reload();
+  }, [reload]);
 
   const resubmitApplicant = useCallback((id: number) => {
     recruitmentService.resubmitApplicant(id);
-    refresh();
-  }, [refresh]);
+    void reload();
+  }, [reload]);
 
   return {
     applicants,
@@ -48,17 +49,18 @@ export function useRecruitment() {
     rejectApplicant,
     approveApplicant,
     resubmitApplicant,
-    refresh,
+    refresh: reload,
   };
 }
 
 export function useApplicant(id: number) {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const applicant = useMemo(
-    () => recruitmentService.getApplicantById(id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [id, refreshKey]
-  );
-  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
-  return { applicant, refresh };
+  const [applicant, setApplicant] = useState<CourierApplicant | undefined>(undefined);
+
+  const reload = useCallback(async () => {
+    setApplicant(await recruitmentService.getApplicantById(id));
+  }, [id]);
+
+  useEffect(() => { void reload(); }, [reload]);
+
+  return { applicant, refresh: reload };
 }

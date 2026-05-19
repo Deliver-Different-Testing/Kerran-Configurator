@@ -1,10 +1,113 @@
-// Phase 3 stub: see np_dashboardService.ts for the conversion pattern.
-import { mockApplicants, mockPipelineSummary } from './np_devData';
-import type { CourierApplicant, ApplicantFilter, PipelineSummary } from '@/types';
+// Recruitment pipeline — read side wired to /api/v1/np/recruitment
+// (legacy CourierApplicant, migration 031). Mutating actions (advance /
+// approve / reject / resubmit) are a later slice and stay stubbed.
+import api from './np_api';
+import type {
+  CourierApplicant,
+  ApplicantFilter,
+  PipelineSummary,
+  ApplicantPipelineStage,
+  ApplicantDocumentSummary,
+} from '@/types';
+
+interface ApplicantDocApi {
+  documentTypeName: string;
+  category: string;
+  mandatory: boolean;
+  status: string;
+  fileName: string;
+  uploadedDate: string | null;
+}
+
+interface ApplicantApi {
+  id: number;
+  regionId: number | null;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  postcode: string;
+  vehicleType: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleYear: number | null;
+  vehiclePlate: string;
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankBsb: string;
+  nextOfKinName: string;
+  nextOfKinPhone: string;
+  nextOfKinRelationship: string;
+  pipelineStage: string;
+  declarationSigned: boolean;
+  declarationSignedDate: string | null;
+  rejectedDate: string | null;
+  rejectedReason: string;
+  approvedAsCourierId: number | null;
+  createdDate: string;
+  modifiedDate: string | null;
+  notes: string;
+  documents: ApplicantDocApi[];
+}
+
+function toDocument(d: ApplicantDocApi): ApplicantDocumentSummary {
+  return {
+    documentTypeName: d.documentTypeName,
+    category: d.category,
+    mandatory: d.mandatory,
+    status: d.status as ApplicantDocumentSummary['status'],
+    fileName: d.fileName || undefined,
+    uploadedDate: d.uploadedDate ?? undefined,
+    expiryDate: null,
+    aiConfidence: null,
+  };
+}
+
+function toApplicant(a: ApplicantApi): CourierApplicant {
+  return {
+    id: a.id,
+    tenantId: 1,                          // per-tenant DB — no real tenant id
+    regionId: a.regionId ?? null,
+    email: a.email,
+    firstName: a.firstName,
+    lastName: a.lastName,
+    phone: a.phone || null,
+    address: a.address || null,
+    city: a.city || null,
+    state: a.state || null,
+    postcode: a.postcode || null,
+    vehicleType: a.vehicleType || null,
+    vehicleMake: a.vehicleMake || null,
+    vehicleModel: a.vehicleModel || null,
+    vehicleYear: a.vehicleYear ?? null,
+    vehiclePlate: a.vehiclePlate || null,
+    bankAccountName: a.bankAccountName || null,
+    bankAccountNumber: a.bankAccountNumber || null,
+    bankBSB: a.bankBsb || null,
+    nextOfKinName: a.nextOfKinName || null,
+    nextOfKinPhone: a.nextOfKinPhone || null,
+    nextOfKinRelationship: a.nextOfKinRelationship || null,
+    pipelineStage: a.pipelineStage as ApplicantPipelineStage,
+    declarationSigned: a.declarationSigned,
+    declarationSignedDate: a.declarationSignedDate ?? null,
+    declarationSignatureS3Key: null,      // legacy stores the signature as a blob
+    rejectedDate: a.rejectedDate ?? null,
+    rejectedReason: a.rejectedReason || null,
+    approvedAsCourierId: a.approvedAsCourierId ?? null,
+    createdDate: a.createdDate,
+    modifiedDate: a.modifiedDate ?? null,
+    notes: a.notes || null,
+    documents: (a.documents ?? []).map(toDocument),
+  };
+}
 
 export const recruitmentService = {
-  getApplicants(filters?: ApplicantFilter): CourierApplicant[] {
-    let list = mockApplicants;
+  async getApplicants(filters?: ApplicantFilter): Promise<CourierApplicant[]> {
+    const { data } = await api.get<ApplicantApi[]>('/recruitment/applicants');
+    let list = (data ?? []).map(toApplicant);
     if (filters?.stage) list = list.filter(a => a.pipelineStage === filters.stage);
     if (filters?.search) {
       const q = filters.search.toLowerCase();
@@ -13,42 +116,38 @@ export const recruitmentService = {
     return list;
   },
 
-  getApplicantById(id: number): CourierApplicant | undefined {
-    return mockApplicants.find(a => a.id === id);
+  async getApplicantById(id: number): Promise<CourierApplicant | undefined> {
+    const { data } = await api.get<ApplicantApi>(`/recruitment/applicants/${id}`);
+    return data ? toApplicant(data) : undefined;
   },
 
-  getPipelineSummary(): PipelineSummary[] {
-    return mockPipelineSummary;
+  async getPipelineSummary(): Promise<PipelineSummary[]> {
+    const { data } = await api.get<PipelineSummary[]>('/recruitment/pipeline-summary');
+    return data ?? [];
   },
 
+  // ── Mutating actions — wired in a later slice (advance/approve/reject). ──
   createApplicant(_data: Partial<CourierApplicant>): CourierApplicant {
     throw new Error('createApplicant() not yet wired to backend');
   },
-
   updateApplicant(_id: number, _updates: Partial<CourierApplicant>): CourierApplicant | undefined {
     return undefined;
   },
-
   advanceStage(_id: number): CourierApplicant | undefined {
     return undefined;
   },
-
   rejectApplicant(_id: number, _reason: string): CourierApplicant | undefined {
     return undefined;
   },
-
   approveApplicant(_id: number): CourierApplicant | undefined {
     return undefined;
   },
-
   resubmitApplicant(_id: number): CourierApplicant | undefined {
     return undefined;
   },
-
   promoteToDriver(_id: number): CourierApplicant | undefined {
     return undefined;
   },
-
   deleteApplicant(_id: number): boolean {
     return false;
   },

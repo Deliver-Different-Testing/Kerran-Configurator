@@ -75,11 +75,19 @@
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[DocumentTypes]",
+         "Name": "[dbo].[CourierApplicant]",
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[JobApplications]",
+         "Name": "[dbo].[CourierApplicantDocument]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[CourierApplicantUpload]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[DocumentTypes]",
          "ObjectType": 0
       },
       {
@@ -88,10 +96,6 @@
       },
       {
          "Name": "[dbo].[JobPhoto]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[JobPostings]",
          "ObjectType": 0
       },
       {
@@ -112,6 +116,10 @@
       },
       {
          "Name": "[dbo].[QuotesQuote]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[RecruitmentStages]",
          "ObjectType": 0
       },
       {

@@ -1,31 +1,37 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { recruitmentSettingsService } from '@/services/np_recruitmentSettingsService';
 import type { RecruitmentStageConfig } from '@/types';
 
 export function useRecruitmentSettings() {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const stages = useMemo(() => recruitmentSettingsService.getStages(), [refreshKey]);
-  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
+  const [stages, setStages] = useState<RecruitmentStageConfig[]>([]);
 
-  const createStage = useCallback((data: Partial<RecruitmentStageConfig>) => {
-    recruitmentSettingsService.createStage(data);
-    refresh();
-  }, [refresh]);
+  const reload = useCallback(async () => {
+    setStages(await recruitmentSettingsService.getStages());
+  }, []);
 
-  const updateStage = useCallback((id: number, data: Partial<RecruitmentStageConfig>) => {
-    recruitmentSettingsService.updateStage(id, data);
-    refresh();
-  }, [refresh]);
+  useEffect(() => { void reload(); }, [reload]);
 
-  const deleteStage = useCallback((id: number) => {
-    recruitmentSettingsService.deleteStage(id);
-    refresh();
-  }, [refresh]);
+  const createStage = useCallback(async (data: Partial<RecruitmentStageConfig>) => {
+    await recruitmentSettingsService.createStage(data);
+    await reload();
+  }, [reload]);
 
-  const seedDefaults = useCallback(() => {
-    recruitmentSettingsService.seedDefaults();
-    refresh();
-  }, [refresh]);
+  // The page issues partial edits (just `enabled`, just `mandatory`, …); the
+  // backend PUT replaces the whole row, so merge onto the current stage first.
+  const updateStage = useCallback(async (id: number, data: Partial<RecruitmentStageConfig>) => {
+    const existing = stages.find(s => s.id === id);
+    await recruitmentSettingsService.updateStage(id, { ...existing, ...data });
+    await reload();
+  }, [stages, reload]);
 
-  return { stages, createStage, updateStage, deleteStage, seedDefaults, refresh };
+  const deleteStage = useCallback(async (id: number) => {
+    await recruitmentSettingsService.deleteStage(id);
+    await reload();
+  }, [reload]);
+
+  const seedDefaults = useCallback(async () => {
+    setStages(await recruitmentSettingsService.seedDefaults());
+  }, []);
+
+  return { stages, createStage, updateStage, deleteStage, seedDefaults, refresh: reload };
 }

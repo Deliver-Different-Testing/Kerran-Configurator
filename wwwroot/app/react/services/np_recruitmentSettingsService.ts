@@ -1,25 +1,66 @@
-// Phase 3 stub: see np_dashboardService.ts for the conversion pattern.
-import { mockRecruitmentStages } from './np_devData';
+// Recruitment Stages — live, backed by /api/v1/np/recruitment-stages
+// (migration 031).
+import api from './np_api';
 import type { RecruitmentStageConfig } from '@/types';
 
+interface RecruitmentStageApi {
+  id: number;
+  stageName: string;
+  sortOrder: number;
+  enabled: boolean;
+  mandatory: boolean;
+  description: string;
+  createdDate: string;
+}
+
+function toStage(s: RecruitmentStageApi): RecruitmentStageConfig {
+  return {
+    id: s.id,
+    tenantId: 1,                  // per-tenant DB — no real tenant id
+    stageName: s.stageName,
+    sortOrder: s.sortOrder,
+    enabled: s.enabled,
+    mandatory: s.mandatory,
+    description: s.description || null,
+    createdDate: s.createdDate,
+  };
+}
+
+// Always send the full stage — the backend PUT replaces the row. The hook
+// merges partial edits onto the existing stage before calling update.
+function toUpsert(p: Partial<RecruitmentStageConfig>) {
+  return {
+    stageName: p.stageName ?? '',
+    sortOrder: p.sortOrder ?? 0,
+    enabled: p.enabled ?? true,
+    mandatory: !!p.mandatory,
+    description: p.description ?? '',
+  };
+}
+
 export const recruitmentSettingsService = {
-  getStages(): RecruitmentStageConfig[] {
-    return [...mockRecruitmentStages].sort((a, b) => a.sortOrder - b.sortOrder);
+  async getStages(): Promise<RecruitmentStageConfig[]> {
+    const { data } = await api.get<RecruitmentStageApi[]>('/recruitment-stages');
+    return (data ?? []).map(toStage);
   },
 
-  createStage(_stage: Partial<RecruitmentStageConfig>): RecruitmentStageConfig {
-    throw new Error('createStage() not yet wired to backend');
+  async createStage(stage: Partial<RecruitmentStageConfig>): Promise<RecruitmentStageConfig> {
+    const { data } = await api.post<RecruitmentStageApi>('/recruitment-stages', toUpsert(stage));
+    return toStage(data);
   },
 
-  updateStage(_id: number, _updates: Partial<RecruitmentStageConfig>): RecruitmentStageConfig | undefined {
-    return undefined;
+  async updateStage(id: number, updates: Partial<RecruitmentStageConfig>): Promise<RecruitmentStageConfig> {
+    const { data } = await api.put<RecruitmentStageApi>(`/recruitment-stages/${id}`, toUpsert(updates));
+    return toStage(data);
   },
 
-  deleteStage(_id: number): boolean {
-    return false;
+  async deleteStage(id: number): Promise<void> {
+    await api.delete(`/recruitment-stages/${id}`);
   },
 
-  seedDefaults(): RecruitmentStageConfig[] {
-    return mockRecruitmentStages;
+  // Restores any missing standard stages; returns the full refreshed list.
+  async seedDefaults(): Promise<RecruitmentStageConfig[]> {
+    const { data } = await api.post<RecruitmentStageApi[]>('/recruitment-stages/seed-defaults');
+    return (data ?? []).map(toStage);
   },
 };

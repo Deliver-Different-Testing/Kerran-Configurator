@@ -41,6 +41,8 @@ public partial class TblSite
 
     public virtual TucSuburb AirportSuburb { get; set; }
 
+    public virtual ICollection<CourierApplicant> CourierApplicants { get; set; } = new List<CourierApplicant>();
+
     public virtual TucClient DefaultDeliveryClient { get; set; }
 
     public virtual TucClient DefaultPickupClient { get; set; }

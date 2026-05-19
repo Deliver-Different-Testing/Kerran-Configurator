@@ -41,15 +41,17 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<ComplianceProfileRequirement> ComplianceProfileRequirements { get; set; }
 
-    public virtual DbSet<DocumentType> DocumentTypes { get; set; }
+    public virtual DbSet<CourierApplicant> CourierApplicants { get; set; }
 
-    public virtual DbSet<JobApplication> JobApplications { get; set; }
+    public virtual DbSet<CourierApplicantDocument> CourierApplicantDocuments { get; set; }
+
+    public virtual DbSet<CourierApplicantUpload> CourierApplicantUploads { get; set; }
+
+    public virtual DbSet<DocumentType> DocumentTypes { get; set; }
 
     public virtual DbSet<JobBarcode> JobBarcodes { get; set; }
 
     public virtual DbSet<JobPhoto> JobPhotos { get; set; }
-
-    public virtual DbSet<JobPosting> JobPostings { get; set; }
 
     public virtual DbSet<JobWorkflowStep> JobWorkflowSteps { get; set; }
 
@@ -60,6 +62,8 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<QuotesPosting> QuotesPostings { get; set; }
 
     public virtual DbSet<QuotesQuote> QuotesQuotes { get; set; }
+
+    public virtual DbSet<RecruitmentStage> RecruitmentStages { get; set; }
 
     public virtual DbSet<TblBulkJob> TblBulkJobs { get; set; }
 
@@ -455,6 +459,145 @@ public partial class DespatchContext : DbContext
                 .HasConstraintName("FK_ComplianceProfileReq_Profile");
         });
 
+        modelBuilder.Entity<CourierApplicant>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_CourierApplication");
+
+            entity.ToTable("CourierApplicant");
+
+            entity.HasIndex(e => new { e.Email, e.FirstName, e.Surname }, "EmailFirstNameSurname-NonClusteredIndex-20191210-201206");
+
+            entity.HasIndex(e => e.ContractId, "FK-ContractId-NonClusteredIndex-20191210-201130").IsDescending();
+
+            entity.HasIndex(e => e.CourierId, "FK-CourierId-NonClusteredIndex-20191210-201044").IsDescending();
+
+            entity.HasIndex(e => e.RegionId, "FK-RegionId-NonClusteredIndex");
+
+            entity.HasIndex(e => e.SiteId, "FK-SiteId-NonClusteredIndex-20191210-201013");
+
+            entity.HasIndex(e => e.CourierFleetId, "IX_CourierApplicant_CourierFleetId");
+
+            entity.HasIndex(e => e.CourierTypeId, "IX_CourierTypeId");
+
+            entity.HasIndex(e => e.MasterCourierId, "IX_MasterCourierId");
+
+            entity.HasIndex(e => e.Email, "UQ__CourierA__A9D105347C1A6C5A").IsUnique();
+
+            entity.Property(e => e.Address).HasMaxLength(100);
+            entity.Property(e => e.AddressLine1).HasMaxLength(255);
+            entity.Property(e => e.AddressLine2).HasMaxLength(255);
+            entity.Property(e => e.AddressLine3).HasMaxLength(255);
+            entity.Property(e => e.AddressLine4).HasMaxLength(255);
+            entity.Property(e => e.AddressLine5).HasMaxLength(255);
+            entity.Property(e => e.AddressLine6).HasMaxLength(255);
+            entity.Property(e => e.AddressLine7).HasMaxLength(255);
+            entity.Property(e => e.AddressLine8).HasMaxLength(255);
+            entity.Property(e => e.BankAccountName).HasMaxLength(200);
+            entity.Property(e => e.BankAccountNo).HasMaxLength(50);
+            entity.Property(e => e.BankBsb).HasMaxLength(20);
+            entity.Property(e => e.BankRoutingNumber).HasMaxLength(9);
+            entity.Property(e => e.City).HasMaxLength(100);
+            entity.Property(e => e.CourierCode).HasMaxLength(50);
+            entity.Property(e => e.Created)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(getdate())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF__CourierAp__Creat__7E0DA1C4");
+            entity.Property(e => e.DateOfBirth).HasPrecision(3);
+            entity.Property(e => e.DeclarationAgree).HasAnnotation("Relational:DefaultConstraintName", "DF__CourierAp__Decla__01DE32A8");
+            entity.Property(e => e.DeclarationDate).HasPrecision(3);
+            entity.Property(e => e.DeclarationName).HasMaxLength(50);
+            entity.Property(e => e.DeclarationSignatureFileName).HasMaxLength(50);
+            entity.Property(e => e.DeclarationSignatureType).HasMaxLength(50);
+            entity.Property(e => e.DriversLicenceNo).HasMaxLength(50);
+            entity.Property(e => e.Email)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.EmailVerificationAttempts).HasAnnotation("Relational:DefaultConstraintName", "DF__CourierAp__Email__7FF5EA36");
+            entity.Property(e => e.EmailVerificationCode)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.EmailVerified).HasAnnotation("Relational:DefaultConstraintName", "DF__CourierAp__Email__7F01C5FD");
+            entity.Property(e => e.FirstName)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Mobile).HasMaxLength(50);
+            entity.Property(e => e.NextOfKin).HasMaxLength(50);
+            entity.Property(e => e.NextOfKinAddress).HasMaxLength(100);
+            entity.Property(e => e.NextOfKinPhone).HasMaxLength(50);
+            entity.Property(e => e.NextOfKinRelationship).HasMaxLength(50);
+            entity.Property(e => e.Password)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Phone).HasMaxLength(50);
+            entity.Property(e => e.PostCode).HasMaxLength(20);
+            entity.Property(e => e.RejectDate).HasPrecision(3);
+            entity.Property(e => e.State).HasMaxLength(50);
+            entity.Property(e => e.Surname)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.TaxNo).HasMaxLength(50);
+            entity.Property(e => e.TrainingCompleted).HasAnnotation("Relational:DefaultConstraintName", "DF__CourierAp__Train__00EA0E6F");
+            entity.Property(e => e.VehicleMake).HasMaxLength(100);
+            entity.Property(e => e.VehicleModel).HasMaxLength(100);
+            entity.Property(e => e.VehicleRegistrationNo).HasMaxLength(50);
+            entity.Property(e => e.VehicleType).HasMaxLength(50);
+
+            entity.HasOne(d => d.Courier).WithMany(p => p.CourierApplicantCouriers)
+                .HasForeignKey(d => d.CourierId)
+                .HasConstraintName("FK_CourierApplicant_tucCourier");
+
+            entity.HasOne(d => d.MasterCourier).WithMany(p => p.CourierApplicantMasterCouriers)
+                .HasForeignKey(d => d.MasterCourierId)
+                .HasConstraintName("FK_CourierApplicant_tucCourierMaster");
+
+            entity.HasOne(d => d.Site).WithMany(p => p.CourierApplicants)
+                .HasForeignKey(d => d.SiteId)
+                .HasConstraintName("FK_CourierApplication_tblSite");
+        });
+
+        modelBuilder.Entity<CourierApplicantDocument>(entity =>
+        {
+            entity.ToTable("CourierApplicantDocument");
+
+            entity.Property(e => e.Created)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(getdate())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF__CourierAp__Creat__02D256E1");
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Type).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<CourierApplicantUpload>(entity =>
+        {
+            entity.ToTable("CourierApplicantUpload");
+
+            entity.HasIndex(e => e.ApplicantId, "FK-ApplicantId-NonClusteredIndex-20191210-201431").IsDescending();
+
+            entity.HasIndex(e => e.DocumentId, "FK-DocumentId-NonClusteredIndex-20191210-201507").IsDescending();
+
+            entity.Property(e => e.Created)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(getdate())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF__CourierAp__Creat__03C67B1A");
+            entity.Property(e => e.Data).IsRequired();
+            entity.Property(e => e.FileName).IsRequired();
+            entity.Property(e => e.Type)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.HasOne(d => d.Applicant).WithMany(p => p.CourierApplicantUploads)
+                .HasForeignKey(d => d.ApplicantId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CourierApplicantUpload_CourierApplicant");
+
+            entity.HasOne(d => d.Document).WithMany(p => p.CourierApplicantUploads)
+                .HasForeignKey(d => d.DocumentId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CourierApplicantUpload_CourierApplicantDocument");
+        });
+
         modelBuilder.Entity<DocumentType>(entity =>
         {
             entity.HasIndex(e => e.Category, "IX_DocumentTypes_Category");
@@ -490,23 +633,6 @@ public partial class DespatchContext : DbContext
                 .HasColumnName("TemplateS3Key");
         });
 
-        modelBuilder.Entity<JobApplication>(entity =>
-        {
-            entity.HasIndex(e => e.ApplicantId, "IX_JobApplications_ApplicantId");
-
-            entity.HasIndex(e => e.PostingId, "IX_JobApplications_PostingId");
-
-            entity.Property(e => e.AppliedAt).HasDefaultValueSql("(getutcdate())");
-            entity.Property(e => e.Status)
-                .IsRequired()
-                .HasMaxLength(50)
-                .HasDefaultValue("applied");
-
-            entity.HasOne(d => d.Posting).WithMany(p => p.JobApplications)
-                .HasForeignKey(d => d.PostingId)
-                .HasConstraintName("FK_JobApplications_Posting");
-        });
-
         modelBuilder.Entity<JobBarcode>(entity =>
         {
             entity.ToTable("JobBarcode");
@@ -540,22 +666,6 @@ public partial class DespatchContext : DbContext
                 .HasMaxLength(50)
                 .HasDefaultValue("delivery");
             entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
-        });
-
-        modelBuilder.Entity<JobPosting>(entity =>
-        {
-            entity.HasIndex(e => e.Status, "IX_JobPostings_Status");
-
-            entity.Property(e => e.Location).HasMaxLength(200);
-            entity.Property(e => e.PayRate).HasColumnType("decimal(10, 2)");
-            entity.Property(e => e.Status)
-                .IsRequired()
-                .HasMaxLength(50)
-                .HasDefaultValue("draft");
-            entity.Property(e => e.Title)
-                .IsRequired()
-                .HasMaxLength(300);
-            entity.Property(e => e.VehicleType).HasMaxLength(100);
         });
 
         modelBuilder.Entity<JobWorkflowStep>(entity =>
@@ -725,6 +835,18 @@ public partial class DespatchContext : DbContext
             entity.HasOne(d => d.ProspectAgent).WithMany(p => p.QuotesQuotes)
                 .HasForeignKey(d => d.ProspectAgentId)
                 .HasConstraintName("FK_QuotesQuote_Prospect");
+        });
+
+        modelBuilder.Entity<RecruitmentStage>(entity =>
+        {
+            entity.HasIndex(e => e.SortOrder, "IX_RecruitmentStages_SortOrder");
+
+            entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Enabled).HasDefaultValue(true);
+            entity.Property(e => e.StageName)
+                .IsRequired()
+                .HasMaxLength(100);
         });
 
         modelBuilder.Entity<TblBulkJob>(entity =>

@@ -191,6 +191,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
         { id: '/recruitment', label: 'Pipeline', implemented: true },
         { id: '/recruitment/portal-url', label: 'Applicant Portal', implemented: true },
         { id: '/settings/recruitment-ads', label: 'Advertising', implemented: true },
+        { id: '/settings/recruitment-stages', label: 'Stages', implemented: true },
       ],
     });
   }
@@ -245,6 +246,7 @@ function buildNpSections(): NavSection[] {
         { id: '/recruitment', label: 'Pipeline', implemented: true },
         { id: '/recruitment/portal-url', label: 'Applicant Portal', implemented: true },
         { id: '/settings/recruitment-ads', label: 'Advertising', implemented: true },
+        { id: '/settings/recruitment-stages', label: 'Stages', implemented: true },
       ],
     },
     {

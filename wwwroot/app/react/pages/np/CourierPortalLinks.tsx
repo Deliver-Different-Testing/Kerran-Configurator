@@ -1,9 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { courierService } from '@/services/np_courierService';
 
+interface PortalLink {
+  courierId: number;
+  code: string;
+  name: string;
+  url: string;
+}
+
 export default function CourierPortalLinks() {
-  const [links, setLinks] = useState(courierService.getPortalLinks());
+  const [links, setLinks] = useState<PortalLink[]>([]);
   const [copied, setCopied] = useState<number | null>(null);
+
+  // getPortalLinks is async — calling it synchronously into useState left
+  // `links` as a Promise and blank-paged the route.
+  useEffect(() => {
+    courierService.getPortalLinks().then(setLinks);
+  }, []);
 
   const copyLink = (id: number, url: string) => {
     navigator.clipboard?.writeText(url);

@@ -7,6 +7,7 @@ import ScanToFill, { AiConfidenceBadge } from '@/components/common/ScanToFill';
 import { courierService } from '@/services/np_courierService';
 import { fleetService } from '@/services/np_fleetService';
 import { useDocumentTypes } from '@/hooks/useDocuments';
+import type { Courier } from '@/types';
 
 const steps = ['Basic Info', 'Vehicle', 'Licensing', 'Documents', 'Review & Save'];
 
@@ -190,7 +191,10 @@ export default function AddCourier() {
   const [mode, setMode] = useState<'pipeline' | 'quick' | null>(initialMode);
   const navigate = useNavigate();
   const { role } = useRole();
-  const masters = courierService.getMasters();
+  // getMasters is async — load it into state rather than calling it
+  // synchronously (which left `masters` as a Promise).
+  const [masters, setMasters] = useState<Courier[]>([]);
+  useEffect(() => { courierService.getMasters().then(setMasters); }, []);
   const fleets = fleetService.getAll();
   const { types: docTypes } = useDocumentTypes();
   const activeTypes = docTypes.filter(dt => dt.active && (dt.appliesTo === 'ActiveCourier' || dt.appliesTo === 'Both'));

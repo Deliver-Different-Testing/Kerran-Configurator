@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DfrntDriveConfigurator.Core.Application.Dtos.Np;
 using DfrntDriveConfigurator.Core.Application.Services.Np;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -70,6 +71,63 @@ public class NpRecruitmentController(NpApplicantService service) : BaseControlle
         catch (Exception e)
         {
             Log.Error(e, "Failed to fetch pipeline summary");
+            throw;
+        }
+    }
+
+    [HttpPut("applicants/{id:int}/advance")]
+    public async Task<IActionResult> Advance(int id)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await service.AdvanceAsync(id, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Applicant);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to advance applicant {Id}", id);
+            throw;
+        }
+    }
+
+    [HttpPut("applicants/{id:int}/reject")]
+    public async Task<IActionResult> Reject(int id, [FromBody] NpApplicantRejectDto dto)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await service.RejectAsync(id, dto.Reason, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Applicant);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to reject applicant {Id}", id);
+            throw;
+        }
+    }
+
+    [HttpPut("applicants/{id:int}/resubmit")]
+    public async Task<IActionResult> Resubmit(int id)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await service.ResubmitAsync(id, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Applicant);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to resubmit applicant {Id}", id);
             throw;
         }
     }

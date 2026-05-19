@@ -63,6 +63,12 @@ public class NpPipelineSummaryDto
     public int Count { get; set; }
 }
 
+// Body for PUT /applicants/{id}/reject.
+public class NpApplicantRejectDto
+{
+    public string Reason { get; set; } = string.Empty;
+}
+
 public class NpApplicantsResponse : BaseResponse
 {
     public NpApplicantsResponse(Guid messageId) : base(messageId) { }

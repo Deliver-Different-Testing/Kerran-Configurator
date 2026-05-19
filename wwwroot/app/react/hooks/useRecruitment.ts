@@ -18,25 +18,25 @@ export function useRecruitment() {
 
   useEffect(() => { void reload(); }, [reload]);
 
-  // Mutating actions are not wired yet (Slice B/C) — the service methods are
-  // no-ops; the wrappers stay so the pipeline page's hook contract is stable.
-  const advanceStage = useCallback((id: number) => {
-    recruitmentService.advanceStage(id);
-    void reload();
+  // Stage actions (Slice B) — advance / reject / resubmit are live.
+  const advanceStage = useCallback(async (id: number) => {
+    await recruitmentService.advanceStage(id);
+    await reload();
   }, [reload]);
 
-  const rejectApplicant = useCallback((id: number, reason: string) => {
-    recruitmentService.rejectApplicant(id, reason);
-    void reload();
+  const rejectApplicant = useCallback(async (id: number, reason: string) => {
+    await recruitmentService.rejectApplicant(id, reason);
+    await reload();
   }, [reload]);
 
+  const resubmitApplicant = useCallback(async (id: number) => {
+    await recruitmentService.resubmitApplicant(id);
+    await reload();
+  }, [reload]);
+
+  // approve → courier promotion is Slice C — still a no-op stub.
   const approveApplicant = useCallback((id: number) => {
     recruitmentService.approveApplicant(id);
-    void reload();
-  }, [reload]);
-
-  const resubmitApplicant = useCallback((id: number) => {
-    recruitmentService.resubmitApplicant(id);
     void reload();
   }, [reload]);
 

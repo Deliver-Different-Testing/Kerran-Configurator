@@ -43,15 +43,72 @@ public class NpApplicantService(
         var row = await Context.CourierApplicants.AsNoTracking()
             .FirstOrDefaultAsync(a => a.Id == id);
         if (row is null)
-            return new NpApplicantResponse(messageId)
-            {
-                Success = false,
-                Messages = { new() { Message = "Applicant not found." } },
-            };
+            return FailApplicant(messageId, "Applicant not found.");
 
         var dtos = await BuildDtos([row]);
         return new NpApplicantResponse(messageId) { Success = true, Applicant = dtos.FirstOrDefault() };
     }
+
+    // Advances an applicant to the next derived stage by setting the next
+    // legacy flag. Stops at Approval — promoting to a courier is Slice C.
+    public async Task<NpApplicantResponse> AdvanceAsync(int id, Guid messageId)
+    {
+        var a = await Context.CourierApplicants.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return FailApplicant(messageId, "Applicant not found.");
+        if (a.RejectDate is not null) return FailApplicant(messageId, "Cannot advance a rejected applicant.");
+        if (a.CourierId.HasValue) return FailApplicant(messageId, "Applicant is already approved.");
+
+        switch (DerivePipelineStage(a))
+        {
+            case "Email Verification":
+                a.EmailVerified = true;
+                break;
+            case "Documentation":
+                a.DeclarationAgree = true;
+                a.DeclarationDate ??= DateTime.UtcNow;
+                break;
+            case "Training":
+                a.TrainingCompleted = true;
+                break;
+            default:
+                return FailApplicant(messageId, "Applicant is at the final stage — use Approve to activate as a courier.");
+        }
+
+        a.ModifiedDate = DateTime.UtcNow;
+        await Context.SaveChangesAsync();
+        return await GetById(id, messageId);
+    }
+
+    public async Task<NpApplicantResponse> RejectAsync(int id, string reason, Guid messageId)
+    {
+        var a = await Context.CourierApplicants.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return FailApplicant(messageId, "Applicant not found.");
+
+        a.RejectDate = DateTime.UtcNow;
+        a.RejectReason = string.IsNullOrWhiteSpace(reason) ? "Rejected" : reason.Trim();
+        a.ModifiedDate = DateTime.UtcNow;
+        await Context.SaveChangesAsync();
+        return await GetById(id, messageId);
+    }
+
+    // Puts a rejected applicant back on the pipeline — clears the rejection.
+    public async Task<NpApplicantResponse> ResubmitAsync(int id, Guid messageId)
+    {
+        var a = await Context.CourierApplicants.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return FailApplicant(messageId, "Applicant not found.");
+
+        a.RejectDate = null;
+        a.RejectReason = null;
+        a.ModifiedDate = DateTime.UtcNow;
+        await Context.SaveChangesAsync();
+        return await GetById(id, messageId);
+    }
+
+    private static NpApplicantResponse FailApplicant(Guid messageId, string message) => new(messageId)
+    {
+        Success = false,
+        Messages = { new() { Message = message } },
+    };
 
     public async Task<NpPipelineSummaryResponse> GetPipelineSummary(Guid messageId)
     {

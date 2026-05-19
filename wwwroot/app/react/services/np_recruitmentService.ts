@@ -126,23 +126,30 @@ export const recruitmentService = {
     return data ?? [];
   },
 
-  // ── Mutating actions — wired in a later slice (advance/approve/reject). ──
+  // ── Stage actions (Slice B) — flag transitions on CourierApplicant. ──
+  async advanceStage(id: number): Promise<CourierApplicant> {
+    const { data } = await api.put<ApplicantApi>(`/recruitment/applicants/${id}/advance`);
+    return toApplicant(data);
+  },
+
+  async rejectApplicant(id: number, reason: string): Promise<CourierApplicant> {
+    const { data } = await api.put<ApplicantApi>(`/recruitment/applicants/${id}/reject`, { reason });
+    return toApplicant(data);
+  },
+
+  async resubmitApplicant(id: number): Promise<CourierApplicant> {
+    const { data } = await api.put<ApplicantApi>(`/recruitment/applicants/${id}/resubmit`);
+    return toApplicant(data);
+  },
+
+  // ── Approve → courier promotion + applicant create/edit — Slice C. ──
   createApplicant(_data: Partial<CourierApplicant>): CourierApplicant {
     throw new Error('createApplicant() not yet wired to backend');
   },
   updateApplicant(_id: number, _updates: Partial<CourierApplicant>): CourierApplicant | undefined {
     return undefined;
   },
-  advanceStage(_id: number): CourierApplicant | undefined {
-    return undefined;
-  },
-  rejectApplicant(_id: number, _reason: string): CourierApplicant | undefined {
-    return undefined;
-  },
   approveApplicant(_id: number): CourierApplicant | undefined {
-    return undefined;
-  },
-  resubmitApplicant(_id: number): CourierApplicant | undefined {
     return undefined;
   },
   promoteToDriver(_id: number): CourierApplicant | undefined {

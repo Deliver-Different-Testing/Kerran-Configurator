@@ -68,9 +68,8 @@ type SortDir = 'asc' | 'desc';
 
 export default function RecruitmentPipeline() {
   const navigate = useNavigate();
-  // Read-only pipeline (Slice A) — only the applicant list is consumed;
-  // approve/resubmit actions land in a later slice.
-  const { applicants } = useRecruitment();
+  // approveApplicant (Activate) is Slice C — still deferred.
+  const { applicants, resubmitApplicant } = useRecruitment();
   const [searchInput, setSearchInput] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('');
   const [complianceFilter, setComplianceFilter] = useState<string>('');
@@ -342,10 +341,10 @@ export default function RecruitmentPipeline() {
                   <td className="px-4 py-3 border-b border-border text-right">
                     <div className="flex items-center gap-2 justify-end">
                       <button
-                        onClick={() => {
-                          // Resubmit is a later recruitment slice (stage actions).
-                          setToast('Re-submitting an applicant is coming in the next update.');
-                          setTimeout(() => setToast(null), 3500);
+                        onClick={async () => {
+                          await resubmitApplicant(a.id);
+                          setToast(`${a.firstName} ${a.lastName} resubmitted to pipeline`);
+                          setTimeout(() => setToast(null), 3000);
                         }}
                         className="text-xs px-3 py-1.5 rounded-md bg-amber-500 text-white hover:bg-amber-600 font-medium transition-colors whitespace-nowrap"
                       >

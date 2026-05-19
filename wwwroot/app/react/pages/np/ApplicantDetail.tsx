@@ -268,20 +268,20 @@ export default function ApplicantDetail() {
   const verifiedCount = mandatoryDocs.filter(d => d.status === 'verified').length;
   const pendingCount = docs.filter(d => d.status === 'uploaded').length;
 
-  const handleAdvance = () => {
-    recruitmentService.advanceStage(applicant.id);
+  const handleAdvance = async () => {
+    await recruitmentService.advanceStage(applicant.id);
     refresh();
   };
 
-  const handleReject = () => {
-    recruitmentService.rejectApplicant(applicant.id, rejectReason);
+  const handleReject = async () => {
+    await recruitmentService.rejectApplicant(applicant.id, rejectReason);
     setShowRejectModal(false);
     refresh();
   };
 
+  // Approve → courier promotion is the next recruitment slice (Slice C).
   const handleApprove = () => {
-    recruitmentService.approveApplicant(applicant.id);
-    refresh();
+    alert('Approving an applicant as a courier is coming in the next update.');
   };
 
   const handleVerifyDoc = (docName: string) => {

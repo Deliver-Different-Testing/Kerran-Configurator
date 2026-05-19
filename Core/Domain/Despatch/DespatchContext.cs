@@ -85,6 +85,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<TucCourier> TucCouriers { get; set; }
 
+    public virtual DbSet<TucCourierFleet> TucCourierFleets { get; set; }
+
     public virtual DbSet<TucEventTemplate> TucEventTemplates { get; set; }
 
     public virtual DbSet<TucEventTemplateDetail> TucEventTemplateDetails { get; set; }
@@ -541,6 +543,10 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.VehicleModel).HasMaxLength(100);
             entity.Property(e => e.VehicleRegistrationNo).HasMaxLength(50);
             entity.Property(e => e.VehicleType).HasMaxLength(50);
+
+            entity.HasOne(d => d.CourierFleet).WithMany(p => p.CourierApplicants)
+                .HasForeignKey(d => d.CourierFleetId)
+                .HasConstraintName("FK_CourierApplicant_tucCourierFleet");
 
             entity.HasOne(d => d.Courier).WithMany(p => p.CourierApplicantCouriers)
                 .HasForeignKey(d => d.CourierId)
@@ -2149,6 +2155,10 @@ public partial class DespatchContext : DbContext
                 .HasColumnName("WOFExpiry");
             entity.Property(e => e.XeroId).HasMaxLength(50);
 
+            entity.HasOne(d => d.CourierFleet).WithMany(p => p.TucCouriers)
+                .HasForeignKey(d => d.CourierFleetId)
+                .HasConstraintName("FK_tucCourier_tucCourierFleet");
+
             entity.HasOne(d => d.NpAgent).WithMany(p => p.TucCouriers)
                 .HasForeignKey(d => d.NpAgentId)
                 .HasConstraintName("FK_tucCourier_NpAgent");
@@ -2168,6 +2178,34 @@ public partial class DespatchContext : DbContext
             entity.HasOne(d => d.UccrVehicleMake).WithMany(p => p.TucCouriers)
                 .HasForeignKey(d => d.UccrVehicleMakeId)
                 .HasConstraintName("FK_tucCourier_tucVehicleMake");
+        });
+
+        modelBuilder.Entity<TucCourierFleet>(entity =>
+        {
+            entity.HasKey(e => e.UccfId).IsClustered(false);
+
+            entity.ToTable("tucCourierFleet");
+
+            entity.HasIndex(e => e.UccfName, "Name").IsUnique();
+
+            entity.Property(e => e.UccfId).HasColumnName("uccfID");
+            entity.Property(e => e.Created).HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.DirectCostAccountCode).HasMaxLength(50);
+            entity.Property(e => e.DisplayOnClearlistsDespatch).HasAnnotation("Relational:DefaultConstraintName", "DF_tucCourierFleet_DisplayOnClearlists");
+            entity.Property(e => e.DisplayOnClearlistsDevice).HasAnnotation("Relational:DefaultConstraintName", "DF_tucCourierFleet_DisplayOnClearlistsDevice");
+            entity.Property(e => e.LastModified).HasColumnType("datetime");
+            entity.Property(e => e.LastModifiedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Notes).HasColumnType("ntext");
+            entity.Property(e => e.OldDirectCostAccountCode).HasMaxLength(50);
+            entity.Property(e => e.UccfName)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasColumnName("uccfName");
         });
 
         modelBuilder.Entity<TucEventTemplate>(entity =>

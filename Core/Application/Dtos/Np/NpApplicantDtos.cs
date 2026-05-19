@@ -69,6 +69,13 @@ public class NpApplicantRejectDto
     public string Reason { get; set; } = string.Empty;
 }
 
+// Body for POST /applicants/{id}/approve. CourierCode blank = auto-assign.
+public class NpApplicantApproveDto
+{
+    public string CourierCode { get; set; } = string.Empty;
+    public int CourierFleetId { get; set; }
+}
+
 public class NpApplicantsResponse : BaseResponse
 {
     public NpApplicantsResponse(Guid messageId) : base(messageId) { }

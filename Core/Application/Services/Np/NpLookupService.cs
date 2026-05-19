@@ -29,4 +29,13 @@ public class NpLookupService(IDbContextFactory<DynamicDespatchDbContext> context
             .Select(i => new LookupItemDto { Id = i.UcicId, Name = i.UcicName ?? string.Empty })
             .ToListAsync();
     }
+
+    public async Task<List<LookupItemDto>> GetCourierFleets()
+    {
+        return await Context.TucCourierFleets
+            .AsNoTracking()
+            .OrderBy(f => f.UccfName)
+            .Select(f => new LookupItemDto { Id = f.UccfId, Name = f.UccfName ?? string.Empty })
+            .ToListAsync();
+    }
 }

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
 using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace DfrntDriveConfigurator.Core.Application.Services.Np;
@@ -15,7 +17,8 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Np;
 // Tenant-wide; not NP-scoped. Mutating actions (advance / approve / reject)
 // are a later slice.
 public class NpApplicantService(
-    IDbContextFactory<DynamicDespatchDbContext> contextFactory) : BaseService(contextFactory)
+    IDbContextFactory<DynamicDespatchDbContext> contextFactory,
+    IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
 {
     // The 7-stage React union. The legacy flags only pin down 5 of them —
     // Registration and Profile have no flag, so applicants surface in the
@@ -102,6 +105,104 @@ public class NpApplicantService(
         a.ModifiedDate = DateTime.UtcNow;
         await Context.SaveChangesAsync();
         return await GetById(id, messageId);
+    }
+
+    // Approve → courier promotion. Creates a TucCourier from the applicant's
+    // data, links CourierApplicant.CourierId. Code auto-assigns when blank.
+    // Mirrors the Add Courier slice (NpFleetService.CreateAsync) for the
+    // TucCourier shape. No Master-DB user sync — that's a Contact-level concern.
+    public async Task<NpApplicantResponse> ApproveAsync(int id, NpApplicantApproveDto dto, Guid messageId)
+    {
+        var a = await Context.CourierApplicants.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return FailApplicant(messageId, "Applicant not found.");
+        if (a.CourierId.HasValue) return FailApplicant(messageId, "Applicant is already approved.");
+        if (a.RejectDate is not null) return FailApplicant(messageId, "Cannot approve a rejected applicant.");
+
+        if (dto.CourierFleetId <= 0 ||
+            !await Context.TucCourierFleets.AnyAsync(f => f.UccfId == dto.CourierFleetId))
+            return FailApplicant(messageId, "A valid fleet must be selected.");
+
+        var code = (dto.CourierCode ?? string.Empty).Trim();
+        if (code.Length == 0)
+            code = await GenerateCourierCode(a);
+        else if (await Context.TucCouriers.AsNoTracking().AnyAsync(c => c.Code == code))
+            return FailApplicant(messageId, $"Courier code \"{code}\" is already in use.");
+
+        var actor = httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.Name)?.Value
+                    ?? httpContextAccessor.HttpContext?.User.FindFirst("name")?.Value
+                    ?? "system";
+        var now = DateTime.UtcNow;
+
+        var courier = new TucCourier
+        {
+            Code = code,
+            UccrName = a.FirstName ?? string.Empty,
+            UccrSurname = a.Surname ?? string.Empty,
+            UccrEmail = a.Email ?? string.Empty,
+            PersonalMobile = a.Mobile ?? string.Empty,
+            UccrTel = a.Phone ?? string.Empty,
+            UccrDob = a.DateOfBirth,
+            AddressLine1 = a.AddressLine1 ?? a.Address ?? string.Empty,
+            AddressLine6 = a.State ?? string.Empty,           // AddressLine6 = "American State"
+            UccrDlno = a.DriversLicenceNo ?? string.Empty,
+            UccrVehicle = a.VehicleType ?? string.Empty,
+            UccrReg = a.VehicleRegistrationNo ?? string.Empty,
+            UccrVehicleModel = a.VehicleModel ?? string.Empty,
+            UccrVehicleYear = a.VehicleYear,
+            UccrGst = a.TaxNo ?? string.Empty,
+            UccrBankAccountNo = a.BankAccountNo ?? string.Empty,
+            UccrKinName = a.NextOfKin ?? string.Empty,
+            UccrKinRelationship = a.NextOfKinRelationship ?? string.Empty,
+            UccrKinTel = a.NextOfKinPhone ?? string.Empty,
+            UccrKinAdd = a.NextOfKinAddress ?? string.Empty,
+            RegionId = a.RegionId,
+            CourierTypeId = a.CourierTypeId ?? 2,             // default Master
+            MasterCourierId = a.MasterCourierId,
+            CourierFleetId = dto.CourierFleetId,
+            Active = true,
+            Created = now,
+            CreatedBy = actor,
+            LastModified = now,
+            LastModifiedBy = actor,
+        };
+
+        Context.TucCouriers.Add(courier);
+        await Context.SaveChangesAsync();
+
+        a.CourierId = courier.UccrId;
+        a.CourierCode = code;
+        a.CourierFleetId = dto.CourierFleetId;
+        a.ModifiedDate = now;
+        await Context.SaveChangesAsync();
+
+        return await GetById(id, messageId);
+    }
+
+    // Auto-assigns a courier code: first-initial + surname, uppercased and
+    // stripped to alphanumerics; a numeric suffix is appended on collision.
+    private async Task<string> GenerateCourierCode(CourierApplicant a)
+    {
+        var first = (a.FirstName ?? string.Empty).Trim();
+        var sur = (a.Surname ?? string.Empty).Trim();
+        var baseCode = new string(
+            ((first.Length > 0 ? first[..1] : string.Empty) + sur)
+            .Where(char.IsLetterOrDigit).ToArray())
+            .ToUpperInvariant();
+        if (baseCode.Length == 0) baseCode = "COURIER";
+        if (baseCode.Length > 16) baseCode = baseCode[..16];
+
+        var taken = (await Context.TucCouriers.AsNoTracking()
+                .Where(c => c.Code != null && c.Code.StartsWith(baseCode))
+                .Select(c => c.Code!)
+                .ToListAsync())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!taken.Contains(baseCode)) return baseCode;
+        for (var i = 2; ; i++)
+        {
+            var candidate = baseCode + i;
+            if (!taken.Contains(candidate)) return candidate;
+        }
     }
 
     private static NpApplicantResponse FailApplicant(Guid messageId, string message) => new(messageId)

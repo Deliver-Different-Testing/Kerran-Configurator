@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRecruitment } from '@/hooks/useRecruitment';
 import { complianceProfileService } from '@/services/np_complianceProfileService';
 import { fleetService } from '@/services/np_fleetService';
+import { recruitmentService } from '@/services/np_recruitmentService';
 import type { CourierApplicant, ApplicantPipelineStage, ApplicantDocumentSummary } from '@/types';
 
 const STAGES: ApplicantPipelineStage[] = [
@@ -68,8 +69,7 @@ type SortDir = 'asc' | 'desc';
 
 export default function RecruitmentPipeline() {
   const navigate = useNavigate();
-  // approveApplicant (Activate) is Slice C — still deferred.
-  const { applicants, resubmitApplicant } = useRecruitment();
+  const { applicants, resubmitApplicant, approveApplicant } = useRecruitment();
   const [searchInput, setSearchInput] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('');
   const [complianceFilter, setComplianceFilter] = useState<string>('');
@@ -80,11 +80,13 @@ export default function RecruitmentPipeline() {
   // Activate modal state
   const [activateModal, setActivateModal] = useState<CourierApplicant | null>(null);
   const [activateFleetId, setActivateFleetId] = useState<number | null>(null);
-  const [activateDepotId, setActivateDepotId] = useState<number | null>(null);
+  const [activateCode, setActivateCode] = useState('');
   const [toast, setToast] = useState<string | null>(null);
 
   const depots = fleetService.getDepots();
-  const fleets = fleetService.getAll();
+  // Courier fleets for the activate modal — real lookup (TucCourierFleet).
+  const [fleets, setFleets] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => { recruitmentService.getCourierFleets().then(setFleets); }, []);
   // Openforce check — reads from localStorage like Settings page
   const openforceEnabled = useMemo(() => {
     // In real app this comes from tenant config; for demo just check localStorage
@@ -174,15 +176,19 @@ export default function RecruitmentPipeline() {
   };
   const sortIcon = (field: SortField) => sort.field === field ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : '';
 
-  const handleActivate = () => {
-    if (!activateModal) return;
-    // Approve → courier promotion is a later recruitment slice; the read-only
-    // pipeline shows the applicant's completed requirements but can't activate.
-    setToast('Activating an applicant as a courier is coming in the next update.');
+  const handleActivate = async () => {
+    if (!activateModal || !activateFleetId) return;
+    const name = `${activateModal.firstName} ${activateModal.lastName}`;
+    try {
+      await approveApplicant(activateModal.id, { courierCode: activateCode, courierFleetId: activateFleetId });
+      setToast(`${name} activated as a courier`);
+    } catch {
+      setToast('Could not activate this applicant — please try again.');
+    }
     setTimeout(() => setToast(null), 3500);
     setActivateModal(null);
     setActivateFleetId(null);
-    setActivateDepotId(null);
+    setActivateCode('');
   };
 
   const handleSendToOpenforce = () => {
@@ -446,7 +452,7 @@ export default function RecruitmentPipeline() {
                           onClick={() => {
                             setActivateModal(a);
                             setActivateFleetId(null);
-                            setActivateDepotId(null);
+                            setActivateCode('');
                           }}
                           className="text-xs px-3 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 font-medium transition-colors whitespace-nowrap"
                         >
@@ -517,19 +523,16 @@ export default function RecruitmentPipeline() {
                 </select>
               </div>
 
-              {/* Assign to depot */}
+              {/* Courier code */}
               <div>
-                <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1.5">Assign to Depot</label>
-                <select
-                  value={activateDepotId ?? ''}
-                  onChange={e => setActivateDepotId(Number(e.target.value) || null)}
+                <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1.5">Courier Code</label>
+                <input
+                  value={activateCode}
+                  onChange={e => setActivateCode(e.target.value)}
+                  maxLength={50}
+                  placeholder="Auto-assigned if left blank"
                   className="w-full border border-border rounded-md p-2.5 text-sm"
-                >
-                  <option value="">Select depot...</option>
-                  {depots.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
+                />
               </div>
             </div>
 
@@ -537,7 +540,7 @@ export default function RecruitmentPipeline() {
               {/* Primary action */}
               <button
                 onClick={handleActivate}
-                disabled={!activateFleetId || !activateDepotId}
+                disabled={!activateFleetId}
                 className="w-full bg-green-600 text-white py-2.5 rounded-md text-sm font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 ✓ Activate as Courier

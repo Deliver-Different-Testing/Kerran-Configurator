@@ -142,17 +142,29 @@ export const recruitmentService = {
     return toApplicant(data);
   },
 
-  // ── Approve → courier promotion + applicant create/edit — Slice C. ──
+  // Approve → courier promotion. courierCode blank = backend auto-assigns.
+  async approveApplicant(
+    id: number,
+    payload: { courierCode?: string; courierFleetId: number },
+  ): Promise<CourierApplicant> {
+    const { data } = await api.post<ApplicantApi>(`/recruitment/applicants/${id}/approve`, {
+      courierCode: payload.courierCode ?? '',
+      courierFleetId: payload.courierFleetId,
+    });
+    return toApplicant(data);
+  },
+
+  // Courier fleets for the activate dropdown.
+  async getCourierFleets(): Promise<{ id: number; name: string }[]> {
+    const { data } = await api.get<{ id: number; name: string }[]>('/lookups/courier-fleets');
+    return data ?? [];
+  },
+
+  // ── Applicant create/edit — not yet wired. ──
   createApplicant(_data: Partial<CourierApplicant>): CourierApplicant {
     throw new Error('createApplicant() not yet wired to backend');
   },
   updateApplicant(_id: number, _updates: Partial<CourierApplicant>): CourierApplicant | undefined {
-    return undefined;
-  },
-  approveApplicant(_id: number): CourierApplicant | undefined {
-    return undefined;
-  },
-  promoteToDriver(_id: number): CourierApplicant | undefined {
     return undefined;
   },
   deleteApplicant(_id: number): boolean {

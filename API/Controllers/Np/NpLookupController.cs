@@ -10,6 +10,7 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 // Read-only lookup feeds for select dropdowns on NP-side pages.
 //   GET /api/v1/np/lookups/vehicle-makes
 //   GET /api/v1/np/lookups/insurance-companies
+//   GET /api/v1/np/lookups/courier-fleets
 [Route("api/v1/np/lookups")]
 [ApiController]
 [Authorize(Policy = "NetworkPartnerOrAdmin")]
@@ -41,6 +42,21 @@ public class NpLookupController(NpLookupService lookupService) : BaseController
         catch (Exception e)
         {
             Log.Error(e, "Failed to fetch insurance-companies lookup");
+            throw;
+        }
+    }
+
+    [HttpGet("courier-fleets")]
+    public async Task<IActionResult> GetCourierFleets()
+    {
+        try
+        {
+            var items = await lookupService.GetCourierFleets();
+            return Ok(items);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to fetch courier-fleets lookup");
             throw;
         }
     }

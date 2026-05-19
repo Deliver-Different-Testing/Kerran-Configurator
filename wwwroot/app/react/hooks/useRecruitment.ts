@@ -34,10 +34,12 @@ export function useRecruitment() {
     await reload();
   }, [reload]);
 
-  // approve → courier promotion is Slice C — still a no-op stub.
-  const approveApplicant = useCallback((id: number) => {
-    recruitmentService.approveApplicant(id);
-    void reload();
+  const approveApplicant = useCallback(async (
+    id: number,
+    payload: { courierCode?: string; courierFleetId: number },
+  ) => {
+    await recruitmentService.approveApplicant(id, payload);
+    await reload();
   }, [reload]);
 
   return {

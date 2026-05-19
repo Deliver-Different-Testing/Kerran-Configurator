@@ -275,6 +275,8 @@ public partial class TucCourier
 
     public virtual ICollection<CourierApplicant> CourierApplicantMasterCouriers { get; set; } = new List<CourierApplicant>();
 
+    public virtual TucCourierFleet CourierFleet { get; set; }
+
     public virtual TucAgent NpAgent { get; set; }
 
     public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();

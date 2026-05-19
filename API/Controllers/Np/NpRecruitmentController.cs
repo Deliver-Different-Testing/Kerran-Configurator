@@ -131,4 +131,23 @@ public class NpRecruitmentController(NpApplicantService service) : BaseControlle
             throw;
         }
     }
+
+    [HttpPost("applicants/{id:int}/approve")]
+    public async Task<IActionResult> Approve(int id, [FromBody] NpApplicantApproveDto dto)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await service.ApproveAsync(id, dto, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Applicant);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to approve applicant {Id}", id);
+            throw;
+        }
+    }
 }

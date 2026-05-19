@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApplicant } from '@/hooks/useRecruitment';
 import { recruitmentService } from '@/services/np_recruitmentService';
 import type { ApplicantPipelineStage, ApplicantDocumentSummary } from '@/types';
@@ -246,6 +246,11 @@ export default function ApplicantDetail() {
   const { applicant, refresh } = useApplicant(Number(id));
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveFleetId, setApproveFleetId] = useState<number | null>(null);
+  const [approveCode, setApproveCode] = useState('');
+  const [fleets, setFleets] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => { recruitmentService.getCourierFleets().then(setFleets); }, []);
   const [activeTab, setActiveTab] = useState<Tab>('profile');
 
   if (!applicant) {
@@ -279,9 +284,20 @@ export default function ApplicantDetail() {
     refresh();
   };
 
-  // Approve → courier promotion is the next recruitment slice (Slice C).
   const handleApprove = () => {
-    alert('Approving an applicant as a courier is coming in the next update.');
+    setApproveFleetId(null);
+    setApproveCode('');
+    setShowApproveModal(true);
+  };
+
+  const confirmApprove = async () => {
+    if (!approveFleetId) return;
+    await recruitmentService.approveApplicant(applicant.id, {
+      courierCode: approveCode,
+      courierFleetId: approveFleetId,
+    });
+    setShowApproveModal(false);
+    refresh();
   };
 
   const handleVerifyDoc = (docName: string) => {
@@ -550,6 +566,37 @@ export default function ApplicantDetail() {
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowRejectModal(false)} className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary">Cancel</button>
               <button onClick={handleReject} className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">Reject</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve / Activate Modal */}
+      {showApproveModal && (
+        <div className="fixed inset-0 bg-black/40 z-[200] flex items-center justify-center" onClick={e => { if (e.target === e.currentTarget) setShowApproveModal(false); }}>
+          <div className="bg-white rounded-lg shadow-lg border border-border w-full max-w-md mx-4 p-6">
+            <h2 className="text-lg font-bold text-text-primary mb-1">Activate as Courier</h2>
+            <p className="text-sm text-text-secondary mb-4">{applicantName} will be created as a courier record.</p>
+            <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1.5">Assign to Fleet</label>
+            <select
+              value={approveFleetId ?? ''}
+              onChange={e => setApproveFleetId(Number(e.target.value) || null)}
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white mb-3"
+            >
+              <option value="">Select fleet...</option>
+              {fleets.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}
+            </select>
+            <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1.5">Courier Code</label>
+            <input
+              value={approveCode}
+              onChange={e => setApproveCode(e.target.value)}
+              maxLength={50}
+              placeholder="Auto-assigned if left blank"
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowApproveModal(false)} className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary">Cancel</button>
+              <button onClick={confirmApprove} disabled={!approveFleetId} className="px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed">Activate</button>
             </div>
           </div>
         </div>

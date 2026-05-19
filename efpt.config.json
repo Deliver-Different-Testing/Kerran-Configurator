@@ -163,6 +163,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tucCourierFleet]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tucEventTemplate]",
          "ObjectType": 0
       },

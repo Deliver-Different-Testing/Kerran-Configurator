@@ -204,6 +204,7 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Publ
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantDashboardService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantLookupService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantProspectService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantRouteService>();
 
 // Automation repository (CRUD for configurator UI — engine execution lives in separate AutomationEngine service)
 builder.Services.AddScoped<IAutomationRepository, AutomationRepository>();

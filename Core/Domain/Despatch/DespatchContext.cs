@@ -117,6 +117,16 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<TucVehicleMake> TucVehicleMakes { get; set; }
 
+    // Routes (recurring delivery routes) — see Core/Domain/Despatch/Route.cs and
+    // database/032-create-routes-and-roster.sql.
+    public virtual DbSet<Route> Routes { get; set; }
+
+    public virtual DbSet<RouteZipcode> RouteZipcodes { get; set; }
+
+    public virtual DbSet<DispatchRouteRoster> DispatchRouteRosters { get; set; }
+
+    public virtual DbSet<ZipPolygon> ZipPolygons { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.UseCollation("Latin1_General_CI_AS");
@@ -3958,6 +3968,63 @@ public partial class DespatchContext : DbContext
                 .IsRequired()
                 .HasMaxLength(50)
                 .HasColumnName("ucvmName");
+        });
+
+        // ─── Routes / RouteZipcodes / DispatchRouteRoster ─────────────────
+        // Recurring delivery routes — see Route.cs and database/032-create-routes-and-roster.sql.
+        modelBuilder.Entity<Route>(entity =>
+        {
+            entity.HasKey(e => e.RouteId).HasName("PK_Routes");
+            entity.ToTable("Routes");
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Area).HasMaxLength(100);
+            entity.Property(e => e.CreatedBy).HasMaxLength(100);
+            entity.Property(e => e.UpdatedBy).HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.HasIndex(e => e.Active, "IX_Routes_Active");
+        });
+
+        modelBuilder.Entity<RouteZipcode>(entity =>
+        {
+            entity.HasKey(e => new { e.RouteId, e.ZipPolygonId }).HasName("PK_RouteZipcodes");
+            entity.ToTable("RouteZipcodes");
+            entity.HasIndex(e => e.ZipPolygonId, "IX_RouteZipcodes_ZipPolygonId");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.RouteZipcodes)
+                .HasForeignKey(d => d.RouteId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_RouteZipcodes_Routes");
+
+            entity.HasOne(d => d.ZipPolygon).WithMany(p => p.RouteZipcodes)
+                .HasForeignKey(d => d.ZipPolygonId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_RouteZipcodes_ZipPolygon");
+        });
+
+        modelBuilder.Entity<DispatchRouteRoster>(entity =>
+        {
+            entity.HasKey(e => e.RouteRosterId).HasName("PK_DispatchRouteRoster");
+            entity.ToTable("Dispatch_RouteRoster");
+            entity.Property(e => e.CreatedBy).HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.RosterDate).HasColumnType("date");
+            entity.HasIndex(e => e.CourierId, "IX_RouteRoster_Courier");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.DispatchRouteRosters)
+                .HasForeignKey(d => d.RouteId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_DispatchRouteRoster_Routes");
+        });
+
+        modelBuilder.Entity<ZipPolygon>(entity =>
+        {
+            entity.HasKey(e => e.ZipPolygonId).HasName("PK_ZipPolygon");
+            entity.ToTable("ZipPolygon");
+            entity.Property(e => e.Zip).HasMaxLength(10);
+            entity.Property(e => e.Wkt).HasColumnType("nvarchar(max)");
+            entity.HasIndex(e => e.Zip, "IX_ZipPolygon_Zip");
         });
 
         OnModelCreatingPartial(modelBuilder);

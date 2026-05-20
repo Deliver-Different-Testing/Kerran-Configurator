@@ -1,0 +1,95 @@
+using System;
+using System.Collections.Generic;
+using DfrntDriveConfigurator.Core.Application.Dtos.Common;
+
+namespace DfrntDriveConfigurator.Core.Application.Dtos.Tenant;
+
+// ─── Route read shape ─────────────────────────────────────────────────
+public class TenantRouteDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Area { get; set; } = string.Empty;
+    public int? DefaultCourierId { get; set; }
+    public string DefaultCourierName { get; set; } = string.Empty;
+    public string DefaultCourierCode { get; set; } = string.Empty;
+    public bool Active { get; set; }
+    public List<TenantRouteZipcodeDto> Zipcodes { get; set; } = new();
+    public int RosterEntryCount { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public class TenantRouteZipcodeDto
+{
+    public int ZipPolygonId { get; set; }
+    public string Zip { get; set; } = string.Empty;
+}
+
+// ─── Route upsert (Create + Update share the same shape) ──────────────
+public class TenantRouteUpsertDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Area { get; set; } = string.Empty;
+    public int? DefaultCourierId { get; set; }
+    public bool Active { get; set; } = true;
+    public List<int> ZipPolygonIds { get; set; } = new();
+}
+
+public class TenantRoutesResponse : BaseResponse
+{
+    public TenantRoutesResponse(Guid messageId) : base(messageId) { }
+    public List<TenantRouteDto> Routes { get; set; } = new();
+}
+
+public class TenantRouteResponse : BaseResponse
+{
+    public TenantRouteResponse(Guid messageId) : base(messageId) { }
+    public TenantRouteDto Route { get; set; }
+}
+
+// ─── Roster ──────────────────────────────────────────────────────────
+public class TenantRouteRosterEntryDto
+{
+    public int Id { get; set; }
+    public int RouteId { get; set; }
+    public int CourierId { get; set; }
+    public string CourierName { get; set; } = string.Empty;
+    public string CourierCode { get; set; } = string.Empty;
+    public DateTime? RosterDate { get; set; }
+    public byte? DayOfWeek { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class TenantRouteRosterUpsertDto
+{
+    public int CourierId { get; set; }
+    public DateTime? RosterDate { get; set; }
+    public byte? DayOfWeek { get; set; }   // Required when RosterDate is null
+}
+
+public class TenantRouteRosterResponse : BaseResponse
+{
+    public TenantRouteRosterResponse(Guid messageId) : base(messageId) { }
+    public List<TenantRouteRosterEntryDto> Entries { get; set; } = new();
+}
+
+public class TenantRouteRosterEntryResponse : BaseResponse
+{
+    public TenantRouteRosterEntryResponse(Guid messageId) : base(messageId) { }
+    public TenantRouteRosterEntryDto Entry { get; set; }
+}
+
+// ─── Lookups ──────────────────────────────────────────────────────────
+public class TenantZipcodeLookupDto
+{
+    public int ZipPolygonId { get; set; }
+    public string Zip { get; set; } = string.Empty;
+}
+
+public class TenantZipcodeLookupResponse : BaseResponse
+{
+    public TenantZipcodeLookupResponse(Guid messageId) : base(messageId) { }
+    public List<TenantZipcodeLookupDto> Zipcodes { get; set; } = new();
+}

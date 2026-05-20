@@ -267,7 +267,10 @@ function buildNpSections(): NavSection[] {
     },
     {
       id: 'operations', label: 'Operations', icon: icons.settings,
-      items: [{ id: '/operations', label: 'Operations', implemented: true }],
+      items: [
+        { id: '/operations', label: 'Operations', implemented: true },
+        { id: '/operations/recurring-routes', label: 'Recurring Routes', implemented: true },
+      ],
     },
     {
       id: 'reports-section', label: 'Reports', icon: icons.reports,

@@ -250,6 +250,23 @@ public class TenantRouteService(
         return new TenantZipcodeLookupResponse(messageId) { Success = true, Zipcodes = rows };
     }
 
+    public async Task<TenantCourierLookupResponse> GetCouriersLookupAsync(Guid messageId)
+    {
+        var rows = await Context.TucCouriers.AsNoTracking()
+            .Where(c => c.Active)
+            .OrderBy(c => c.UccrSurname)
+            .ThenBy(c => c.UccrName)
+            .Select(c => new TenantCourierLookupDto
+            {
+                Id = c.UccrId,
+                Name = ((c.UccrName ?? string.Empty) + " " + (c.UccrSurname ?? string.Empty)).Trim(),
+                Code = c.Code ?? string.Empty,
+            })
+            .ToListAsync();
+
+        return new TenantCourierLookupResponse(messageId) { Success = true, Couriers = rows };
+    }
+
     // ─── HELPERS ──────────────────────────────────────────────────────
 
     private string ResolveActor() =>

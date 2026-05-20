@@ -93,3 +93,16 @@ public class TenantZipcodeLookupResponse : BaseResponse
     public TenantZipcodeLookupResponse(Guid messageId) : base(messageId) { }
     public List<TenantZipcodeLookupDto> Zipcodes { get; set; } = new();
 }
+
+public class TenantCourierLookupDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}
+
+public class TenantCourierLookupResponse : BaseResponse
+{
+    public TenantCourierLookupResponse(Guid messageId) : base(messageId) { }
+    public List<TenantCourierLookupDto> Couriers { get; set; } = new();
+}

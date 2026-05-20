@@ -30,6 +30,7 @@ import PortalUrl from './pages/np/PortalUrl';
 import FleetManagement from './pages/np/FleetManagement';
 import Scheduling from './pages/np/Scheduling';
 import Operations from './pages/np/Operations';
+import { RecurringRoutes } from './pages/tenant/RecurringRoutes';
 import QuizBuilderPage from './pages/np/QuizBuilderPage';
 import NpQuotes from './pages/np/Quotes';
 import NpSettings from './pages/np/Settings';
@@ -125,6 +126,7 @@ export default function App() {
             <Route path="fleet-management/:id" element={<FleetManagement />} />
             <Route path="scheduling" element={<Scheduling />} />
             <Route path="operations" element={<Operations />} />
+            <Route path="operations/recurring-routes" element={<RecurringRoutes />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
@@ -166,6 +168,7 @@ export default function App() {
             <Route path="fleet-management/:id" element={<FleetManagement />} />
             <Route path="scheduling" element={<Scheduling />} />
             <Route path="operations" element={<Operations />} />
+            <Route path="operations/recurring-routes" element={<RecurringRoutes />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

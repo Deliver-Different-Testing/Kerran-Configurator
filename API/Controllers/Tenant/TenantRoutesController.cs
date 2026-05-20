@@ -173,4 +173,23 @@ public class TenantRoutesController(TenantRouteService routeService) : BaseContr
             throw;
         }
     }
+
+    // ─── Courier lookup (for default-courier + roster dropdowns) ──────
+
+    [HttpGet("/api/v1/tenant/couriers/lookup")]
+    public async Task<IActionResult> CouriersLookup()
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            var response = await routeService.GetCouriersLookupAsync(messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Couriers);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed courier lookup");
+            throw;
+        }
+    }
 }

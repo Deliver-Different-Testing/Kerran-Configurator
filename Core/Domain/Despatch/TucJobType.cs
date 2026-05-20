@@ -83,6 +83,8 @@ public partial class TucJobType
 
     public bool ShowPhotosWhenChild { get; set; }
 
+    public bool AutoDispatchEnabled { get; set; }
+
     public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();
 
     public virtual ICollection<TucEventTemplate> TucEventTemplates { get; set; } = new List<TucEventTemplate>();

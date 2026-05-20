@@ -47,6 +47,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<CourierApplicantUpload> CourierApplicantUploads { get; set; }
 
+    public virtual DbSet<DispatchRouteRoster> DispatchRouteRosters { get; set; }
+
     public virtual DbSet<DocumentType> DocumentTypes { get; set; }
 
     public virtual DbSet<JobBarcode> JobBarcodes { get; set; }
@@ -64,6 +66,8 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<QuotesQuote> QuotesQuotes { get; set; }
 
     public virtual DbSet<RecruitmentStage> RecruitmentStages { get; set; }
+
+    public virtual DbSet<Route> Routes { get; set; }
 
     public virtual DbSet<TblBulkJob> TblBulkJobs { get; set; }
 
@@ -116,14 +120,6 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<TucSuburb> TucSuburbs { get; set; }
 
     public virtual DbSet<TucVehicleMake> TucVehicleMakes { get; set; }
-
-    // Routes (recurring delivery routes) — see Core/Domain/Despatch/Route.cs and
-    // database/032-create-routes-and-roster.sql.
-    public virtual DbSet<Route> Routes { get; set; }
-
-    public virtual DbSet<RouteZipcode> RouteZipcodes { get; set; }
-
-    public virtual DbSet<DispatchRouteRoster> DispatchRouteRosters { get; set; }
 
     public virtual DbSet<ZipPolygon> ZipPolygons { get; set; }
 
@@ -614,6 +610,46 @@ public partial class DespatchContext : DbContext
                 .HasConstraintName("FK_CourierApplicantUpload_CourierApplicantDocument");
         });
 
+        modelBuilder.Entity<DispatchRouteRoster>(entity =>
+        {
+            entity.HasKey(e => e.RouteRosterId).HasName("PK_DispatchRouteRoster");
+
+            entity.ToTable("Dispatch_RouteRoster");
+
+            entity.HasIndex(e => new { e.RouteId, e.IsActive }, "IX_DispatchRouteRoster_RouteActive");
+
+            entity.HasIndex(e => new { e.RouteId, e.RosterDate }, "UX_DispatchRouteRoster_RouteDate_Active")
+                .IsUnique()
+                .HasFilter("([IsActive]=(1) AND [RosterDate] IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.RouteId, e.DayOfWeek }, "UX_DispatchRouteRoster_RouteDow_Active")
+                .IsUnique()
+                .HasFilter("([IsActive]=(1) AND [RosterDate] IS NULL)");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_DispatchRouteRoster_CreatedAt")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasDefaultValue("system")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_DispatchRouteRoster_CreatedBy");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_DispatchRouteRoster_IsActive");
+            entity.Property(e => e.RosterDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.Courier).WithMany(p => p.DispatchRouteRosters)
+                .HasForeignKey(d => d.CourierId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_DispatchRouteRoster_tucCourier");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.DispatchRouteRosters)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("FK_DispatchRouteRoster_Routes");
+        });
+
         modelBuilder.Entity<DocumentType>(entity =>
         {
             entity.HasIndex(e => e.Category, "IX_DocumentTypes_Category");
@@ -863,6 +899,53 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.StageName)
                 .IsRequired()
                 .HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<Route>(entity =>
+        {
+            entity.HasIndex(e => new { e.Active, e.Name }, "IX_Routes_Active");
+
+            entity.Property(e => e.Active).HasAnnotation("Relational:DefaultConstraintName", "DF_Routes_Active");
+            entity.Property(e => e.Area)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasDefaultValue("")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_Routes_Area");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_Routes_CreatedAt")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasDefaultValue("system")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_Routes_CreatedBy");
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.UpdatedAt).HasColumnType("datetime");
+            entity.Property(e => e.UpdatedBy).HasMaxLength(100);
+
+            entity.HasOne(d => d.DefaultCourier).WithMany(p => p.Routes)
+                .HasForeignKey(d => d.DefaultCourierId)
+                .HasConstraintName("FK_Routes_tucCourier");
+
+            entity.HasMany(d => d.ZipPolygons).WithMany(p => p.Routes)
+                .UsingEntity<Dictionary<string, object>>(
+                    "RouteZipcode",
+                    r => r.HasOne<ZipPolygon>().WithMany()
+                        .HasForeignKey("ZipPolygonId")
+                        .OnDelete(DeleteBehavior.ClientSetNull)
+                        .HasConstraintName("FK_RouteZipcodes_ZipPolygon"),
+                    l => l.HasOne<Route>().WithMany()
+                        .HasForeignKey("RouteId")
+                        .HasConstraintName("FK_RouteZipcodes_Routes"),
+                    j =>
+                    {
+                        j.HasKey("RouteId", "ZipPolygonId");
+                        j.ToTable("RouteZipcodes");
+                        j.HasIndex(new[] { "ZipPolygonId" }, "IX_RouteZipcodes_ZipPolygonId");
+                    });
         });
 
         modelBuilder.Entity<TblBulkJob>(entity =>
@@ -3406,6 +3489,8 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => e.NpAgentId, "IX_tucJobBooking_NpAgentId");
 
+            entity.HasIndex(e => e.RouteId, "IX_tucJobBooking_RouteId");
+
             entity.HasIndex(e => e.ToAirportId, "IX_tucJobBooking_ToAirportID");
 
             entity.HasIndex(e => e.InformationParentId, "InformationParentID");
@@ -3769,6 +3854,7 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.UcjtId).HasColumnName("ucjtID");
             entity.Property(e => e.AddonPercentage).HasColumnType("decimal(5, 4)");
             entity.Property(e => e.Alias).HasMaxLength(500);
+            entity.Property(e => e.AutoDispatchEnabled).HasAnnotation("Relational:DefaultConstraintName", "DF_tucJobType_AutoDispatchEnabled");
             entity.Property(e => e.CourierPercentage).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.Created).HasColumnType("datetime");
             entity.Property(e => e.CreatedBy)
@@ -3970,61 +4056,21 @@ public partial class DespatchContext : DbContext
                 .HasColumnName("ucvmName");
         });
 
-        // ─── Routes / RouteZipcodes / DispatchRouteRoster ─────────────────
-        // Recurring delivery routes — see Route.cs and database/032-create-routes-and-roster.sql.
-        modelBuilder.Entity<Route>(entity =>
-        {
-            entity.HasKey(e => e.RouteId).HasName("PK_Routes");
-            entity.ToTable("Routes");
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-            entity.Property(e => e.Area).HasMaxLength(100);
-            entity.Property(e => e.CreatedBy).HasMaxLength(100);
-            entity.Property(e => e.UpdatedBy).HasMaxLength(100);
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
-            entity.Property(e => e.Active).HasDefaultValue(true);
-            entity.HasIndex(e => e.Active, "IX_Routes_Active");
-        });
-
-        modelBuilder.Entity<RouteZipcode>(entity =>
-        {
-            entity.HasKey(e => new { e.RouteId, e.ZipPolygonId }).HasName("PK_RouteZipcodes");
-            entity.ToTable("RouteZipcodes");
-            entity.HasIndex(e => e.ZipPolygonId, "IX_RouteZipcodes_ZipPolygonId");
-
-            entity.HasOne(d => d.Route).WithMany(p => p.RouteZipcodes)
-                .HasForeignKey(d => d.RouteId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("FK_RouteZipcodes_Routes");
-
-            entity.HasOne(d => d.ZipPolygon).WithMany(p => p.RouteZipcodes)
-                .HasForeignKey(d => d.ZipPolygonId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_RouteZipcodes_ZipPolygon");
-        });
-
-        modelBuilder.Entity<DispatchRouteRoster>(entity =>
-        {
-            entity.HasKey(e => e.RouteRosterId).HasName("PK_DispatchRouteRoster");
-            entity.ToTable("Dispatch_RouteRoster");
-            entity.Property(e => e.CreatedBy).HasMaxLength(100);
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.RosterDate).HasColumnType("date");
-            entity.HasIndex(e => e.CourierId, "IX_RouteRoster_Courier");
-
-            entity.HasOne(d => d.Route).WithMany(p => p.DispatchRouteRosters)
-                .HasForeignKey(d => d.RouteId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("FK_DispatchRouteRoster_Routes");
-        });
-
         modelBuilder.Entity<ZipPolygon>(entity =>
         {
-            entity.HasKey(e => e.ZipPolygonId).HasName("PK_ZipPolygon");
+            entity.HasKey(e => e.ZipPolygonId).HasName("PK__ZipPolyg__6A8AEEE3127F7A1C");
+
             entity.ToTable("ZipPolygon");
-            entity.Property(e => e.Zip).HasMaxLength(10);
-            entity.Property(e => e.Wkt).HasColumnType("nvarchar(max)");
+
             entity.HasIndex(e => e.Zip, "IX_ZipPolygon_Zip");
+
+            entity.Property(e => e.ZipPolygonId).HasColumnName("ZipPolygonID");
+            entity.Property(e => e.Latitude).HasColumnType("decimal(18, 8)");
+            entity.Property(e => e.Longitude).HasColumnType("decimal(18, 8)");
+            entity.Property(e => e.Wkt).HasColumnName("WKT");
+            entity.Property(e => e.Zip)
+                .HasMaxLength(20)
+                .IsUnicode(false);
         });
 
         OnModelCreatingPartial(modelBuilder);

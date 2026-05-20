@@ -277,7 +277,11 @@ public partial class TucCourier
 
     public virtual TucCourierFleet CourierFleet { get; set; }
 
+    public virtual ICollection<DispatchRouteRoster> DispatchRouteRosters { get; set; } = new List<DispatchRouteRoster>();
+
     public virtual TucAgent NpAgent { get; set; }
+
+    public virtual ICollection<Route> Routes { get; set; } = new List<Route>();
 
     public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();
 

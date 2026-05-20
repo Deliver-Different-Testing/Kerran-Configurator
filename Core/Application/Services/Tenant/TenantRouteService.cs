@@ -38,10 +38,10 @@ public class TenantRouteService(
                 Active = r.Active,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
-                Zipcodes = r.RouteZipcodes.Select(rz => new TenantRouteZipcodeDto
+                Zipcodes = r.ZipPolygons.Select(z => new TenantRouteZipcodeDto
                 {
-                    ZipPolygonId = rz.ZipPolygonId,
-                    Zip = rz.ZipPolygon.Zip ?? string.Empty,
+                    ZipPolygonId = z.ZipPolygonId,
+                    Zip = z.Zip ?? string.Empty,
                 }).ToList(),
                 RosterEntryCount = r.DispatchRouteRosters.Count(rr => rr.IsActive),
             })
@@ -83,8 +83,15 @@ public class TenantRouteService(
             CreatedAt = DateTime.UtcNow,
             CreatedBy = actor,
         };
-        foreach (var zid in dto.ZipPolygonIds.Distinct())
-            route.RouteZipcodes.Add(new RouteZipcode { ZipPolygonId = zid });
+        // EF Power Tools regenerated RouteZipcodes as an implicit junction
+        // (skip-navigation `Route.ZipPolygons`), so we attach existing
+        // ZipPolygon rows by ID — EF inserts the junction rows on save.
+        var newIds = dto.ZipPolygonIds.Distinct().ToList();
+        var newZips = await Context.ZipPolygons
+            .Where(z => newIds.Contains(z.ZipPolygonId))
+            .ToListAsync();
+        foreach (var z in newZips)
+            route.ZipPolygons.Add(z);
 
         Context.Routes.Add(route);
         await Context.SaveChangesAsync();
@@ -100,7 +107,7 @@ public class TenantRouteService(
             return FailRoute(messageId, "At least one zip code is required.");
 
         var route = await Context.Routes
-            .Include(r => r.RouteZipcodes)
+            .Include(r => r.ZipPolygons)
             .FirstOrDefaultAsync(r => r.RouteId == id);
         if (route == null) return FailRoute(messageId, "Route not found.");
 
@@ -113,9 +120,15 @@ public class TenantRouteService(
         route.UpdatedBy = actor;
 
         // Replace zipcode set wholesale — small N, simpler than reconciling diffs.
-        Context.RouteZipcodes.RemoveRange(route.RouteZipcodes);
-        foreach (var zid in dto.ZipPolygonIds.Distinct())
-            route.RouteZipcodes.Add(new RouteZipcode { RouteId = id, ZipPolygonId = zid });
+        // Clear() on the skip-nav collection has EF delete the corresponding
+        // implicit-junction rows; Add() inserts new ones on save.
+        var newIds = dto.ZipPolygonIds.Distinct().ToList();
+        var newZips = await Context.ZipPolygons
+            .Where(z => newIds.Contains(z.ZipPolygonId))
+            .ToListAsync();
+        route.ZipPolygons.Clear();
+        foreach (var z in newZips)
+            route.ZipPolygons.Add(z);
 
         await Context.SaveChangesAsync();
         return await ReadRouteAsync(id, messageId);

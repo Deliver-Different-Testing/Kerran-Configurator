@@ -388,6 +388,8 @@ public partial class TucJobBooking
 
     public decimal? PumpPrice { get; set; }
 
+    public int? RouteId { get; set; }
+
     public virtual TucJobBooking BookingParent { get; set; }
 
     public virtual TucCourier Courier { get; set; }

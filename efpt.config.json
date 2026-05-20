@@ -87,6 +87,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[Dispatch_RouteRoster]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[DocumentTypes]",
          "ObjectType": 0
       },
@@ -120,6 +124,14 @@
       },
       {
          "Name": "[dbo].[RecruitmentStages]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Routes]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[RouteZipcodes]",
          "ObjectType": 0
       },
       {
@@ -224,6 +236,10 @@
       },
       {
          "Name": "[dbo].[tucVehicleMake]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ZipPolygon]",
          "ObjectType": 0
       }
    ],

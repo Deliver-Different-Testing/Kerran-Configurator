@@ -213,6 +213,17 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     });
   }
 
+  // Operations — exposes Recurring Routes (medical-courier US MVP feature).
+  // Mirrors the NP sidebar's Operations group; unconditional because Routes
+  // default to Active=0 and the feature is inert until staff opt in.
+  sections.push({
+    id: 'operations', label: 'Operations', icon: icons.settings,
+    items: [
+      { id: '/operations', label: 'Operations', implemented: true },
+      { id: '/operations/recurring-routes', label: 'Recurring Routes', implemented: true },
+    ],
+  });
+
   if (cfg.quotesEnabled) {
     sections.push({
       id: 'quotes', label: 'Quotes', icon: icons.quotes,

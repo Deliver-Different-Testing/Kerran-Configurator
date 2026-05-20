@@ -210,6 +210,8 @@ export default function App() {
             <Route path="fleet-management" element={<FleetManagement />} />
             <Route path="fleet-management/:id" element={<FleetManagement />} />
             <Route path="scheduling" element={<Scheduling />} />
+            <Route path="operations" element={<Operations />} />
+            <Route path="operations/recurring-routes" element={<RecurringRoutes />} />
             <Route path="settings" element={<TenantSettings />} />
             <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
             <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />

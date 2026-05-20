@@ -12,17 +12,16 @@ behaviour, RunViewer wiring) is in
 | 1 | P0 | 0.25 | Garry | Apply `database/032-create-routes-and-roster.sql` to the NeoGenomics tenant DB if not already present. |
 | 2 | P0 | 0.25 | Garry | Apply dbmigrationsv2 `20260519104500_AddRouteIdToTucJobBookingForRecurringRoutes`. |
 | 3 | P0 | 0.25 | Garry | Apply dbmigrationsv2 `20260519104600_RecurringRoutesPrebookAndRunViewer`. |
-| 4 | P0 | 0.25 | Ops   | Confirm 3 edge-case bookings in `docs/NEOGENOMICS-RECURRING-ROUTE-MAPPING.md` (Sac vs Central Valley). Edit `033` before running if any need to move. |
-| 5 | P0 | 0.5  | Garry | Run `database/033-seed-neogenomics-recurring-routes.sql`. Creates 4 inactive route rows and stamps `tucJobBooking.RouteId` for the 59 mapped bookings. |
-| 6 | P0 | 1.0  | Ops   | Populate `RouteZipcodes` per corridor (see "ZIP coverage" below). |
-| 7 | P0 | 0.5  | Ops   | Set `DefaultCourierId` and/or `Dispatch_RouteRoster` rows for each corridor, then flip `Routes.Active = 1`. |
-| 8 | P1 | 1.0  | Garry | Run an end-to-end prebook test through `uspPrebookSet` for all four corridors. |
-| 9 | P1 | 0.25 | Ops   | Confirm `KT1578CRT` is test data and deactivate the booking if so. |
-| 10 | P1 | 1.0 | Steve | RunViewer Angular: pass `runDate` on `RVW_stpBulkRunJobs` for negative run IDs. Branch `feat/runviewer-recurring-routes` (commit `01a46a4`) ready for review; merge + GitLab push pending. |
+| 4 | P0 | 0.5  | Garry | Run `database/033-seed-neogenomics-recurring-routes.sql`. Creates 4 inactive route rows and stamps `tucJobBooking.RouteId` for the 59 mapped bookings. |
+| 5 | P0 | 1.0  | Ops   | Populate `RouteZipcodes` per corridor (see "ZIP coverage" below). |
+| 6 | P0 | 0.5  | Ops   | Set `DefaultCourierId` and/or `Dispatch_RouteRoster` rows for each corridor, then flip `Routes.Active = 1`. |
+| 7 | P1 | 1.0  | Garry | Run an end-to-end prebook test through `uspPrebookSet` for all four corridors. |
+| 8 | P1 | 0.25 | Ops   | Confirm `KT1578CRT` is test data and deactivate the booking if so. |
+| 9 | P1 | 1.0  | Steve | RunViewer Angular: pass `runDate` on `RVW_stpBulkRunJobs` for negative run IDs. Branch `feat/runviewer-recurring-routes` (commit `01a46a4`) ready for review; merge + GitLab push pending. |
 
 ## Verification queries
 
-After step 5, the 59 bookings should split as:
+After step 4, the 59 bookings should split as:
 
 ```sql
 SELECT r.Name, COUNT(*) AS BookingCount
@@ -36,8 +35,8 @@ ORDER BY r.Name;
 | Route | Expected count |
 |---|---:|
 | `Reno to Aliso Viejo` | 14 |
-| `Hayward to Aliso Viejo` | 18 |
-| `Sacramento to Aliso Viejo` | 17 |
+| `Hayward to Aliso Viejo` | 19 |
+| `Sacramento to Aliso Viejo` | 16 |
 | `Central Valley to Aliso Viejo` | 10 |
 
 Row-level booking→route mapping is in

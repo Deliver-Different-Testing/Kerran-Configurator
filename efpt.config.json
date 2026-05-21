@@ -87,6 +87,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[CourierDocuments]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[Dispatch_RouteRoster]",
          "ObjectType": 0
       },

@@ -104,18 +104,50 @@ else
 
 
 builder.Services.AddSingleton<IConnectionStringManager, ConnectionStringManager>();
+
+// IAmazonS3 — OS-aware credential resolution.
+//   Windows (local dev): use the developer's AWS SSO credentials profile
+//     (refreshed via `aws sso login`).
+//   Linux  (container / pod): rely on the default credential chain which
+//     picks up IRSA / instance role / env vars automatically.
+// The previous version of this block hard-coded SSO creds and would fail
+// at first AWS call from any non-Windows host.
 builder.Services.AddSingleton<IAmazonS3>(_ =>
 {
     var awsOptions = builder.Configuration.GetAWSOptions();
+    var region = awsOptions.Region ?? RegionEndpoint.APSoutheast2;
 
-    Log.Information("AWS Region from config: {Region}", awsOptions.Region?.SystemName ?? "null");
+    Log.Information("AWS Region from config: {Region}", region.SystemName);
 
-    var ssoCreds = LoadSsoCredentials("default");
-    return new AmazonS3Client(ssoCreds, new AmazonS3Config
+    var s3Config = new AmazonS3Config { RegionEndpoint = region };
+
+    if (OperatingSystem.IsWindows())
     {
-        RegionEndpoint = awsOptions.Region ?? RegionEndpoint.APSoutheast2
-    });
+        var ssoCreds = LoadSsoCredentials("default");
+        return new AmazonS3Client(ssoCreds, s3Config);
+    }
+
+    return new AmazonS3Client(s3Config);
 });
+
+// AppSettings — strongly-typed config (env vars + appsettings.json),
+// populated at startup and registered as a singleton. Services inject
+// AppSettings for typed access to bucket names etc. Matches the
+// despatchweb / Mars pattern for stack consistency.
+var appSettings = new AppSettings
+{
+    S3BucketComplianceUploads = builder.Configuration["S3BucketComplianceUploads"] ?? string.Empty
+};
+builder.Services.AddSingleton(appSettings);
+
+if (string.IsNullOrEmpty(appSettings.S3BucketComplianceUploads))
+{
+    Log.Warning("S3BucketComplianceUploads environment variable is not set — compliance document upload/download will fail until it is configured.");
+}
+else
+{
+    Log.Information("S3BucketComplianceUploads: {Bucket}", appSettings.S3BucketComplianceUploads);
+}
 
 builder.Services.Configure<CookiePolicyOptions>(options =>
 {
@@ -191,9 +223,15 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.N
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpComplianceProfileService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpRecruitmentStageService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpApplicantService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.CourierDocumentService>();
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpScopeResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpScopeResolver>();
+
+// Common infrastructure services (used by multiple lanes)
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Common.IS3StorageService,
+    DfrntDriveConfigurator.Core.Application.Services.Common.S3StorageService>();
 
 // Phase 5+1 — Tenant scope services
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantAgentService>();

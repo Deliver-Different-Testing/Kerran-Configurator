@@ -275,6 +275,8 @@ public partial class TucCourier
 
     public virtual ICollection<CourierApplicant> CourierApplicantMasterCouriers { get; set; } = new List<CourierApplicant>();
 
+    public virtual ICollection<CourierDocument> CourierDocuments { get; set; } = new List<CourierDocument>();
+
     public virtual TucCourierFleet CourierFleet { get; set; }
 
     public virtual ICollection<DispatchRouteRoster> DispatchRouteRosters { get; set; } = new List<DispatchRouteRoster>();

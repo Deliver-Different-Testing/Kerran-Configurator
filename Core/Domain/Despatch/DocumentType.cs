@@ -50,4 +50,6 @@ public partial class DocumentType
     public DateTime? ModifiedDate { get; set; }
 
     public virtual ICollection<ComplianceProfileRequirement> ComplianceProfileRequirements { get; set; } = new List<ComplianceProfileRequirement>();
+
+    public virtual ICollection<CourierDocument> CourierDocuments { get; set; } = new List<CourierDocument>();
 }

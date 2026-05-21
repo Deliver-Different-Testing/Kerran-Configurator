@@ -47,6 +47,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<CourierApplicantUpload> CourierApplicantUploads { get; set; }
 
+    public virtual DbSet<CourierDocument> CourierDocuments { get; set; }
+
     public virtual DbSet<DispatchRouteRoster> DispatchRouteRosters { get; set; }
 
     public virtual DbSet<DocumentType> DocumentTypes { get; set; }
@@ -608,6 +610,53 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.DocumentId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_CourierApplicantUpload_CourierApplicantDocument");
+        });
+
+        modelBuilder.Entity<CourierDocument>(entity =>
+        {
+            entity.HasIndex(e => e.CourierId, "IX_CourierDocuments_CourierId");
+
+            entity.HasIndex(e => e.DocumentTypeId, "IX_CourierDocuments_DocumentTypeId");
+
+            entity.Property(e => e.ContentType)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_CourierDocuments_CreatedDate");
+            entity.Property(e => e.FileName)
+                .IsRequired()
+                .HasMaxLength(255);
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_CourierDocuments_IsActive");
+            entity.Property(e => e.RejectReason).HasMaxLength(500);
+            entity.Property(e => e.S3key)
+                .IsRequired()
+                .HasMaxLength(500)
+                .HasColumnName("S3Key");
+            entity.Property(e => e.UploadedBy)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.UploadedDate)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_CourierDocuments_UploadedDate");
+            entity.Property(e => e.VerifiedBy).HasMaxLength(100);
+            entity.Property(e => e.VerifyStatus)
+                .IsRequired()
+                .HasMaxLength(20)
+                .HasDefaultValue("Pending")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_CourierDocuments_VerifyStatus");
+
+            entity.HasOne(d => d.Courier).WithMany(p => p.CourierDocuments)
+                .HasForeignKey(d => d.CourierId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CourierDocuments_Courier");
+
+            entity.HasOne(d => d.DocumentType).WithMany(p => p.CourierDocuments)
+                .HasForeignKey(d => d.DocumentTypeId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CourierDocuments_DocumentType");
         });
 
         modelBuilder.Entity<DispatchRouteRoster>(entity =>

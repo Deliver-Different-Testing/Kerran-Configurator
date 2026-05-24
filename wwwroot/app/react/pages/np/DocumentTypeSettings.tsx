@@ -167,6 +167,19 @@ export default function DocumentTypeSettings() {
     input.click();
   };
 
+  const handleTemplateDownload = async (id: number) => {
+    const url = await documentTypeService.downloadTemplate(id);
+    // Open the proxy-download URL in a new tab; browser handles the stream
+    // from the API (which streams from S3 with cookie auth end-to-end).
+    window.open(url, '_blank');
+  };
+
+  const handleTemplateRemove = async (id: number, name: string) => {
+    if (!confirm(`Remove template from "${name}"? The file in S3 will be deleted.`)) return;
+    await documentTypeService.removeTemplate(id);
+    await refresh();
+  };
+
   return (
     <>
       <div className="flex items-center justify-between mb-5">
@@ -240,7 +253,23 @@ export default function DocumentTypeSettings() {
                   }</td>
                   <td className="px-4 py-2.5 text-center">
                     {dt.hasTemplate ? (
-                      <span className="text-green-600 cursor-pointer" title="Template available">📋</span>
+                      <span className="inline-flex items-center gap-1">
+                        <button
+                          onClick={() => handleTemplateDownload(dt.id)}
+                          className="text-green-600 hover:text-green-700"
+                          title={`Download template: ${dt.templateFileName || 'template'}`}
+                        >📋</button>
+                        <button
+                          onClick={() => handleTemplateUpload(dt.id)}
+                          className="text-text-muted hover:text-brand-cyan text-xs"
+                          title="Replace template — uploads a new file and removes the old one"
+                        >↺</button>
+                        <button
+                          onClick={() => handleTemplateRemove(dt.id, dt.name)}
+                          className="text-text-muted hover:text-red-500 text-xs"
+                          title="Remove template"
+                        >×</button>
+                      </span>
                     ) : (
                       <button
                         onClick={() => handleTemplateUpload(dt.id)}

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
 using DfrntDriveConfigurator.Core.Application.Services.Np;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
@@ -93,4 +94,78 @@ public class NpDocumentTypeController(NpDocumentTypeService service) : BaseContr
             throw;
         }
     }
+
+    // ─── Template (blank form attached to a document type) ────────────────
+
+    [HttpPost("{id:int}/template")]
+    [RequestSizeLimit(25 * 1024 * 1024)]
+    public async Task<IActionResult> UploadTemplate(int id, [FromForm] DocumentTypeTemplateForm form)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            if (form?.File is null || form.File.Length == 0)
+            {
+                return BadRequest(new { error = "File is required." });
+            }
+
+            await using var stream = form.File.OpenReadStream();
+            var response = await service.UploadTemplateAsync(
+                id, stream, form.File.FileName, form.File.ContentType, form.File.Length, messageId);
+
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.DocumentType);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to upload template for document type {Id}", id);
+            throw;
+        }
+    }
+
+    [HttpGet("{id:int}/template")]
+    public async Task<IActionResult> DownloadTemplate(int id)
+    {
+        try
+        {
+            Log.Information("({Method} {Path})", Request.Method, Request.Path);
+
+            var result = await service.GetTemplateForDownloadAsync(id);
+            if (result is null) return NotFound();
+
+            return File(result.Content, result.ContentType, result.FileName);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to download template for document type {Id}", id);
+            throw;
+        }
+    }
+
+    [HttpDelete("{id:int}/template")]
+    public async Task<IActionResult> RemoveTemplate(int id)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await service.RemoveTemplateAsync(id, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.DocumentType);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to remove template for document type {Id}", id);
+            throw;
+        }
+    }
+}
+
+/// <summary>Multipart form binding for the template upload.</summary>
+public class DocumentTypeTemplateForm
+{
+    public IFormFile? File { get; set; }
 }

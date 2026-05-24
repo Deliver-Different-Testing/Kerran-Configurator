@@ -118,13 +118,33 @@ export const documentTypeService = {
     return documentTypeService.getAll();
   },
 
-  // Template files belong in S3 — upload/download is a separate sub-feature
-  // not yet wired. The HasTemplate/TemplateS3Key columns exist for it.
-  downloadTemplate(_id: number): never {
-    throw new Error('Template download not yet wired to backend');
+  // Templates — blank forms attached to a DocumentType, stored in S3 under the
+  // same compliance-uploads bucket as courier-document instances but with key
+  // prefix `tenant-{id}/templates/doctype-{id}/{uuid}.{ext}`. Proxy-download
+  // via the API so cookie auth + audit are end-to-end (mirrors the courier-doc
+  // download model — no presigned URLs).
+
+  async uploadTemplate(id: number, file: File): Promise<DocumentType> {
+    const form = new FormData();
+    form.append('File', file);
+    const { data } = await api.post<DocumentTypeApi>(
+      `/document-types/${id}/template`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return toDocumentType(data);
   },
-  uploadTemplate(_id: number, _file: File): never {
-    throw new Error('Template upload not yet wired to backend');
+
+  // Returns the proxy-download URL. Caller opens in a new tab; the browser
+  // streams from the API which streams from S3. Returned async to mirror the
+  // courierDocumentService shape.
+  async downloadTemplate(id: number): Promise<string> {
+    return `/api/v1/np/document-types/${id}/template`;
+  },
+
+  async removeTemplate(id: number): Promise<DocumentType> {
+    const { data } = await api.delete<DocumentTypeApi>(`/document-types/${id}/template`);
+    return toDocumentType(data);
   },
 };
 

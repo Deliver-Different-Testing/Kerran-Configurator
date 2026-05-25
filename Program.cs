@@ -224,9 +224,13 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.N
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpRecruitmentStageService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpApplicantService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.CourierDocumentService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpFeatureConfigService>();
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpScopeResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpScopeResolver>();
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Np.INpFeatureResolver,
+    DfrntDriveConfigurator.Core.Application.Services.Np.NpFeatureResolver>();
 
 // Common infrastructure services (used by multiple lanes)
 builder.Services.AddScoped<

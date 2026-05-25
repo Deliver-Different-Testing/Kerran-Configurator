@@ -694,6 +694,24 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
               <span className={`text-xs font-medium ${location.pathname === '/settings/tenant-config' ? 'text-brand-cyan' : 'text-white/60'}`}>Tenant Configuration</span>
             </button>
           )}
+
+          {/* DF Admin: Per-NP Feature Flags link under settings (Phase 5+26) */}
+          {isDfAdmin && !collapsed && (
+            <button
+              onClick={() => navigate('/settings/np-feature-flags')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/5 ml-2 ${
+                location.pathname === '/settings/np-feature-flags' ? 'bg-brand-cyan/20 text-brand-cyan' : ''
+              }`}
+            >
+              <svg className={`w-4 h-4 flex-shrink-0 ${location.pathname === '/settings/np-feature-flags' ? 'text-brand-cyan' : 'text-white/50'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 5h18M3 12h18M3 19h18" />
+                <circle cx="7" cy="5" r="1.2" fill="currentColor" />
+                <circle cx="14" cy="12" r="1.2" fill="currentColor" />
+                <circle cx="9" cy="19" r="1.2" fill="currentColor" />
+              </svg>
+              <span className={`text-xs font-medium ${location.pathname === '/settings/np-feature-flags' ? 'text-brand-cyan' : 'text-white/60'}`}>Per-NP Feature Flags</span>
+            </button>
+          )}
         </div>
 
         {/* Import & Export */}

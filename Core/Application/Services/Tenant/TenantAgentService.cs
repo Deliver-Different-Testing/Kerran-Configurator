@@ -281,12 +281,21 @@ public class TenantAgentService(
     // produces empty firstname + dto.Name fragment as surname so the row is
     // recognisable in tucClientContact lists. Email uniqueness is the
     // caller's responsibility — pre-checked in CreateAsync.
+    //
+    // UserName = UcctEmail per AdminManager.CreateContact convention
+    // (UserSetupService.cs:148 uses UserName as the canonical login key).
+    // Hub's full login auth process requires UserName populated; EF's
+    // IsRequired metadata doesn't mark it, so our local validation never
+    // catches a missing UserName but Hub login fails. Set both fields to
+    // the same value so the column-of-truth question stays moot.
     private static TucClientContact BuildPrimaryContact(TenantAgentUpsertDto dto, string actor, DateTime now)
     {
         var (firstname, surname) = SplitContactName(dto.ContactName, dto.Name);
+        var email = (dto.ContactEmail ?? string.Empty).Trim();
         return new TucClientContact
         {
-            UcctEmail = (dto.ContactEmail ?? string.Empty).Trim(),
+            UcctEmail = email,
+            UserName = email,                  // required for Hub login auth
             UcctFirstname = firstname,
             UcctSurname = surname,
             UcctMobile = dto.Phone ?? string.Empty,
@@ -302,15 +311,31 @@ public class TenantAgentService(
         };
     }
 
+    // Splits a "Firstname Surname" string into the two components for
+    // tucClientContact.UcctFirstname / UcctSurname.
+    //
+    //   "Jane Smith"          → ("Jane", "Smith")
+    //   "Mary Jane Smith"     → ("Mary Jane", "Smith")     (surname = last token,
+    //                                                       everything before = firstname)
+    //   "Gaz"                 → ("Gaz", "")                (single token = firstname,
+    //                                                       NOT surname — was a bug in
+    //                                                       Phase 5+27 §A initial cut)
+    //   "" / null             → ("Contact", agentName)     (defensive fallback so the
+    //                                                       row is still recognisable
+    //                                                       in tucClientContact lists)
+    //
+    // Uses last-space split because Western names typically have one surname
+    // and any number of given/middle names — splitting on first space would
+    // mis-classify "Mary Jane" as firstname=Mary, surname="Jane Smith".
     private static (string firstname, string surname) SplitContactName(string? contactName, string agentName)
     {
         var name = (contactName ?? string.Empty).Trim();
         if (name.Length == 0)
-            return (string.Empty, Truncate(agentName ?? "Contact", 50));
+            return ("Contact", Truncate(agentName ?? string.Empty, 50));
 
         var lastSpace = name.LastIndexOf(' ');
         if (lastSpace < 0)
-            return (string.Empty, Truncate(name, 50));
+            return (Truncate(name, 50), string.Empty);
         return (Truncate(name[..lastSpace].Trim(), 50), Truncate(name[(lastSpace + 1)..].Trim(), 50));
     }
 

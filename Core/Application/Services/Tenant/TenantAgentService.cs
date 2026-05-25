@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Common;
 using DfrntDriveConfigurator.Core.Application.Dtos.Tenant;
+using DfrntDriveConfigurator.Core.Application.Services.Common;
 using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
 using Microsoft.AspNetCore.Http;
@@ -15,7 +16,8 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Tenant;
 
 public class TenantAgentService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
-    IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
+    IHttpContextAccessor httpContextAccessor,
+    INpUserInviteService npUserInviteService) : BaseService(contextFactory)
 {
     public async Task<TenantAgentsResponse> GetAll(Guid messageId)
     {
@@ -205,6 +207,29 @@ public class TenantAgentService(
 
         Context.TucAgents.Add(agent);
         await Context.SaveChangesAsync();
+
+        // Phase 5+28a §B.1 — Hub invite cascade. Fires only when the §A
+        // cascade just wrote a tucClientContact (NP + ContactEmail set).
+        // Cross-DB call is non-atomic: tenant rows stay committed if the
+        // Hub step fails (per brief corrections #2 — surface, don't roll
+        // back). Failures land as warnings in TenantAgentResponse.Messages
+        // so the operator sees them in the UI and can retry / fix in Hub.
+        if (dto.IsNetworkPartner && !string.IsNullOrWhiteSpace(dto.ContactEmail))
+        {
+            var invite = await npUserInviteService.InviteAsync(dto.ContactEmail!);
+            if (invite.FullySucceeded)
+            {
+                warnings.Add($"Hub user provisioned and invite email sent to {dto.ContactEmail}. They can set their password from that email and log in.");
+            }
+            else if (invite.PartialSuccess)
+            {
+                warnings.Add($"Hub user provisioned (id {invite.HubUserId}) but the invite email did NOT send. The contact will need a manual password-reset invite — see Hub admin for next step.");
+            }
+            else
+            {
+                warnings.Add(invite.FailureMessage ?? "Hub invite cascade failed — provision the Hub user manually.");
+            }
+        }
 
         var read = await Context.TucAgents.AsNoTracking()
             .Where(a => a.UcagId == agent.UcagId)

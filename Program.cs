@@ -136,7 +136,9 @@ builder.Services.AddSingleton<IAmazonS3>(_ =>
 // despatchweb / Mars pattern for stack consistency.
 var appSettings = new AppSettings
 {
-    S3BucketComplianceUploads = builder.Configuration["S3BucketComplianceUploads"] ?? string.Empty
+    S3BucketComplianceUploads = builder.Configuration["S3BucketComplianceUploads"] ?? string.Empty,
+    HubBaseUrl = (builder.Configuration["HubBaseUrl"] ?? string.Empty).TrimEnd('/'),
+    HubAdminApiKey = builder.Configuration["HubAdminApiKey"] ?? string.Empty,
 };
 builder.Services.AddSingleton(appSettings);
 
@@ -147,6 +149,19 @@ if (string.IsNullOrEmpty(appSettings.S3BucketComplianceUploads))
 else
 {
     Log.Information("S3BucketComplianceUploads: {Bucket}", appSettings.S3BucketComplianceUploads);
+}
+
+// Phase 5+28a §B.1 — Hub invite cascade settings. Both must be set for
+// the cascade to do the Hub-side identity create + invite-email send;
+// missing values degrade gracefully (tenant-side tucClientContact is
+// still created, a warning surfaces to the operator).
+if (string.IsNullOrEmpty(appSettings.HubBaseUrl) || string.IsNullOrEmpty(appSettings.HubAdminApiKey))
+{
+    Log.Warning("HubBaseUrl and/or HubAdminApiKey not set — NP user-invite cascade will skip the Hub-side identity create. Tenant-side contacts will still be written but operators must provision Hub users manually.");
+}
+else
+{
+    Log.Information("HubBaseUrl: {Url}; HubAdminApiKey present.", appSettings.HubBaseUrl);
 }
 
 builder.Services.Configure<CookiePolicyOptions>(options =>
@@ -236,6 +251,9 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Common.IS3StorageService,
     DfrntDriveConfigurator.Core.Application.Services.Common.S3StorageService>();
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Common.INpUserInviteService,
+    DfrntDriveConfigurator.Core.Application.Services.Common.NpUserInviteService>();
 
 // Phase 5+1 — Tenant scope services
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantAgentService>();

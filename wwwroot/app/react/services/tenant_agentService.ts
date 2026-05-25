@@ -1,5 +1,5 @@
 import api from './tenant_api';
-import type { Agent, AgentStatus, AssociationType, NpTier } from '@/types';
+import type { Agent, AgentStatus, AssociationType, CitySuggestion, NpTier } from '@/types';
 
 // Backend shape — kept in sync with TenantAgentDto. Pass 3 added city,
 // statusName, rankingName via lookup joins; Pass 4 added state plus the
@@ -96,10 +96,15 @@ function toAgent(dto: TenantAgentApi): Agent {
     isNetworkPartner: dto.isNetworkPartner,
     npTier: npTierFromByte(dto.npTier, dto.isNetworkPartner),
     npActivatedDate: null,
-    // Phase 5+29a §C — backend now returns rich shape; reduce to names
-    // for current chip render. 5+29b will lift this to the rich shape +
-    // surface zipCount / hasZipMapping in the AgentList chip.
+    // Phase 5+29a §C — names list preserved for existing consumers
+    // (AgentWorkspace etc.). Rich shape mirrored to coverageAreaDetails
+    // for AgentList's chip render (Phase 5+29b).
     coverageAreas: (dto.coverageAreas ?? []).map(a => a.areaName),
+    coverageAreaDetails: (dto.coverageAreas ?? []).map(a => ({
+      areaName: a.areaName,
+      zipCount: a.zipCount,
+      hasZipMapping: a.hasZipMapping,
+    })),
     defaultCourierPayPercent: dto.defaultCourierPayPercent ?? null,
     createdDate: dto.created,
     updatedDate: dto.lastModified,
@@ -188,6 +193,16 @@ export const tenantLookupService = {
   // Phase 5+27.1 — ClientType lookup for the Add/Edit Agent picker.
   async getClientTypes(): Promise<LookupItem[]> {
     const { data } = await api.get<LookupItem[]>('/lookups/client-types');
+    return data ?? [];
+  },
+
+  // Phase 5+29b §C — city autocomplete for the Coverage Areas chip.
+  // Backend caps at 20 suggestions + requires q.length >= 2; if you call
+  // with a 1-char prefix it returns [].
+  async getCities(q: string, state?: string): Promise<CitySuggestion[]> {
+    const params = new URLSearchParams({ q });
+    if (state) params.set('state', state);
+    const { data } = await api.get<CitySuggestion[]>(`/lookups/cities?${params}`);
     return data ?? [];
   },
 };

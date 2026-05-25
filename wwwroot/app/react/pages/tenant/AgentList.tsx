@@ -9,7 +9,7 @@ import { useAgents as useLiveAgents } from '@/hooks/useAgents';
 import { NpManagement } from './NpManagement';
 import { agentService, tenantLookupService, LookupItem } from '@/services/tenant_agentService';
 import { prospectService, ProspectAgent } from '@/services/tenant_prospectService';
-import type { Agent } from '@/types';
+import type { Agent, CitySuggestion } from '@/types';
 
 function AgentStatusBadge({ status }: { status: string }) {
   return (
@@ -43,6 +43,27 @@ export function AgentList() {
   const [saveError, setSaveError] = useState<string | null>(null);
   // Text buffer for the coverage-area chip editor in the Edit Agent modal.
   const [coverageInput, setCoverageInput] = useState('');
+  // Phase 5+29b §C — debounced city autocomplete state.
+  const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Debounced fetch of city suggestions while the operator types. Backend
+  // requires q.length >= 2 (short-circuits to [] otherwise) — we mirror
+  // that here to avoid sending one-char hits.
+  useEffect(() => {
+    const q = coverageInput.trim();
+    if (q.length < 2) {
+      setCitySuggestions([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(() => {
+      tenantLookupService.getCities(q)
+        .then(rows => { if (alive) setCitySuggestions(rows); })
+        .catch(() => { if (alive) setCitySuggestions([]); });
+    }, 200);
+    return () => { alive = false; clearTimeout(t); };
+  }, [coverageInput]);
 
   useEffect(() => {
     let alive = true;
@@ -124,17 +145,22 @@ export function AgentList() {
     setCoverageInput('');
   }
 
-  // Adds the typed coverage area to the draft (trimmed, case-insensitively
-  // de-duped) and clears the input.
-  function addCoverageArea() {
+  // Adds a coverage area to the draft (trimmed, case-insensitively de-duped)
+  // and clears the input + suggestion dropdown. Accepts either:
+  //   - a CitySuggestion clicked from the dropdown (canonical seed match)
+  //   - a free-text fallback (matches backend's soft-fail path — parent
+  //     still saves with zero children, chip will render the yellow
+  //     "no zips mapped" badge after the next read).
+  function addCoverageArea(override?: string) {
     if (!draft) return;
-    const area = coverageInput.trim();
+    const area = (override ?? coverageInput).trim();
     if (!area) return;
     const current = draft.coverageAreas ?? [];
     if (!current.some((a) => a.toLowerCase() === area.toLowerCase())) {
       setDraft({ ...draft, coverageAreas: [...current, area] });
     }
     setCoverageInput('');
+    setShowSuggestions(false);
   }
 
   async function handleSave() {
@@ -678,39 +704,106 @@ export function AgentList() {
             <div className="flex flex-col gap-1 col-span-2">
               <label className="text-xs text-text-secondary uppercase tracking-wide">Coverage Areas</label>
               <div className="flex flex-wrap gap-1.5">
-                {(draft.coverageAreas ?? []).map((area) => (
-                  <span key={area} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
-                    {area}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${area}`}
-                      onClick={() => setDraft({ ...draft, coverageAreas: (draft.coverageAreas ?? []).filter((a) => a !== area) })}
-                      className="text-slate-400 hover:text-red-500"
+                {(draft.coverageAreas ?? []).map((area) => {
+                  // Phase 5+29b §C — find matching backend-resolved details for
+                  // this chip (zip count + hasZipMapping). Falls back to a
+                  // zero-count "pending" state for chips added in this session
+                  // before save (details only land on the read after save).
+                  const detail = (draft.coverageAreaDetails ?? []).find(
+                    (d) => d.areaName.toLowerCase() === area.toLowerCase(),
+                  );
+                  const hasZips = detail ? detail.hasZipMapping : null;
+                  const chipStyle = hasZips === false
+                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                    : 'bg-slate-100 text-slate-700';
+                  return (
+                    <span
+                      key={area}
+                      title={
+                        detail
+                          ? hasZips
+                            ? `${detail.zipCount} zipcodes mapped from ZipPolygonCity seed`
+                            : 'No zips mapped — operator-typed city not in the ZipPolygonCity seed. Downstream zip-based filtering will see nothing from this entry until the seed is updated.'
+                          : 'New entry — zip count appears after save'
+                      }
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${chipStyle}`}
                     >
-                      ×
-                    </button>
-                  </span>
-                ))}
+                      {area}
+                      {detail && (
+                        <span className="text-[10px] opacity-70">
+                          {hasZips ? `(${detail.zipCount})` : '(no zips)'}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${area}`}
+                        onClick={() => setDraft({
+                          ...draft,
+                          coverageAreas: (draft.coverageAreas ?? []).filter((a) => a !== area),
+                          // Drop the matching detail too so the next render is consistent.
+                          coverageAreaDetails: (draft.coverageAreaDetails ?? []).filter(
+                            (d) => d.areaName.toLowerCase() !== area.toLowerCase(),
+                          ),
+                        })}
+                        className="text-current opacity-50 hover:opacity-100 hover:text-red-500"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
                 {(draft.coverageAreas ?? []).length === 0 && (
                   <span className="text-xs text-text-muted">No coverage areas yet.</span>
                 )}
               </div>
-              <div className="mt-1 flex gap-2">
-                <input
-                  type="text"
-                  className="flex-1"
-                  placeholder="Add a city or territory…"
-                  value={coverageInput}
-                  onChange={(e) => setCoverageInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCoverageArea(); } }}
-                />
-                <button
-                  type="button"
-                  onClick={addCoverageArea}
-                  className="bg-brand-cyan text-brand-dark border-none font-medium px-3 py-2 rounded-md text-sm hover:shadow-cyan-glow"
-                >
-                  Add
-                </button>
+              {/* Phase 5+29b §C — debounced city autocomplete. Backend's
+                  /lookups/cities filters ZipPolygonCity by prefix and surfaces
+                  the zip count per suggestion. Operator picks one → city name
+                  added; Enter / Add still works for free-text (soft-fail path,
+                  yellow badge after save). */}
+              <div className="relative mt-1">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="flex-1"
+                    placeholder="Start typing a city — suggestions appear below"
+                    value={coverageInput}
+                    onChange={(e) => { setCoverageInput(e.target.value); setShowSuggestions(true); }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCoverageArea(); } }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addCoverageArea()}
+                    className="bg-brand-cyan text-brand-dark border-none font-medium px-3 py-2 rounded-md text-sm hover:shadow-cyan-glow"
+                  >
+                    Add
+                  </button>
+                </div>
+                {showSuggestions && citySuggestions.length > 0 && (
+                  <div className="absolute z-10 mt-1 left-0 right-0 max-h-56 overflow-y-auto rounded-md border border-border bg-white shadow-lg">
+                    {citySuggestions.map((s) => (
+                      <button
+                        key={`${s.cityName}|${s.state ?? ''}`}
+                        type="button"
+                        onClick={() => addCoverageArea(s.cityName)}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-surface-cream"
+                      >
+                        <span className="text-text-primary">
+                          {s.cityName}
+                          {s.state && <span className="text-text-secondary">, {s.state}</span>}
+                        </span>
+                        <span className="text-xs text-text-muted">({s.zipCount} zips)</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showSuggestions && coverageInput.trim().length >= 2 && citySuggestions.length === 0 && (
+                  <div className="absolute z-10 mt-1 left-0 right-0 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 shadow-lg">
+                    No cities found for "{coverageInput.trim()}". You can still Add it as free-text — it'll save with zero mapped zips (yellow badge) until the seed is updated.
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex flex-col gap-1 col-span-2">

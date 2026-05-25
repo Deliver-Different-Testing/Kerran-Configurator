@@ -219,6 +219,12 @@ export interface Agent {
   npTier: NpTier | null;
   npActivatedDate: string | null;
   coverageAreas: string[];
+  // Phase 5+29b §C — surfaces backend's per-city zip-count + resolution
+  // flag alongside the name list. Coexists with coverageAreas (names) so
+  // existing consumers (AgentWorkspace etc.) keep working unchanged.
+  // AgentList chip render uses this to show "Sacramento (42)" + yellow
+  // "no zips" badge when hasZipMapping=false.
+  coverageAreaDetails?: AgentCoverageAreaDetail[];
   defaultCourierPayPercent: number | null;
   createdDate: string;
   updatedDate: string;
@@ -231,6 +237,21 @@ export interface Agent {
   // 3 NetworkPartner, or any further seeded value). Null when no TucClient
   // is linked (non-NP agent).
   clientTypeId?: number | null;
+}
+
+// Phase 5+29b §C — per-coverage-area detail for the chip render.
+export interface AgentCoverageAreaDetail {
+  areaName: string;
+  zipCount: number;
+  hasZipMapping: boolean;
+}
+
+// Phase 5+29b §C — city autocomplete suggestion from
+// GET /api/v1/tenant/lookups/cities?q=...
+export interface CitySuggestion {
+  cityName: string;
+  state: string | null;
+  zipCount: number;
 }
 
 export type VehicleSize = 'Bike' | 'Small' | 'Medium' | 'Large' | 'Van' | 'Truck';

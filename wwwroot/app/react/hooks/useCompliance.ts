@@ -164,7 +164,11 @@ function generateMockAlerts(filters?: ComplianceAlertFilter): ComplianceAlert[] 
   });
 }
 
-const USE_MOCK = true;
+// Phase 5+25: flipped to live. The mock generators above (generateMockDashboard,
+// generateMockAlerts, courier-score mock branch) are retained for emergency
+// fallback but are no longer the default path. Backend is NP-scoped via
+// INpScopeResolver — admin sees everything, NP users see only their couriers.
+const USE_MOCK = false;
 
 export function useComplianceDashboard() {
   const [data, setData] = useState<ComplianceDashboard | null>(null);

@@ -5,19 +5,19 @@ using System.Collections.Generic;
 
 namespace DfrntDriveConfigurator.Core.Domain.Despatch;
 
-public partial class AgentCoverageArea
+public partial class AgentCoverageAreaZipcode
 {
     public int Id { get; set; }
 
-    public int AgentId { get; set; }
+    public int AgentCoverageAreaId { get; set; }
 
-    public string AreaName { get; set; }
+    public int ZipPolygonId { get; set; }
 
     public DateTime CreatedDate { get; set; }
 
     public string CreatedBy { get; set; }
 
-    public virtual TucAgent Agent { get; set; }
+    public virtual AgentCoverageArea AgentCoverageArea { get; set; }
 
-    public virtual ICollection<AgentCoverageAreaZipcode> AgentCoverageAreaZipcodes { get; set; } = new List<AgentCoverageAreaZipcode>();
+    public virtual ZipPolygon ZipPolygon { get; set; }
 }

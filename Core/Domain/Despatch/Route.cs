@@ -29,5 +29,7 @@ public partial class Route
 
     public virtual ICollection<DispatchRouteRoster> DispatchRouteRosters { get; set; } = new List<DispatchRouteRoster>();
 
+    public virtual ICollection<TucJob> TucJobs { get; set; } = new List<TucJob>();
+
     public virtual ICollection<ZipPolygon> ZipPolygons { get; set; } = new List<ZipPolygon>();
 }

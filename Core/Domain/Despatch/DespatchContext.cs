@@ -21,6 +21,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<AgentCoverageArea> AgentCoverageAreas { get; set; }
 
+    public virtual DbSet<AgentCoverageAreaZipcode> AgentCoverageAreaZipcodes { get; set; }
+
     public virtual DbSet<AgentOnboarding> AgentOnboardings { get; set; }
 
     public virtual DbSet<AppConfig> AppConfigs { get; set; }
@@ -125,6 +127,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<ZipPolygon> ZipPolygons { get; set; }
 
+    public virtual DbSet<ZipPolygonCity> ZipPolygonCities { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.UseCollation("Latin1_General_CI_AS");
@@ -202,6 +206,29 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.AgentId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_AgentCoverageArea_Agent");
+        });
+
+        modelBuilder.Entity<AgentCoverageAreaZipcode>(entity =>
+        {
+            entity.ToTable("AgentCoverageAreaZipcode");
+
+            entity.HasIndex(e => e.ZipPolygonId, "IX_AgentCoverageAreaZipcode_ZipPolygonId");
+
+            entity.HasIndex(e => new { e.AgentCoverageAreaId, e.ZipPolygonId }, "UQ_AgentCoverageAreaZipcode_AcaZip").IsUnique();
+
+            entity.Property(e => e.CreatedBy).HasMaxLength(100);
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_AgentCoverageAreaZipcode_CreatedDate");
+
+            entity.HasOne(d => d.AgentCoverageArea).WithMany(p => p.AgentCoverageAreaZipcodes)
+                .HasForeignKey(d => d.AgentCoverageAreaId)
+                .HasConstraintName("FK_AgentCoverageAreaZipcode_AgentCoverageArea");
+
+            entity.HasOne(d => d.ZipPolygon).WithMany(p => p.AgentCoverageAreaZipcodes)
+                .HasForeignKey(d => d.ZipPolygonId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_AgentCoverageAreaZipcode_ZipPolygon");
         });
 
         modelBuilder.Entity<AgentOnboarding>(entity =>
@@ -2653,6 +2680,8 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => e.PartnerPairingId, "IX_tucJob_PartnerPairingId");
 
+            entity.HasIndex(e => new { e.RouteId, e.UcjbDate }, "IX_tucJob_RouteId_ucjbDate");
+
             entity.HasIndex(e => e.SourceId, "IX_tucJob_SourceID");
 
             entity.HasIndex(e => e.ToAirportId, "IX_tucJob_ToAirportId");
@@ -3048,6 +3077,10 @@ public partial class DespatchContext : DbContext
                 .HasConstraintName("FK_tucJob_tucCourierMaster");
 
             entity.HasOne(d => d.NotifiedJobType).WithMany(p => p.TucJobNotifiedJobTypes).HasForeignKey(d => d.NotifiedJobTypeId);
+
+            entity.HasOne(d => d.Route).WithMany(p => p.TucJobs)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("FK_tucJob_Routes");
 
             entity.HasOne(d => d.UcjbClient).WithMany(p => p.TucJobs)
                 .HasForeignKey(d => d.UcjbClientId)
@@ -4120,6 +4153,29 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.Zip)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+        });
+
+        modelBuilder.Entity<ZipPolygonCity>(entity =>
+        {
+            entity.ToTable("ZipPolygonCity");
+
+            entity.HasIndex(e => new { e.CityName, e.State }, "IX_ZipPolygonCity_CityState");
+
+            entity.HasIndex(e => e.ZipPolygonId, "IX_ZipPolygonCity_ZipPolygonId");
+
+            entity.Property(e => e.CityName)
+                .IsRequired()
+                .HasMaxLength(120);
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_ZipPolygonCity_CreatedDate");
+            entity.Property(e => e.Primary).HasAnnotation("Relational:DefaultConstraintName", "DF_ZipPolygonCity_Primary");
+            entity.Property(e => e.State).HasMaxLength(20);
+
+            entity.HasOne(d => d.ZipPolygon).WithMany(p => p.ZipPolygonCities)
+                .HasForeignKey(d => d.ZipPolygonId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ZipPolygonCity_ZipPolygon");
         });
 
         OnModelCreatingPartial(modelBuilder);

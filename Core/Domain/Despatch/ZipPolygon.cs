@@ -21,5 +21,9 @@ public partial class ZipPolygon
 
     public string Wkt { get; set; }
 
+    public virtual ICollection<AgentCoverageAreaZipcode> AgentCoverageAreaZipcodes { get; set; } = new List<AgentCoverageAreaZipcode>();
+
+    public virtual ICollection<ZipPolygonCity> ZipPolygonCities { get; set; } = new List<ZipPolygonCity>();
+
     public virtual ICollection<Route> Routes { get; set; } = new List<Route>();
 }

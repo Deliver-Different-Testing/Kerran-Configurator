@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
+using DfrntDriveConfigurator.Core.Application.Dtos.Tenant;
 using DfrntDriveConfigurator.Core.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,6 +43,62 @@ public class TenantLookupService(IDbContextFactory<DynamicDespatchDbContext> con
             .AsNoTracking()
             .OrderBy(t => t.Id)
             .Select(t => new LookupItemDto { Id = t.Id, Name = t.Name ?? string.Empty })
+            .ToListAsync();
+    }
+
+    // Phase 5+29a §C — city autocomplete for the Coverage Areas chip input.
+    // GROUP BY CityName+State so the same city in different states shows
+    // as separate options ("Springfield, MO" vs "Springfield, IL"). ZipCount
+    // surfaces alongside so the UI can disambiguate or render the future
+    // "(N zips)" affordance directly off the suggestion. Returns up to 20
+    // rows — autocomplete UI never needs more, and bounding the query
+    // keeps the response fast on a 33k-row ZCTA seed.
+    public async Task<List<CitySuggestionDto>> GetCitiesAsync(string q, string? state)
+    {
+        var query = (q ?? string.Empty).Trim();
+        if (query.Length < 2) return new List<CitySuggestionDto>();
+
+        var rows = Context.ZipPolygonCities.AsNoTracking()
+            .Where(c => c.CityName.StartsWith(query));
+        if (!string.IsNullOrWhiteSpace(state))
+            rows = rows.Where(c => c.State == state);
+
+        return await rows
+            .GroupBy(c => new { c.CityName, c.State })
+            .Select(g => new CitySuggestionDto
+            {
+                CityName = g.Key.CityName,
+                State = g.Key.State,
+                ZipCount = g.Count(),
+            })
+            .OrderBy(s => s.CityName)
+            .ThenBy(s => s.State)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    // Phase 5+29a §C — given a city (+ optional state for disambiguation)
+    // returns the underlying ZipPolygon rows. Used by TenantAgentService's
+    // ApplyCoverageAreas to materialise the AgentCoverageAreaZipcode
+    // children when an operator adds a coverage-area chip.
+    public async Task<List<LookupItemDto>> GetZipPolygonsByCityAsync(string city, string? state)
+    {
+        var name = (city ?? string.Empty).Trim();
+        if (name.Length == 0) return new List<LookupItemDto>();
+
+        var rows = Context.ZipPolygonCities.AsNoTracking()
+            .Where(c => c.CityName == name);
+        if (!string.IsNullOrWhiteSpace(state))
+            rows = rows.Where(c => c.State == state);
+
+        return await rows
+            .Select(c => new LookupItemDto
+            {
+                Id = c.ZipPolygonId,
+                Name = c.ZipPolygon.Zip ?? string.Empty,
+            })
+            .Distinct()
+            .OrderBy(z => z.Name)
             .ToListAsync();
     }
 }

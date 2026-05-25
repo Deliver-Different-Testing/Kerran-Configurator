@@ -491,6 +491,8 @@ public partial class TucJob
 
     public decimal? PumpPrice { get; set; }
 
+    public int? RouteId { get; set; }
+
     public virtual TucJobType AcceptedJobType { get; set; }
 
     public virtual TucAgent Agent { get; set; }
@@ -504,6 +506,8 @@ public partial class TucJob
     public virtual TucCourier MasterCourier { get; set; }
 
     public virtual TucJobType NotifiedJobType { get; set; }
+
+    public virtual Route Route { get; set; }
 
     public virtual ICollection<TucNote> TucNotes { get; set; } = new List<TucNote>();
 

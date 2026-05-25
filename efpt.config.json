@@ -35,6 +35,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[AgentCoverageAreaZipcode]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[AgentOnboarding]",
          "ObjectType": 0
       },
@@ -244,6 +248,10 @@
       },
       {
          "Name": "[dbo].[ZipPolygon]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ZipPolygonCity]",
          "ObjectType": 0
       }
    ],

@@ -59,7 +59,7 @@ public class TenantAgentService(
         var actor = ResolveActor();
         var now = DateTime.UtcNow;
         ApplyUpdate(agent, dto);
-        ApplyCoverageAreas(agent, dto, actor);
+        await ApplyCoverageAreas(agent, dto, actor);
 
         // Propagate identity fields to the linked NP TucClient row if one
         // exists. There is exactly one per NP-flagged agent (the cascade in
@@ -169,7 +169,7 @@ public class TenantAgentService(
             Notes = string.Empty,
         };
         ApplyUpdate(agent, dto);
-        ApplyCoverageAreas(agent, dto, actor);
+        await ApplyCoverageAreas(agent, dto, actor);
 
         var warnings = new List<string>();
 
@@ -435,12 +435,26 @@ public class TenantAgentService(
         a.DefaultCourierPayPercent = dto.DefaultCourierPayPercent;
     }
 
-    // Reconciles the AgentCoverageArea child rows against the desired set on
-    // the DTO: drops rows no longer wanted, adds rows that are new.
-    // Case-insensitive + de-duped so a careless caller can't create "Chicago"
-    // twice. Works for both create (empty starting collection) and update
-    // (collection loaded via Include).
-    private void ApplyCoverageAreas(TucAgent agent, TenantAgentUpsertDto dto, string actor)
+    // Reconciles the AgentCoverageArea parent rows against the desired set
+    // on the DTO: drops rows no longer wanted, adds rows that are new.
+    // Case-insensitive + de-duped so a careless caller can't create
+    // "Chicago" twice. Works for both create (empty starting collection)
+    // and update (collection loaded via Include).
+    //
+    // Phase 5+29a §C — also resolves NEW parent rows' city names to their
+    // ZipPolygon ids via ZipPolygonCity and inserts AgentCoverageAreaZipcode
+    // child rows in the same SaveChanges. Stale parents cascade-delete
+    // their children via the FK_AgentCoverageAreaZipcode_AgentCoverageArea
+    // ON DELETE CASCADE constraint (no extra cleanup needed here). Soft-fail
+    // when a city doesn't resolve (not in the ZipPolygonCity seed): the
+    // parent still saves with zero children; the DTO surfaces the state via
+    // HasZipMapping=false so the UI can render a "no zips mapped" badge.
+    //
+    // Existing parents whose names are unchanged get NO child backfill on
+    // edit — we don't know if the operator wants their pre-§C parents
+    // re-resolved. Operator can trigger a backfill by removing + re-adding
+    // the chip (drops + recreates the parent, resolves on the new row).
+    private async Task ApplyCoverageAreas(TucAgent agent, TenantAgentUpsertDto dto, string actor)
     {
         var desired = (dto.CoverageAreas ?? Enumerable.Empty<string>())
             .Select(s => (s ?? string.Empty).Trim())
@@ -448,10 +462,11 @@ public class TenantAgentService(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Delete rows no longer wanted via the DbSet — RemoveRange marks them
-        // Deleted directly. Removing them from agent.AgentCoverageAreas instead
-        // would make EF try to null the non-nullable AgentId FK ("relationship
-        // severed"), since the scaffolded FK has no cascade-delete configured.
+        // Delete parents no longer wanted via the DbSet — RemoveRange marks
+        // them Deleted directly. Removing them from agent.AgentCoverageAreas
+        // instead would make EF try to null the non-nullable AgentId FK
+        // ("relationship severed"), since the scaffolded FK has no
+        // cascade-delete configured.
         var stale = agent.AgentCoverageAreas
             .Where(ca => !desired.Contains(ca.AreaName, StringComparer.OrdinalIgnoreCase))
             .ToList();
@@ -464,13 +479,41 @@ public class TenantAgentService(
         var existing = agent.AgentCoverageAreas
             .Select(ca => ca.AreaName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var now = DateTime.UtcNow;
         foreach (var name in desired.Where(d => !existing.Contains(d)))
-            agent.AgentCoverageAreas.Add(new AgentCoverageArea
+        {
+            var parent = new AgentCoverageArea
             {
                 AreaName = name,
-                CreatedDate = DateTime.UtcNow,
+                CreatedDate = now,
                 CreatedBy = actor,
-            });
+            };
+            agent.AgentCoverageAreas.Add(parent);
+
+            // Resolve city → zips via ZipPolygonCity. Distinct so a city
+            // mapped to the same zip from multiple variants (USPS preferred
+            // + alt-spelling rows) doesn't double-count. State disambiguator
+            // is not exposed on the chip input yet — 5+29b adds it; for now
+            // any state row matching the city name contributes.
+            var zipIds = await Context.ZipPolygonCities.AsNoTracking()
+                .Where(c => c.CityName == name)
+                .Select(c => c.ZipPolygonId)
+                .Distinct()
+                .ToListAsync();
+            foreach (var zipPolygonId in zipIds)
+            {
+                parent.AgentCoverageAreaZipcodes.Add(new AgentCoverageAreaZipcode
+                {
+                    ZipPolygonId = zipPolygonId,
+                    CreatedDate = now,
+                    CreatedBy = actor,
+                });
+            }
+            // Empty zipIds → parent saves with no children. DTO surfaces
+            // ZipCount=0 / HasZipMapping=false. Operator sees the chip but
+            // downstream zip-based filtering gets nothing from this city
+            // until the seed is updated.
+        }
     }
 
     private string ResolveActor() =>
@@ -510,7 +553,11 @@ public class TenantAgentService(
         DefaultCourierPayPercent = a.DefaultCourierPayPercent,
         CoverageAreas = a.AgentCoverageAreas
             .OrderBy(ca => ca.AreaName)
-            .Select(ca => ca.AreaName)
+            .Select(ca => new TenantAgentCoverageAreaDto
+            {
+                AreaName = ca.AreaName,
+                ZipCount = ca.AgentCoverageAreaZipcodes.Count(),
+            })
             .ToList(),
         // §A.1 — surfaces the linked TucClient.ClientTypeId for the picker.
         // Picks the lowest-Id active client where multiple linkages exist

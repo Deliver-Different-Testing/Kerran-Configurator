@@ -25,12 +25,22 @@ interface TenantAgentApi {
   contactName: string;
   contactEmail: string;
   defaultCourierPayPercent: number | null;
-  coverageAreas: string[];
+  // Phase 5+29a §C — was string[], now backend returns richer shape so
+  // the chip can render "Sacramento (42)" once the UI catches up in 5+29b.
+  // For now we map back to string[] in toAgent() to keep the existing
+  // Agent type + AgentList chip render compatible.
+  coverageAreas: TenantAgentCoverageAreaApi[];
   // Phase 5+27.1 — linked TucClient.ClientTypeId surfaced for the picker.
   // Null for non-NP agents (no TucClient linkage).
   clientTypeId: number | null;
   created: string;
   lastModified: string;
+}
+
+interface TenantAgentCoverageAreaApi {
+  areaName: string;
+  zipCount: number;
+  hasZipMapping: boolean;
 }
 
 // '' / unknown → 'None'; otherwise pass through the known association codes.
@@ -86,7 +96,10 @@ function toAgent(dto: TenantAgentApi): Agent {
     isNetworkPartner: dto.isNetworkPartner,
     npTier: npTierFromByte(dto.npTier, dto.isNetworkPartner),
     npActivatedDate: null,
-    coverageAreas: dto.coverageAreas ?? [],
+    // Phase 5+29a §C — backend now returns rich shape; reduce to names
+    // for current chip render. 5+29b will lift this to the rich shape +
+    // surface zipCount / hasZipMapping in the AgentList chip.
+    coverageAreas: (dto.coverageAreas ?? []).map(a => a.areaName),
     defaultCourierPayPercent: dto.defaultCourierPayPercent ?? null,
     createdDate: dto.created,
     updatedDate: dto.lastModified,

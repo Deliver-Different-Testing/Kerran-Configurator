@@ -511,6 +511,8 @@ public partial class TucJobArchive
 
     public decimal? PumpPrice { get; set; }
 
+    public int? RouteId { get; set; }
+
     public virtual TucAgent Agent { get; set; }
 
     public virtual TucCourier MasterCourier { get; set; }

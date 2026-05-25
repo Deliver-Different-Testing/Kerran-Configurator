@@ -32,7 +32,12 @@ public class TenantAgentDto
     public string ContactName { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
     public decimal? DefaultCourierPayPercent { get; set; }
-    public List<string> CoverageAreas { get; set; } = new();         // AgentCoverageArea.AreaName rows
+    // Phase 5+29a §C — was List<string>, now richer per-city DTO so the
+    // chip can render "Sacramento (42)" once the frontend is updated in
+    // 5+29b. ZipCount=0 means the city did not resolve in ZipPolygonCity
+    // (operator-typed city not in the seed); the parent row still saved
+    // and HasZipMapping=false flags that state to the UI.
+    public List<TenantAgentCoverageAreaDto> CoverageAreas { get; set; } = new();
 
     // Phase 5+27.1 — surfaces the linked TucClient.ClientTypeId for display +
     // the edit picker. Null when no TucClient is linked (non-NP agent).
@@ -40,6 +45,28 @@ public class TenantAgentDto
 
     public DateTime Created { get; set; }
     public DateTime LastModified { get; set; }
+}
+
+// Phase 5+29a §C — one row per AgentCoverageArea parent, with the
+// materialised zipcode count for chip-display + a flag for the
+// no-zips-resolved soft-fail state. Operators still SEND just city
+// names on the upsert DTO; backend resolves and surfaces the count.
+public class TenantAgentCoverageAreaDto
+{
+    public string AreaName { get; set; } = string.Empty;
+    public int ZipCount { get; set; }
+    public bool HasZipMapping => ZipCount > 0;
+}
+
+// Phase 5+29a §C — city autocomplete result. Returned by
+// GET /api/v1/tenant/lookups/cities?q=&state=. ZipCount lets the UI
+// disambiguate same-name cities across states ("Springfield, MO (47)"
+// vs "Springfield, IL (33)") without an extra round-trip.
+public class CitySuggestionDto
+{
+    public string CityName { get; set; } = string.Empty;
+    public string? State { get; set; }
+    public int ZipCount { get; set; }
 }
 
 public class TenantAgentsResponse : BaseResponse

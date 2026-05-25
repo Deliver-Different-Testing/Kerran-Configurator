@@ -385,7 +385,10 @@ interface Props {
 
 export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Props) {
   const { role } = useRole();
-  const { user } = useAuth();
+  const { user, npRole } = useAuth();
+  // Phase 5+28b §B.2 — Settings is NpAdmin-only within the NP lane (per
+  // the role permission matrix). DF Admin sees it regardless.
+  const settingsVisible = role !== 'np' || npRole === 'NpAdmin';
   const { config } = useTenantConfig();
   const location = useLocation();
   const navigate = useNavigate();
@@ -669,15 +672,17 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
 
         {/* Settings */}
         <div className="px-3 py-2 border-t border-white/10 flex-shrink-0">
-          <button
-            onClick={() => handleNav('/settings')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 hover:bg-white/5 ${
-              collapsed ? 'justify-center' : ''
-            } ${isActive('/settings') && !location.pathname.startsWith('/settings/document-types') && !location.pathname.startsWith('/settings/recruitment') ? 'bg-brand-cyan/20 text-brand-cyan' : ''}`}
-          >
-            <span className={`flex-shrink-0 ${isActive('/settings') && !location.pathname.startsWith('/settings/document-types') && !location.pathname.startsWith('/settings/recruitment') ? 'text-brand-cyan' : 'text-white/70'}`}>{icons.settings}</span>
-            {!collapsed && <span className={`text-sm font-medium ${isActive('/settings') && !location.pathname.startsWith('/settings/document-types') && !location.pathname.startsWith('/settings/recruitment') ? 'text-brand-cyan' : 'text-white/90'}`}>Settings</span>}
-          </button>
+          {settingsVisible && (
+            <button
+              onClick={() => handleNav('/settings')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 hover:bg-white/5 ${
+                collapsed ? 'justify-center' : ''
+              } ${isActive('/settings') && !location.pathname.startsWith('/settings/document-types') && !location.pathname.startsWith('/settings/recruitment') ? 'bg-brand-cyan/20 text-brand-cyan' : ''}`}
+            >
+              <span className={`flex-shrink-0 ${isActive('/settings') && !location.pathname.startsWith('/settings/document-types') && !location.pathname.startsWith('/settings/recruitment') ? 'text-brand-cyan' : 'text-white/70'}`}>{icons.settings}</span>
+              {!collapsed && <span className={`text-sm font-medium ${isActive('/settings') && !location.pathname.startsWith('/settings/document-types') && !location.pathname.startsWith('/settings/recruitment') ? 'text-brand-cyan' : 'text-white/90'}`}>Settings</span>}
+            </button>
+          )}
 
           {/* DF Admin: Tenant Configuration link under settings */}
           {isDfAdmin && !collapsed && (

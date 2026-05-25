@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUsers } from '@/hooks/useUsers';
 import { userService } from '@/services/np_userService';
+import { useAuth } from '@/context/AuthContext';
 import StatusBadge from '@/components/common/StatusBadge';
 import Modal from '@/components/common/Modal';
 import type { User } from '@/types';
@@ -26,12 +27,59 @@ const permissions = [
 
 export default function Users() {
   const navigate = useNavigate();
-  const { users, replace } = useUsers();
+  const { users, replace, refresh } = useUsers();
+  const { npRole } = useAuth();
+  const canManageUsers = npRole === 'NpAdmin';
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [draft, setDraft] = useState<User | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Phase 5+28b §B.2 — Add User modal form state.
+  const [inviteName, setInviteName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('Dispatcher');
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteToast, setInviteToast] = useState<string | null>(null);
+
+  function openAddUser() {
+    setInviteName('');
+    setInviteEmail('');
+    setInviteRole('Dispatcher');
+    setInviteError(null);
+    setInviteToast(null);
+    setModalOpen(true);
+  }
+
+  function closeAddUser() {
+    setModalOpen(false);
+    setInviteError(null);
+  }
+
+  async function handleSendInvite() {
+    if (!inviteName.trim() || !inviteEmail.trim()) {
+      setInviteError('Full name and email are both required.');
+      return;
+    }
+    setInviting(true);
+    setInviteError(null);
+    try {
+      const { message } = await userService.create({
+        name: inviteName.trim(),
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      setInviteToast(message ?? `Invite sent to ${inviteEmail.trim()}.`);
+      setModalOpen(false);
+      refresh();
+    } catch (e: any) {
+      const fromAxios = e?.response?.data?.messages?.[0]?.message;
+      setInviteError(fromAxios ?? e?.message ?? 'Failed to send invite.');
+    } finally {
+      setInviting(false);
+    }
+  }
 
   function openEdit(u: User) {
     setEditing(u);
@@ -66,14 +114,28 @@ export default function Users() {
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-bold">Users</h2>
         <div className="flex gap-2">
-          <button onClick={() => navigate('/users/import')} className="bg-white text-brand-cyan border border-border px-4 py-2 rounded-md text-sm hover:bg-surface-cream transition-all">
-            Import from Spreadsheet
-          </button>
-          <button onClick={() => setModalOpen(true)} className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow">
-            + Add User
-          </button>
+          {canManageUsers && (
+            <>
+              <button onClick={() => navigate('/users/import')} className="bg-white text-brand-cyan border border-border px-4 py-2 rounded-md text-sm hover:bg-surface-cream transition-all">
+                Import from Spreadsheet
+              </button>
+              <button onClick={openAddUser} className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow">
+                + Add User
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Phase 5+28b — post-invite toast surfaces success / partial-failure
+          messages from the cascade so the operator knows whether the email
+          actually went out. */}
+      {inviteToast && (
+        <div className="mb-4 p-3 rounded-md bg-green-50 border border-green-200 text-sm text-green-800 flex items-start justify-between gap-3">
+          <div>{inviteToast}</div>
+          <button onClick={() => setInviteToast(null)} className="text-green-700 hover:text-green-900 font-bold leading-none" aria-label="Dismiss">×</button>
+        </div>
+      )}
       <p className="text-text-secondary text-sm mb-5">
         Manage who can access your NP portal. Assign roles to control what each team member can see and do.
       </p>
@@ -99,12 +161,14 @@ export default function Users() {
                 <td className="px-3 py-2.5 text-sm border-b border-border"><StatusBadge status={u.status} /></td>
                 <td className="px-3 py-2.5 text-[13px] text-text-secondary border-b border-border">{u.lastLogin}</td>
                 <td className="px-3 py-2.5 border-b border-border">
-                  <button
-                    onClick={() => openEdit(u)}
-                    className="bg-transparent border border-border text-text-primary px-2.5 py-1 rounded-md text-xs hover:border-brand-cyan hover:text-brand-cyan transition-all"
-                  >
-                    Edit
-                  </button>
+                  {canManageUsers && (
+                    <button
+                      onClick={() => openEdit(u)}
+                      className="bg-transparent border border-border text-text-primary px-2.5 py-1 rounded-md text-xs hover:border-brand-cyan hover:text-brand-cyan transition-all"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -205,35 +269,64 @@ export default function Users() {
         </div>
       </Modal>
 
-      {/* Add User Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+      {/* Add User Modal — wired in Phase 5+28b §B.2. Form fields controlled;
+          Send Invite POSTs to /api/np/users which creates the
+          tucClientContact + triggers the Hub invite cascade. */}
+      <Modal open={modalOpen} onClose={closeAddUser}>
         <h2 className="text-xl font-bold mb-2">Add New User</h2>
         <p className="text-text-secondary text-sm mb-4">Create a portal login for a team member.</p>
         <div className="flex flex-col gap-3 mb-5">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-text-secondary uppercase tracking-wide">Full Name</label>
-            <input type="text" placeholder="e.g. Jane Smith" />
+            <input
+              type="text"
+              placeholder="e.g. Jane Smith"
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              disabled={inviting}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-text-secondary uppercase tracking-wide">UserName</label>
-            <input type="text" placeholder="e.g. jane@pacificexpress.com" />
+            <input
+              type="email"
+              placeholder="e.g. jane@pacificexpress.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              disabled={inviting}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-text-secondary uppercase tracking-wide">Role</label>
-            <select>
-              <option>Admin</option>
-              <option>Dispatcher</option>
-              <option>Read-Only</option>
+            <select
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value)}
+              disabled={inviting}
+            >
+              <option value="Admin">Admin</option>
+              <option value="Dispatcher">Dispatcher</option>
+              <option value="Read-Only">Read-Only</option>
             </select>
           </div>
         </div>
+        {inviteError && (
+          <p className="text-xs text-red-600 mb-3">{inviteError}</p>
+        )}
         <p className="text-xs text-text-secondary mb-4">An invitation email will be sent with login instructions.</p>
         <div className="flex gap-2.5 justify-end">
-          <button onClick={() => setModalOpen(false)} className="bg-transparent border border-border text-text-primary px-4 py-2 rounded-md text-sm hover:border-brand-cyan hover:text-brand-cyan transition-all">
+          <button
+            onClick={closeAddUser}
+            disabled={inviting}
+            className="bg-transparent border border-border text-text-primary px-4 py-2 rounded-md text-sm hover:border-brand-cyan hover:text-brand-cyan transition-all disabled:opacity-50"
+          >
             Cancel
           </button>
-          <button onClick={() => setModalOpen(false)} className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow">
-            Send Invite
+          <button
+            onClick={handleSendInvite}
+            disabled={inviting}
+            className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50"
+          >
+            {inviting ? 'Sending…' : 'Send Invite'}
           </button>
         </div>
       </Modal>

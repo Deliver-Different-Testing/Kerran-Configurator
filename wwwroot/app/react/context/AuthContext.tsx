@@ -2,6 +2,11 @@ import { createContext, useContext, useMemo, ReactNode } from 'react';
 
 export type AppRole = 'dfadmin' | 'np' | 'tenant' | 'courier';
 
+// Phase 5+28b §B.2 — within the NP lane, per-user role tier (drives UI
+// surface gating + which controllers a user can write to). Maps from the
+// `NpRoleId` claim Hub emits at login from tucClientContact.ContactRoleId.
+export type NpRole = 'NpAdmin' | 'NpDispatcher' | 'NpReadOnly' | null;
+
 export interface AppUser {
   isAdmin: boolean;
   isCourier: boolean;
@@ -12,11 +17,18 @@ export interface AppUser {
   fullName: string | null;
   email: string | null;
   tenantCode: string | null;
+  // Phase 5+28b — raw ContactRoleId (1/2/3) or null when the claim is
+  // absent (non-NP users / NP users w/o a contact role).
+  npRoleId: number | null;
 }
 
 interface AuthContextValue {
   user: AppUser;
   role: AppRole;
+  // Phase 5+28b — friendly role name derived from npRoleId. DF Admin in
+  // the NP lane gets `NpAdmin` so existing checks like
+  // `npRole === 'NpAdmin'` still pass for cross-tenant admins.
+  npRole: NpRole;
   logout: () => void;
 }
 
@@ -30,6 +42,7 @@ const ANONYMOUS: AppUser = {
   fullName: null,
   email: null,
   tenantCode: null,
+  npRoleId: null,
 };
 
 declare global {
@@ -53,6 +66,20 @@ function deriveRole(user: AppUser): AppRole {
   return 'tenant';
 }
 
+// Phase 5+28b §B.2 — maps the raw ContactRoleId from the cookie claim
+// to the typed NpRole. DF Admins (isAdmin=true) are treated as NpAdmin
+// when they're acting in the NP lane so every "is the operator allowed
+// to do X?" check has the same shape regardless of who they are.
+function deriveNpRole(user: AppUser): NpRole {
+  if (user.isAdmin) return 'NpAdmin';
+  switch (user.npRoleId) {
+    case 1: return 'NpAdmin';
+    case 2: return 'NpDispatcher';
+    case 3: return 'NpReadOnly';
+    default: return null;
+  }
+}
+
 function readDevRoleOverride(internal: boolean): AppRole | null {
   if (!internal) return null;
   if (typeof window === 'undefined') return null;
@@ -69,9 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const user = readBootstrap();
     const override = readDevRoleOverride(user.internal);
     const role = override ?? deriveRole(user);
+    const npRole = deriveNpRole(user);
     return {
       user,
       role,
+      npRole,
       logout: () => {
         // Hub owns sign-out. Hit Hub's logout endpoint, then come back.
         window.location.href = '/Account/Logout';

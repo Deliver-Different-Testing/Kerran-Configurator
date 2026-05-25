@@ -215,6 +215,40 @@ builder.Services.AddAuthorization(options =>
             var userGroupId = context.User.FindFirst("UserGroupID")?.Value;
             return !string.IsNullOrEmpty(userGroupId);
         }));
+
+    // ─── Phase 5+28b §B.2 — Per-NP-role policies ─────────────────────────
+    // DF Admin (UserGroupID=1) bypasses all gates — admins can act on any
+    // tenant. NP users pass if their NpRoleId claim (emitted by Hub from
+    // tucClientContact.ContactRoleId) is in the allowlist. Claim absent →
+    // deny (defensive — a misconfigured NP user shouldn't accidentally
+    // gain admin rights).
+    //
+    // Roles (matches DfrntDriveConfigurator.Core.Application.Services.Np.NpRole):
+    //   1 = NpAdmin       — finance / users / settings + everything below
+    //   2 = NpDispatcher  — operations, fleet, no finance / users / settings
+    //   3 = NpReadOnly    — view-only across the portal
+    //
+    // Permission matrix from Steve's brief §B.2 (rendered in the React
+    // Users page Role Permissions table). The 9 policies below are the
+    // server-side enforcement layer; UI hides matching buttons per role.
+    static bool DfAdminOrNpRole(Microsoft.AspNetCore.Authorization.AuthorizationHandlerContext ctx, params string[] allowedRoleIds)
+    {
+        if (ctx.User.FindFirst("UserGroupID")?.Value == "1") return true;
+        var role = ctx.User.FindFirst("NpRoleId")?.Value;
+        return !string.IsNullOrEmpty(role) && System.Linq.Enumerable.Contains(allowedRoleIds, role);
+    }
+
+    options.AddPolicy("NpManageUsers",    p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1")));            // NpAdmin
+    options.AddPolicy("NpEditSettings",   p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1")));            // NpAdmin
+    options.AddPolicy("NpViewFinancials", p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1")));            // NpAdmin
+
+    options.AddPolicy("NpAssignCouriers", p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2")));       // Admin + Dispatcher
+    options.AddPolicy("NpManageCouriers", p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2")));       // Admin + Dispatcher
+    options.AddPolicy("NpManageFleet",    p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2")));       // Admin + Dispatcher
+
+    options.AddPolicy("NpViewDispatch",   p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2", "3")));  // All 3
+    options.AddPolicy("NpViewReports",    p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2", "3")));  // All 3
+    options.AddPolicy("NpViewDashboard",  p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2", "3")));  // All 3
 });
 
 builder.Services.AddHttpClient();
@@ -246,6 +280,9 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpFeatureResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpFeatureResolver>();
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Np.INpRoleResolver,
+    DfrntDriveConfigurator.Core.Application.Services.Np.NpRoleResolver>();
 
 // Common infrastructure services (used by multiple lanes)
 builder.Services.AddScoped<

@@ -31,6 +31,18 @@ public class NpUserUpdateDto
     public string Status { get; set; } = "active";         // "active" | "inactive"
 }
 
+// Phase 5+28b §B.2 — Add User from the NP team page. Operator-supplied
+// name + email + role. Backend resolves the caller's NP scope, creates a
+// tucClientContact under it, and calls the Hub invite cascade so the new
+// user gets a set-password email. Role names map to tblContactRole IDs
+// (1=Admin / 2=Dispatcher / 3=Read-Only) — see NpRole enum.
+public class NpUserCreateDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Role { get; set; } = "Dispatcher";       // "Admin" | "Dispatcher" | "Read-Only"
+}
+
 public class NpUserResponse : BaseResponse
 {
     public NpUserResponse(Guid messageId) : base(messageId) { }

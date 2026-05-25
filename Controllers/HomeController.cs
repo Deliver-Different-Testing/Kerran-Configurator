@@ -22,7 +22,12 @@ public record AppUserBootstrap(
     int? StaffId,
     string? FullName,
     string? Email,
-    string? TenantCode);
+    string? TenantCode,
+    // Phase 5+28b §B.2 — raw tucClientContact.ContactRoleId (1=NpAdmin,
+    // 2=NpDispatcher, 3=NpReadOnly). Null for non-NP users or NP users
+    // whose contact row has no role set. Frontend maps the ID to a
+    // friendly role name + uses it to gate UI surfaces.
+    int? NpRoleId);
 
 [Authorize]
 public class HomeController(
@@ -158,7 +163,8 @@ public class HomeController(
             StaffId: ParseInt(Get("StaffID")),
             FullName: Get("fullName"),
             Email: Get(ClaimTypes.Name),
-            TenantCode: Get("TenantCode"));
+            TenantCode: Get("TenantCode"),
+            NpRoleId: ParseInt(Get("NpRoleId")));
     }
 
     private async Task EnsureConnectionString()

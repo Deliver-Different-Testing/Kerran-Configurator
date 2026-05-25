@@ -39,6 +39,7 @@ public class NpUsersController(NpUserService npUserService) : BaseController
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = "NpManageUsers")]      // Phase 5+28b — NpAdmin-only
     public async Task<IActionResult> Update(int id, [FromBody] NpUserUpdateDto dto)
     {
         try
@@ -53,6 +54,29 @@ public class NpUsersController(NpUserService npUserService) : BaseController
         catch (Exception e)
         {
             Log.Error(e, "Failed to update NP user {Id}", id);
+            throw;
+        }
+    }
+
+    // Phase 5+28b §B.2 — Add User from the NP team page. Creates a
+    // tucClientContact + triggers Hub invite cascade. Gated NpManageUsers
+    // (NpAdmin-only; DF Admin bypasses via the policy).
+    [HttpPost]
+    [Authorize(Policy = "NpManageUsers")]
+    public async Task<IActionResult> Create([FromBody] NpUserCreateDto dto)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await npUserService.CreateAsync(dto, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to create NP user");
             throw;
         }
     }

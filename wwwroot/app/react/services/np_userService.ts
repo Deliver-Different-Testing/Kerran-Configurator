@@ -16,8 +16,20 @@ export const userService = {
     return ['Admin', 'Dispatcher', 'Read-Only'];
   },
 
-  async create(_user: Partial<User>): Promise<User> {
-    throw new Error('create() not yet wired to backend');
+  // Phase 5+28b §B.2 — Add User from the NP team page. POST creates the
+  // tucClientContact server-side + dispatches the Hub invite cascade
+  // (see NpUserService.CreateAsync). Backend returns a wrapped response
+  // so we can surface the partial-failure warning message in the UI.
+  async create(payload: { name: string; email: string; role: string }): Promise<{ user: User; message: string | null }> {
+    const { data } = await api.post<{ user: User; messages?: { message: string }[] }>('/users', {
+      name: payload.name,
+      email: payload.email,
+      role: payload.role,
+    });
+    return {
+      user: data?.user as User,
+      message: data?.messages?.[0]?.message ?? null,
+    };
   },
 
   async update(id: string, updates: Partial<User>): Promise<User> {

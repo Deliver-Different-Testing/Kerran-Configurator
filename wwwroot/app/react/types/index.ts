@@ -227,6 +227,10 @@ export interface Agent {
   rankingId?: number | null;
   npPortalEnabled?: boolean;
   npTierByte?: number;
+  // Phase 5+27.1 — linked TucClient.ClientTypeId (1 Internal / 2 Customer /
+  // 3 NetworkPartner, or any further seeded value). Null when no TucClient
+  // is linked (non-NP agent).
+  clientTypeId?: number | null;
 }
 
 export type VehicleSize = 'Bike' | 'Small' | 'Medium' | 'Large' | 'Van' | 'Truck';

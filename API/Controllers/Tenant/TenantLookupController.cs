@@ -44,4 +44,20 @@ public class TenantLookupController(TenantLookupService lookupService) : BaseCon
             throw;
         }
     }
+
+    // Phase 5+27.1 — client-type picker feed for Add/Edit Agent modal.
+    [HttpGet("client-types")]
+    public async Task<IActionResult> GetClientTypes()
+    {
+        try
+        {
+            var items = await lookupService.GetClientTypes();
+            return Ok(items);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to fetch client-types lookup");
+            throw;
+        }
+    }
 }

@@ -26,6 +26,9 @@ interface TenantAgentApi {
   contactEmail: string;
   defaultCourierPayPercent: number | null;
   coverageAreas: string[];
+  // Phase 5+27.1 — linked TucClient.ClientTypeId surfaced for the picker.
+  // Null for non-NP agents (no TucClient linkage).
+  clientTypeId: number | null;
   created: string;
   lastModified: string;
 }
@@ -91,6 +94,7 @@ function toAgent(dto: TenantAgentApi): Agent {
     rankingId: dto.rankingId,
     npPortalEnabled: dto.npPortalEnabled,
     npTierByte: dto.npTier,
+    clientTypeId: dto.clientTypeId ?? null,
     // ExtAgent extras (optional on the type) — empty defaults keep
     // AgentWorkspace happy until the relevant joins / tables exist.
     npDocs: [],
@@ -121,6 +125,9 @@ function toUpsertPayload(a: Partial<Agent>) {
     contactEmail: a.email ?? '',
     defaultCourierPayPercent: a.defaultCourierPayPercent ?? null,
     coverageAreas: a.coverageAreas ?? [],
+    // Phase 5+27.1 — operator-selectable ClientType for the linked TucClient.
+    // Backend defaults to 3 (NetworkPartner) when null + IsNetworkPartner=true.
+    clientTypeId: a.clientTypeId ?? null,
   };
 }
 
@@ -163,6 +170,11 @@ export const tenantLookupService = {
   },
   async getAgentRankings(): Promise<LookupItem[]> {
     const { data } = await api.get<LookupItem[]>('/lookups/agent-rankings');
+    return data ?? [];
+  },
+  // Phase 5+27.1 — ClientType lookup for the Add/Edit Agent picker.
+  async getClientTypes(): Promise<LookupItem[]> {
+    const { data } = await api.get<LookupItem[]>('/lookups/client-types');
     return data ?? [];
   },
 };

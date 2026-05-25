@@ -34,6 +34,10 @@ public class TenantAgentDto
     public decimal? DefaultCourierPayPercent { get; set; }
     public List<string> CoverageAreas { get; set; } = new();         // AgentCoverageArea.AreaName rows
 
+    // Phase 5+27.1 — surfaces the linked TucClient.ClientTypeId for display +
+    // the edit picker. Null when no TucClient is linked (non-NP agent).
+    public int? ClientTypeId { get; set; }
+
     public DateTime Created { get; set; }
     public DateTime LastModified { get; set; }
 }
@@ -69,6 +73,13 @@ public class TenantAgentUpsertDto
     public string ContactEmail { get; set; } = string.Empty;
     public decimal? DefaultCourierPayPercent { get; set; }
     public List<string> CoverageAreas { get; set; } = new();         // full desired set — service reconciles rows
+
+    // Phase 5+27.1 — picker value for the linked TucClient.ClientTypeId.
+    // Null is accepted; the service applies the default rule
+    // (IsNetworkPartner=true → 3 NetworkPartner, otherwise no client row).
+    // Operators can override to 1 (Internal) / 2 (Customer) or any other
+    // seeded ClientType when they have a reason to.
+    public int? ClientTypeId { get; set; }
 }
 
 public class TenantAgentResponse : BaseResponse

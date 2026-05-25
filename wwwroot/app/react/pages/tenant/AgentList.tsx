@@ -38,6 +38,7 @@ export function AgentList() {
   const [createMode, setCreateMode] = useState(false);
   const [statuses, setStatuses] = useState<LookupItem[]>([]);
   const [rankings, setRankings] = useState<LookupItem[]>([]);
+  const [clientTypes, setClientTypes] = useState<LookupItem[]>([]);   // Phase 5+27.1
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   // Text buffer for the coverage-area chip editor in the Edit Agent modal.
@@ -47,6 +48,7 @@ export function AgentList() {
     let alive = true;
     tenantLookupService.getAgentStatuses().then(s => { if (alive) setStatuses(s); });
     tenantLookupService.getAgentRankings().then(r => { if (alive) setRankings(r); });
+    tenantLookupService.getClientTypes().then(t => { if (alive) setClientTypes(t); });
     return () => { alive = false; };
   }, []);
 
@@ -94,6 +96,10 @@ export function AgentList() {
     association: 'None',
     associationMemberId: '',
     defaultCourierPayPercent: null,
+    // Phase 5+27.1 — defaults to 3 (NetworkPartner). Field only takes effect
+    // server-side when IsNetworkPartner=true (no TucClient is created
+    // otherwise). Operator can override via the picker.
+    clientTypeId: 3,
   };
 
   function openEdit(agent: Agent) {
@@ -648,6 +654,24 @@ export function AgentList() {
                     <option value={1}>Base</option>
                     <option value={2}>Multi-Client</option>
                   </select>
+                </div>
+                {/* Phase 5+27.1 — ClientType picker for the linked TucClient.
+                    Defaults to NetworkPartner; operator can override.
+                    "+ Add new..." inline-create is deferred to a later slice. */}
+                <div className="flex flex-col gap-1 col-span-2">
+                  <label className="text-xs text-text-secondary uppercase tracking-wide">Client Type</label>
+                  <select
+                    value={draft.clientTypeId ?? 3}
+                    onChange={(e) => setDraft({ ...draft, clientTypeId: Number(e.target.value) })}
+                  >
+                    {clientTypes.length === 0
+                      ? <option value={3}>NetworkPartner</option>
+                      : clientTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)
+                    }
+                  </select>
+                  <span className="text-xs text-text-muted">
+                    Determines how this NP's tucClient row is classified for billing / Hub visibility. Defaults to NetworkPartner.
+                  </span>
                 </div>
               </>
             )}

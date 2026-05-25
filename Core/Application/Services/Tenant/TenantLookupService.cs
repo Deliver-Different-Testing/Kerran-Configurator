@@ -28,4 +28,20 @@ public class TenantLookupService(IDbContextFactory<DynamicDespatchDbContext> con
             .Select(r => new LookupItemDto { Id = r.AgentRankingId, Name = r.AgentRankingName ?? string.Empty })
             .ToListAsync();
     }
+
+    // Phase 5+27.1 — Client-type lookup for the NP Add/Edit picker.
+    // Seeded 3 rows by migration 20260513123935_NPMarketplaceAndQuotes.sql:
+    // 1=Internal, 2=Customer, 3=NetworkPartner. Operator may add more later
+    // — picker reflects whatever's in the table. v1 is read-only; the
+    // inline "+ Add new..." path is deferred per the NP-creation-cascade
+    // brief corrections (#5) to avoid ad-hoc-typo duplicates in the
+    // lookup table.
+    public async Task<List<LookupItemDto>> GetClientTypes()
+    {
+        return await Context.ClientTypes
+            .AsNoTracking()
+            .OrderBy(t => t.Id)
+            .Select(t => new LookupItemDto { Id = t.Id, Name = t.Name ?? string.Empty })
+            .ToListAsync();
+    }
 }

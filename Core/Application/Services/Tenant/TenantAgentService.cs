@@ -71,6 +71,13 @@ public class TenantAgentService(
             client.UcclAddress = dto.AddressLine1 ?? string.Empty;
             client.UcclPostCode = dto.PostCode ?? string.Empty;
             client.UcclPhone = dto.Phone ?? string.Empty;
+            // §A.1: propagate ClientTypeId change. Null DTO value leaves the
+            // existing client.ClientTypeId untouched (callers pre-dating the
+            // picker keep the original value).
+            if (dto.ClientTypeId is int newType && client.ClientTypeId != newType)
+            {
+                client.ClientTypeId = newType;
+            }
             client.LastModified = now;
             client.LastModifiedBy = actor;
 
@@ -178,7 +185,12 @@ public class TenantAgentService(
                 return Fail(messageId, "Cannot create NP — no existing active tucClient rows on this tenant DB to inherit required-FK defaults from (SiteId, BillingType, etc.). The tenant needs at least one active tucClient row before NPs can be created via this cascade.");
             }
             var clientCode = await GenerateClientCodeAsync(dto.Name);
-            var client = BuildNpClient(dto, clientCode, template, actor, now);
+            // ClientTypeId defaults to 3 (NetworkPartner) when caller doesn't
+            // send one — preserves backward compatibility for §A callers
+            // pre-dating the §A.1 picker. Operator can override to any other
+            // seeded ClientType via the picker (rare but allowed).
+            var clientTypeId = dto.ClientTypeId ?? 3;
+            var client = BuildNpClient(dto, clientCode, clientTypeId, template, actor, now);
             agent.TucClients.Add(client);
 
             if (!string.IsNullOrWhiteSpace(dto.ContactEmail))
@@ -225,16 +237,17 @@ public class TenantAgentService(
     // pulled from the template so newly-added schema FKs land here
     // automatically when this method is re-touched.
     //
-    // ClientTypeId hardcoded to 3 (NetworkPartner — seeded by migration
-    // 20260513123935_NPMarketplaceAndQuotes.sql); replaced by operator-driven
-    // picker in §A.1 (Phase 5+27.1).
-    private static TucClient BuildNpClient(TenantAgentUpsertDto dto, string code, TucClient template, string actor, DateTime now) => new()
+    // ClientTypeId resolved by caller — defaults to 3 (NetworkPartner) when
+    // dto.ClientTypeId is null. §A.1 (Phase 5+27.1) wired the operator-driven
+    // picker; any of the seeded ClientType values (1 Internal / 2 Customer /
+    // 3 NetworkPartner) is accepted.
+    private static TucClient BuildNpClient(TenantAgentUpsertDto dto, string code, int clientTypeId, TucClient template, string actor, DateTime now) => new()
     {
         // ── NP-specific (override template) ──────────────────────────────
         UcclName = Truncate(dto.Name, 75),
         UcclLegalName = Truncate(dto.Name, 150),
         UcclCode = code,
-        ClientTypeId = 3,                          // NetworkPartner
+        ClientTypeId = clientTypeId,
         UcclAddress = dto.AddressLine1 ?? string.Empty,
         UcclPostCode = dto.PostCode ?? string.Empty,
         UcclPhone = dto.Phone ?? string.Empty,
@@ -474,6 +487,14 @@ public class TenantAgentService(
             .OrderBy(ca => ca.AreaName)
             .Select(ca => ca.AreaName)
             .ToList(),
+        // §A.1 — surfaces the linked TucClient.ClientTypeId for the picker.
+        // Picks the lowest-Id active client where multiple linkages exist
+        // (1:1 by §A construction, but defensive ordering doesn't hurt).
+        ClientTypeId = a.TucClients
+            .Where(c => c.UcclActive)
+            .OrderBy(c => c.UcclId)
+            .Select(c => (int?)c.ClientTypeId)
+            .FirstOrDefault(),
         Created = a.Created,
         LastModified = a.LastModified,
     };

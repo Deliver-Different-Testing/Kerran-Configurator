@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Security.Claims;
@@ -37,9 +38,16 @@ public class TenantAgentService(
 
     public async Task<TenantAgentResponse> UpdateAsync(int id, TenantAgentUpsertDto dto, Guid messageId)
     {
-        // Include the coverage rows so ApplyCoverageAreas can reconcile them.
+        // Include the coverage rows so ApplyCoverageAreas can reconcile them,
+        // and the linked NP TucClient (with its primary contact) so identity
+        // edits propagate without a second round-trip. Phase 5+27 only mirrors
+        // name + address + phone — billing / rate / type fields stay under the
+        // operator's direct DB control. An un-tick of IsNetworkPartner does
+        // NOT auto-sever NpAgentId on the client; see warning below.
         var agent = await Context.TucAgents
             .Include(a => a.AgentCoverageAreas)
+            .Include(a => a.TucClients)
+                .ThenInclude(c => c.TucClientContacts)
             .FirstOrDefaultAsync(a => a.UcagId == id);
         if (agent is null)
         {
@@ -47,9 +55,52 @@ public class TenantAgentService(
         }
 
         var actor = ResolveActor();
+        var now = DateTime.UtcNow;
         ApplyUpdate(agent, dto);
         ApplyCoverageAreas(agent, dto, actor);
-        agent.LastModified = DateTime.UtcNow;
+
+        // Propagate identity fields to the linked NP TucClient row if one
+        // exists. There is exactly one per NP-flagged agent (the cascade in
+        // CreateAsync enforces 1:1), but the collection nav can carry more in
+        // pathological cases — iterate defensively.
+        var warnings = new List<string>();
+        foreach (var client in agent.TucClients)
+        {
+            client.UcclName = Truncate(dto.Name, 75);
+            client.UcclLegalName = Truncate(dto.Name, 150);
+            client.UcclAddress = dto.AddressLine1 ?? string.Empty;
+            client.UcclPostCode = dto.PostCode ?? string.Empty;
+            client.UcclPhone = dto.Phone ?? string.Empty;
+            client.LastModified = now;
+            client.LastModifiedBy = actor;
+
+            // ContactEmail newly populated and no contact exists yet → create
+            // the primary contact now. Pre-existing contacts are NOT mutated
+            // here — that lives on the §B per-user surface (Phase 5+28).
+            if (!string.IsNullOrWhiteSpace(dto.ContactEmail) &&
+                client.TucClientContacts.Count == 0)
+            {
+                if (await IsContactEmailTakenAsync(dto.ContactEmail))
+                {
+                    warnings.Add($"Primary contact not created — email \"{dto.ContactEmail}\" is already in use on another tucClientContact.");
+                }
+                else
+                {
+                    client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now));
+                }
+            }
+        }
+
+        if (!dto.IsNetworkPartner && agent.TucClients.Count > 0)
+        {
+            // Un-ticking IsNetworkPartner on an agent that already has a linked
+            // TucClient is an edge case (downgrade-from-NP). v1 leaves the
+            // tucClient.NpAgentId link intact and surfaces a warning — the
+            // operator decides whether to repoint or delete the client row.
+            warnings.Add($"Agent has {agent.TucClients.Count} linked TucClient row(s) but IsNetworkPartner is now false — NP linkage left in place. Repoint or remove the client row manually if intended.");
+        }
+
+        agent.LastModified = now;
         agent.LastModifiedBy = actor;
 
         await Context.SaveChangesAsync();
@@ -59,11 +110,14 @@ public class TenantAgentService(
             .Select(ProjectToDto)
             .FirstOrDefaultAsync();
 
-        return new TenantAgentResponse(messageId)
+        var response = new TenantAgentResponse(messageId)
         {
             Success = true,
             Agent = read,
         };
+        foreach (var w in warnings)
+            response.Messages.Add(new MessageDto { Message = w });
+        return response;
     }
 
     public async Task<TenantAgentResponse> CreateAsync(TenantAgentUpsertDto dto, Guid messageId)
@@ -73,11 +127,27 @@ public class TenantAgentService(
             return Fail(messageId, "Name is required.");
         }
 
+        // Pre-flight: NPs with a populated ContactEmail need that email to be
+        // unique across tucClientContact. If it's not, bail before any insert
+        // — the alternative (atomic rollback after the SaveChangesAsync throws)
+        // is the same outcome with a noisier error path.
+        if (dto.IsNetworkPartner && !string.IsNullOrWhiteSpace(dto.ContactEmail)
+            && await IsContactEmailTakenAsync(dto.ContactEmail))
+        {
+            return Fail(messageId, $"Contact email \"{dto.ContactEmail}\" is already in use on another tucClientContact.");
+        }
+
         var actor = ResolveActor();
         var now = DateTime.UtcNow;
         var agent = new TucAgent
         {
-            UcagSuburbId = 152,                  // Default until a suburb picker exists.
+            // UcagSuburbId is `int` (NOT NULL) with a non-nullable FK to
+            // tucSuburb — sending 0 fails the FK constraint. Steve's brief
+            // §C suggests dropping this "while you're in there" but that
+            // assumes the column is/becomes nullable; it's not today. Leave
+            // the 152 default until Coverage-Areas-as-source-of-truth lands
+            // (Phase 5+29) and either nulls this column or wires a picker.
+            UcagSuburbId = 152,
             UcagAddress = string.Empty,
             UcagFax = string.Empty,
             UcagAltPhone = string.Empty,
@@ -92,6 +162,35 @@ public class TenantAgentService(
         ApplyUpdate(agent, dto);
         ApplyCoverageAreas(agent, dto, actor);
 
+        var warnings = new List<string>();
+
+        // NP cascade: TucClient (always) + TucClientContact (if ContactEmail
+        // present) attached via navigation collections so EF resolves the
+        // generated UcagId / UcclId into the FKs during the single
+        // SaveChangesAsync below. No orphan state possible at this layer.
+        // §A.1 (Phase 5+27.1) will replace the hardcoded ClientTypeId=3 with
+        // an operator-selectable value.
+        if (dto.IsNetworkPartner)
+        {
+            var template = await ResolveTemplateClientAsync();
+            if (template is null)
+            {
+                return Fail(messageId, "Cannot create NP — no existing active tucClient rows on this tenant DB to inherit required-FK defaults from (SiteId, BillingType, etc.). The tenant needs at least one active tucClient row before NPs can be created via this cascade.");
+            }
+            var clientCode = await GenerateClientCodeAsync(dto.Name);
+            var client = BuildNpClient(dto, clientCode, template, actor, now);
+            agent.TucClients.Add(client);
+
+            if (!string.IsNullOrWhiteSpace(dto.ContactEmail))
+            {
+                client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now));
+            }
+            else
+            {
+                warnings.Add("Network Partner created with no contact email — no login contact was created. Add a user on the NP team page (or re-edit the NP with a Contact Email) to issue a portal invite.");
+            }
+        }
+
         Context.TucAgents.Add(agent);
         await Context.SaveChangesAsync();
 
@@ -100,11 +199,156 @@ public class TenantAgentService(
             .Select(ProjectToDto)
             .FirstOrDefaultAsync();
 
-        return new TenantAgentResponse(messageId)
+        var response = new TenantAgentResponse(messageId)
         {
             Success = true,
             Agent = read,
         };
+        foreach (var w in warnings)
+            response.Messages.Add(new MessageDto { Message = w });
+        return response;
+    }
+
+    // ─── NP cascade helpers (Phase 5+27 §A) ───────────────────────────────
+
+    // Builds the TucClient row for an NP. Atomic-cascade-friendly — does NOT
+    // set NpAgentId; the caller attaches via agent.TucClients.Add(client) so
+    // EF resolves the generated UcagId into the FK on SaveChangesAsync.
+    //
+    // Template-clone strategy: the legacy tucClient table has FKs at the DB
+    // layer that EF doesn't model as navigations (BillingType / Site / etc.)
+    // and there's no way to enumerate them from C#. Rather than chase each
+    // FK violation one error at a time, we inherit the FK values from an
+    // existing active tucClient row on the tenant — whatever values that
+    // row uses are proven-working on this tenant. NP-specific columns
+    // (identity / address / type / audit) override; everything else is
+    // pulled from the template so newly-added schema FKs land here
+    // automatically when this method is re-touched.
+    //
+    // ClientTypeId hardcoded to 3 (NetworkPartner — seeded by migration
+    // 20260513123935_NPMarketplaceAndQuotes.sql); replaced by operator-driven
+    // picker in §A.1 (Phase 5+27.1).
+    private static TucClient BuildNpClient(TenantAgentUpsertDto dto, string code, TucClient template, string actor, DateTime now) => new()
+    {
+        // ── NP-specific (override template) ──────────────────────────────
+        UcclName = Truncate(dto.Name, 75),
+        UcclLegalName = Truncate(dto.Name, 150),
+        UcclCode = code,
+        ClientTypeId = 3,                          // NetworkPartner
+        UcclAddress = dto.AddressLine1 ?? string.Empty,
+        UcclPostCode = dto.PostCode ?? string.Empty,
+        UcclPhone = dto.Phone ?? string.Empty,
+        UcclActive = true,
+        Created = now,
+        CreatedBy = actor,
+        LastModified = now,
+        LastModifiedBy = actor,
+
+        // ── Inherit from template (covers DB-only FKs EF doesn't model) ─
+        SiteId = template.SiteId,
+        UcclBillingType = template.UcclBillingType,
+        UcclSuburbId = template.UcclSuburbId,
+        Smsname = template.Smsname ?? string.Empty,   // required string
+        UcclGroupId = template.UcclGroupId,
+        UcclAverageDailyGroup = template.UcclAverageDailyGroup,
+        StartingWeightExcess = template.StartingWeightExcess,
+        AlertLatePickUp = template.AlertLatePickUp,
+        AlertLateDelivery = template.AlertLateDelivery,
+        PpdgraceDays = template.PpdgraceDays,
+    };
+
+    // Picks a tucClient row on the tenant to inherit required-FK defaults
+    // from. Active rows preferred (active clients carry the production
+    // FK / rate-code values the tenant actually uses); falls back to any
+    // row if no active client exists; returns null on completely-empty
+    // tucClient so the caller can surface a clear "tenant misconfigured"
+    // error instead of an opaque FK-violation stack trace.
+    private async Task<TucClient?> ResolveTemplateClientAsync()
+    {
+        var active = await Context.TucClients.AsNoTracking()
+            .Where(c => c.UcclActive)
+            .OrderBy(c => c.UcclId)
+            .FirstOrDefaultAsync();
+        if (active != null) return active;
+
+        return await Context.TucClients.AsNoTracking()
+            .OrderBy(c => c.UcclId)
+            .FirstOrDefaultAsync();
+    }
+
+    // Splits dto.ContactName into firstname/surname (last space-delimited
+    // token = surname; everything before = firstname). Empty ContactName
+    // produces empty firstname + dto.Name fragment as surname so the row is
+    // recognisable in tucClientContact lists. Email uniqueness is the
+    // caller's responsibility — pre-checked in CreateAsync.
+    private static TucClientContact BuildPrimaryContact(TenantAgentUpsertDto dto, string actor, DateTime now)
+    {
+        var (firstname, surname) = SplitContactName(dto.ContactName, dto.Name);
+        return new TucClientContact
+        {
+            UcctEmail = (dto.ContactEmail ?? string.Empty).Trim(),
+            UcctFirstname = firstname,
+            UcctSurname = surname,
+            UcctMobile = dto.Phone ?? string.Empty,
+            HasEmail = true,
+            ValidatedEmail = false,
+            Active = true,
+            AllowCookieLogin = true,           // required for Hub shared-cookie auth
+            StaffId = null,                     // NP user — no DF staff linkage
+            Created = now,
+            CreatedBy = actor,
+            LastModified = now,
+            LastModifiedBy = actor,
+        };
+    }
+
+    private static (string firstname, string surname) SplitContactName(string? contactName, string agentName)
+    {
+        var name = (contactName ?? string.Empty).Trim();
+        if (name.Length == 0)
+            return (string.Empty, Truncate(agentName ?? "Contact", 50));
+
+        var lastSpace = name.LastIndexOf(' ');
+        if (lastSpace < 0)
+            return (string.Empty, Truncate(name, 50));
+        return (Truncate(name[..lastSpace].Trim(), 50), Truncate(name[(lastSpace + 1)..].Trim(), 50));
+    }
+
+    // Mirrors NpApplicantService.GenerateCourierCode: first 6 alphanumeric
+    // chars of the agent name, uppercased; numeric suffix on collision.
+    // Scoped tenant-wide (no NP context needed — code is globally unique
+    // within the tenant DB).
+    private async Task<string> GenerateClientCodeAsync(string agentName)
+    {
+        var baseCode = new string((agentName ?? string.Empty)
+                .Where(char.IsLetterOrDigit).ToArray())
+            .ToUpperInvariant();
+        if (baseCode.Length == 0) baseCode = "NPCLIENT";
+        if (baseCode.Length > 16) baseCode = baseCode[..16];
+
+        var taken = (await Context.TucClients.AsNoTracking()
+                .Where(c => c.UcclCode != null && c.UcclCode.StartsWith(baseCode))
+                .Select(c => c.UcclCode!)
+                .ToListAsync())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!taken.Contains(baseCode)) return baseCode;
+        for (var i = 2; ; i++)
+        {
+            var candidate = baseCode + i;
+            if (candidate.Length > 50) candidate = candidate[..50];
+            if (!taken.Contains(candidate)) return candidate;
+        }
+    }
+
+    private Task<bool> IsContactEmailTakenAsync(string email) =>
+        Context.TucClientContacts.AsNoTracking()
+            .AnyAsync(c => c.UcctEmail != null && c.UcctEmail == email);
+
+    private static string Truncate(string? s, int maxLength)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        return s.Length <= maxLength ? s : s[..maxLength];
     }
 
     private static void ApplyUpdate(TucAgent a, TenantAgentUpsertDto dto)

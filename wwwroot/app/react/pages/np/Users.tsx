@@ -38,7 +38,7 @@ export default function Users() {
   // Phase 5+28b §B.2 — Add User modal form state.
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('Dispatcher');
+  const [inviteRole, setInviteRole] = useState('Admin');     // Phase 5+27.2 — default to Administrator per Steve
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteToast, setInviteToast] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export default function Users() {
   function openAddUser() {
     setInviteName('');
     setInviteEmail('');
-    setInviteRole('Dispatcher');
+    setInviteRole('Admin');                                   // Phase 5+27.2
     setInviteError(null);
     setInviteToast(null);
     setModalOpen(true);

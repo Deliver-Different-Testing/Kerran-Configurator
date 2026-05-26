@@ -10,7 +10,7 @@ public class NpUserDto
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string Role { get; set; } = "Dispatcher";
+    public string Role { get; set; } = "Admin";       // Phase 5+27.2 — Steve req'd Administrator as the default
     public string Status { get; set; } = "active";
     public string LastLogin { get; set; } = string.Empty;
 }
@@ -27,7 +27,7 @@ public class NpUserUpdateDto
 {
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string Role { get; set; } = "Dispatcher";       // "Admin" | "Dispatcher" | "Read-Only"
+    public string Role { get; set; } = "Admin";       // Phase 5+27.2 — Steve req'd Administrator as the default       // "Admin" | "Dispatcher" | "Read-Only"
     public string Status { get; set; } = "active";         // "active" | "inactive"
 }
 
@@ -40,7 +40,7 @@ public class NpUserCreateDto
 {
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string Role { get; set; } = "Dispatcher";       // "Admin" | "Dispatcher" | "Read-Only"
+    public string Role { get; set; } = "Admin";       // Phase 5+27.2 — Steve req'd Administrator as the default       // "Admin" | "Dispatcher" | "Read-Only"
 }
 
 public class NpUserResponse : BaseResponse

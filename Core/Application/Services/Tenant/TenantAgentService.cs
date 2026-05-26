@@ -56,16 +56,53 @@ public class TenantAgentService(
             return Fail(messageId, "Agent not found.");
         }
 
+        // Phase 5+27.2 — first-time NP transition (non-NP agent upgraded by
+        // ticking IsNetworkPartner) needs to fire the full §A cascade,
+        // mirroring CreateAsync. Detect via "no existing TucClients" — once
+        // the cascade lands, future edits route through the propagation
+        // loop instead. Pre-flight the email collision the same way Create
+        // does so an upgrade with a duplicate email fails fast rather than
+        // half-committing name/address changes.
+        var isFirstTimeNpUpgrade = dto.IsNetworkPartner && agent.TucClients.Count == 0;
+        if (isFirstTimeNpUpgrade && !string.IsNullOrWhiteSpace(dto.ContactEmail)
+            && await IsContactEmailTakenAsync(dto.ContactEmail))
+        {
+            return Fail(messageId, $"Contact email \"{dto.ContactEmail}\" is already in use on another tucClientContact.");
+        }
+
         var actor = ResolveActor();
         var now = DateTime.UtcNow;
         ApplyUpdate(agent, dto);
         await ApplyCoverageAreas(agent, dto, actor);
 
-        // Propagate identity fields to the linked NP TucClient row if one
-        // exists. There is exactly one per NP-flagged agent (the cascade in
-        // CreateAsync enforces 1:1), but the collection nav can carry more in
-        // pathological cases — iterate defensively.
         var warnings = new List<string>();
+
+        // First-time NP upgrade: build the cascade rows now. Same template-
+        // clone + UcclCode generation + ClientTypeId default + optional
+        // TucClientContact as CreateAsync uses.
+        if (isFirstTimeNpUpgrade)
+        {
+            var template = await ResolveTemplateClientAsync();
+            if (template is null)
+            {
+                // Soft-fail: name/address/coverage changes still go through;
+                // operator sees a clear warning explaining why the cascade
+                // didn't fire so they can fix tenant data + re-edit.
+                warnings.Add("Agent upgraded to Network Partner but no TucClient row was created — no existing active tucClient rows on this tenant to inherit required-FK defaults from. Resolve at the tenant DB level + re-edit the agent to retry.");
+            }
+            else
+            {
+                var clientCode = await GenerateClientCodeAsync(dto.Name);
+                var clientTypeId = dto.ClientTypeId ?? 3;
+                AddNpClientCascadeRows(agent, dto, template, clientCode, clientTypeId, actor, now, warnings);
+            }
+        }
+
+        // Propagate identity fields to linked TucClient rows. For the just-
+        // cascaded client this is a no-op (BuildNpClient already set the
+        // same values from dto), so the redundancy is harmless. For pre-
+        // existing NPs this is the canonical name/address-edit path.
+        var contactAddedToExistingClient = false;
         foreach (var client in agent.TucClients)
         {
             client.UcclName = Truncate(dto.Name, 75);
@@ -83,11 +120,14 @@ public class TenantAgentService(
             client.LastModified = now;
             client.LastModifiedBy = actor;
 
-            // ContactEmail newly populated and no contact exists yet → create
-            // the primary contact now. Pre-existing contacts are NOT mutated
-            // here — that lives on the §B per-user surface (Phase 5+28).
-            if (!string.IsNullOrWhiteSpace(dto.ContactEmail) &&
-                client.TucClientContacts.Count == 0)
+            // ContactEmail newly populated on an EXISTING NP client with no
+            // contact yet → create the primary contact now. Skipped on the
+            // first-time-upgrade path because AddNpClientCascadeRows already
+            // handled it. Pre-existing contacts are not mutated here — that
+            // lives on the §B per-user surface (Phase 5+28).
+            if (!isFirstTimeNpUpgrade
+                && client.TucClientContacts.Count == 0
+                && !string.IsNullOrWhiteSpace(dto.ContactEmail))
             {
                 if (await IsContactEmailTakenAsync(dto.ContactEmail))
                 {
@@ -96,6 +136,7 @@ public class TenantAgentService(
                 else
                 {
                     client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now));
+                    contactAddedToExistingClient = true;
                 }
             }
         }
@@ -113,6 +154,16 @@ public class TenantAgentService(
         agent.LastModifiedBy = actor;
 
         await Context.SaveChangesAsync();
+
+        // Hub invite fires for any newly-landed tucClientContact in this
+        // transaction — whether from the first-time-cascade path or from
+        // the existing-client contact-add path. Cross-DB call stays non-
+        // atomic per §B.1 corrections; partial failures land as warnings.
+        if ((isFirstTimeNpUpgrade || contactAddedToExistingClient)
+            && !string.IsNullOrWhiteSpace(dto.ContactEmail))
+        {
+            await FireHubInviteAsync(dto.ContactEmail!, warnings);
+        }
 
         var read = await Context.TucAgents.AsNoTracking()
             .Where(a => a.UcagId == id)
@@ -192,17 +243,7 @@ public class TenantAgentService(
             // pre-dating the §A.1 picker. Operator can override to any other
             // seeded ClientType via the picker (rare but allowed).
             var clientTypeId = dto.ClientTypeId ?? 3;
-            var client = BuildNpClient(dto, clientCode, clientTypeId, template, actor, now);
-            agent.TucClients.Add(client);
-
-            if (!string.IsNullOrWhiteSpace(dto.ContactEmail))
-            {
-                client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now));
-            }
-            else
-            {
-                warnings.Add("Network Partner created with no contact email — no login contact was created. Add a user on the NP team page (or re-edit the NP with a Contact Email) to issue a portal invite.");
-            }
+            AddNpClientCascadeRows(agent, dto, template, clientCode, clientTypeId, actor, now, warnings);
         }
 
         Context.TucAgents.Add(agent);
@@ -216,19 +257,7 @@ public class TenantAgentService(
         // so the operator sees them in the UI and can retry / fix in Hub.
         if (dto.IsNetworkPartner && !string.IsNullOrWhiteSpace(dto.ContactEmail))
         {
-            var invite = await npUserInviteService.InviteAsync(dto.ContactEmail!);
-            if (invite.FullySucceeded)
-            {
-                warnings.Add($"Hub user provisioned and invite email sent to {dto.ContactEmail}. They can set their password from that email and log in.");
-            }
-            else if (invite.PartialSuccess)
-            {
-                warnings.Add($"Hub user provisioned (id {invite.HubUserId}) but the invite email did NOT send. The contact will need a manual password-reset invite — see Hub admin for next step.");
-            }
-            else
-            {
-                warnings.Add(invite.FailureMessage ?? "Hub invite cascade failed — provision the Hub user manually.");
-            }
+            await FireHubInviteAsync(dto.ContactEmail!, warnings);
         }
 
         var read = await Context.TucAgents.AsNoTracking()
@@ -247,6 +276,60 @@ public class TenantAgentService(
     }
 
     // ─── NP cascade helpers (Phase 5+27 §A) ───────────────────────────────
+
+    // Shared TucClient + optional TucClientContact attach. Used by both
+    // CreateAsync (brand-new NP agent) and UpdateAsync (existing agent
+    // upgraded to NP). Caller must have already verified the dto is for an
+    // NP, a template tucClient row exists, and any ContactEmail collision
+    // check (CreateAsync fails fast, UpdateAsync also fails fast on first-
+    // time upgrade — both before this helper is invoked). EF resolves the
+    // generated UcagId / UcclId into the FKs during the caller's
+    // SaveChangesAsync. Warns when ContactEmail is empty so the operator
+    // knows no portal-login contact was created.
+    private void AddNpClientCascadeRows(
+        TucAgent agent,
+        TenantAgentUpsertDto dto,
+        TucClient template,
+        string clientCode,
+        int clientTypeId,
+        string actor,
+        DateTime now,
+        List<string> warnings)
+    {
+        var client = BuildNpClient(dto, clientCode, clientTypeId, template, actor, now);
+        agent.TucClients.Add(client);
+
+        if (!string.IsNullOrWhiteSpace(dto.ContactEmail))
+        {
+            client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now));
+        }
+        else
+        {
+            warnings.Add("Network Partner created with no contact email — no login contact was created. Add a user on the NP team page (or re-edit the NP with a Contact Email) to issue a portal invite.");
+        }
+    }
+
+    // Hub invite cascade — calls Hub's POST /api/admin/users via
+    // NpUserInviteService and maps the three outcome states (fully succeeded,
+    // partial success with Hub user but no email, complete failure) into
+    // appropriate warning messages. Cross-DB call is non-atomic so partial
+    // states surface to the operator rather than rolling back tenant rows.
+    private async Task FireHubInviteAsync(string email, List<string> warnings)
+    {
+        var invite = await npUserInviteService.InviteAsync(email);
+        if (invite.FullySucceeded)
+        {
+            warnings.Add($"Hub user provisioned and invite email sent to {email}. They can set their password from that email and log in.");
+        }
+        else if (invite.PartialSuccess)
+        {
+            warnings.Add($"Hub user provisioned (id {invite.HubUserId}) but the invite email did NOT send. The contact will need a manual password-reset invite — see Hub admin for next step.");
+        }
+        else
+        {
+            warnings.Add(invite.FailureMessage ?? "Hub invite cascade failed — provision the Hub user manually.");
+        }
+    }
 
     // Builds the TucClient row for an NP. Atomic-cascade-friendly — does NOT
     // set NpAgentId; the caller attaches via agent.TucClients.Add(client) so
@@ -342,6 +425,18 @@ public class TenantAgentService(
             Active = true,
             AllowCookieLogin = true,           // required for Hub shared-cookie auth
             StaffId = null,                     // NP user — no DF staff linkage
+            // Phase 5+27.2 — Steve's §B.1: "Default role: NpAdmin — the first
+            // user for an NP gets the admin role automatically." The cascade-
+            // created primary contact IS that first user. ContactRoleId = 1
+            // = NpAdmin per the seeded tblContactRole rows (see migration
+            // 20260513123935_NPMarketplaceAndQuotes.sql + the NpRole enum
+            // in Core/Application/Services/Np/NpRole.cs). Subsequent users
+            // added via the /users page get explicit role picks per §B.2.
+            // Without this, ContactRoleId is NULL, NpRoleId claim is empty,
+            // NpRoleResolver returns Unknown, every NP authorization policy
+            // denies them, and the UI mis-badges them as "Dispatcher" via
+            // the MapRoleIdToName fallback.
+            ContactRoleId = 1,
             Created = now,
             CreatedBy = actor,
             LastModified = now,

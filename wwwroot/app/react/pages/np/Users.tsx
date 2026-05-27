@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUsers } from '@/hooks/useUsers';
 import { userService } from '@/services/np_userService';
-import { useAuth } from '@/context/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import StatusBadge from '@/components/common/StatusBadge';
 import Modal from '@/components/common/Modal';
 import type { User } from '@/types';
@@ -13,23 +13,24 @@ const roleBadgeStyles: Record<string, string> = {
   'Read-Only': 'bg-surface-light text-text-secondary',
 };
 
-const permissions = [
-  { perm: 'View Dashboard', admin: '✅', dispatcher: '✅', readonly: '✅' },
-  { perm: 'View Dispatch Board', admin: '✅', dispatcher: '✅', readonly: '✅' },
-  { perm: 'Assign Couriers to Jobs', admin: '✅', dispatcher: '✅', readonly: '❌' },
-  { perm: 'Fleet Management', admin: '✅', dispatcher: '✅', readonly: '👁️ View' },
-  { perm: 'Add/Edit Couriers', admin: '✅', dispatcher: '✅', readonly: '❌' },
-  { perm: 'View Financial Data', admin: '✅', dispatcher: '❌', readonly: '❌' },
-  { perm: 'Manage Users', admin: '✅', dispatcher: '❌', readonly: '❌' },
-  { perm: 'Edit Settings', admin: '✅', dispatcher: '❌', readonly: '❌' },
-  { perm: 'View Reports', admin: '✅', dispatcher: '✅', readonly: '✅' },
-];
+// Phase 5+31 R3 §3.5 — the read-only 'Role Permissions' matrix that
+// used to live on this page is retired. The DF-admin matrix UI at
+// /settings/role-permissions is now the single source for the matrix,
+// editable, and data-driven from dbo.RolePermission. NP users see
+// only their effective permissions via usePermissions(); they don't
+// see the full matrix here.
 
 export default function Users() {
   const navigate = useNavigate();
   const { users, replace, refresh } = useUsers();
-  const { npRole } = useAuth();
-  const canManageUsers = npRole === 'NpAdmin';
+  // Phase 5+31 R3 — UI-level Add User gating now driven by the matrix-
+  // resolved 'manage-users' permission key instead of hardcoded
+  // NpRole === 'NpAdmin'. Default-allow during fetch (permissions===null)
+  // so the button doesn't flash hidden on first paint. Server-side
+  // [RequirePermission('manage-users')] on the POST endpoint is the
+  // real security boundary; this is the UX nicety.
+  const { permissions } = usePermissions();
+  const canManageUsers = permissions === null || permissions.has('manage-users');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [draft, setDraft] = useState<User | null>(null);
@@ -170,30 +171,6 @@ export default function Users() {
                     </button>
                   )}
                 </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Role Permissions */}
-      <div className="bg-white border border-border rounded-lg p-5 mt-4">
-        <h3 className="font-bold mb-3">Role Permissions</h3>
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              {['Permission', 'Admin', 'Dispatcher', 'Read-Only'].map(h => (
-                <th key={h} className="text-left text-xs text-text-secondary uppercase tracking-wide px-3 py-2.5 border-b border-border">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {permissions.map(p => (
-              <tr key={p.perm} className="hover:bg-surface-cream">
-                <td className="px-3 py-2.5 text-sm border-b border-border">{p.perm}</td>
-                <td className="px-3 py-2.5 text-sm border-b border-border">{p.admin}</td>
-                <td className="px-3 py-2.5 text-sm border-b border-border">{p.dispatcher}</td>
-                <td className="px-3 py-2.5 text-sm border-b border-border">{p.readonly}</td>
               </tr>
             ))}
           </tbody>

@@ -155,3 +155,41 @@ export const featuresApi = {
       { method: 'PUT', body: JSON.stringify({ visible }) }
     ),
 };
+
+// --- Role × Permission matrix (Phase 5+31 R3) ---
+export interface RoleRefDto {
+  contactRoleId: number;
+  name: string;
+  description: string | null;
+}
+export interface PermissionRefDto {
+  permissionKey: string;
+  displayName: string;
+  description: string | null;
+  category: string | null;
+}
+export interface RolePermissionCellDto {
+  contactRoleId: number;
+  permissionKey: string;
+  allowed: boolean;
+  clientId: number | null;
+}
+export interface RolePermissionMatrix {
+  roles: RoleRefDto[];
+  permissions: PermissionRefDto[];
+  matrix: RolePermissionCellDto[];
+}
+
+export const rolePermissionsApi = {
+  /** Current user's allowed permission keys. Available to any authed user. */
+  getMyPermissions: () => request<string[]>('/me/permissions'),
+  /** Full Role × Permission matrix for the DF-admin matrix UI. AdminOnly. */
+  getMatrix: () => request<RolePermissionMatrix>('/admin/role-permissions'),
+  /** Upsert a (ContactRoleId, PermissionKey, ClientId) cell. AdminOnly.
+   *  clientId = null edits the global default; non-null edits a per-client override. */
+  setPermission: (contactRoleId: number, permissionKey: string, allowed: boolean, clientId: number | null = null) =>
+    request<unknown>(
+      `/admin/role-permissions/${contactRoleId}/${encodeURIComponent(permissionKey)}`,
+      { method: 'PUT', body: JSON.stringify({ allowed, clientId }) }
+    ),
+};

@@ -5,21 +5,15 @@ using System.Collections.Generic;
 
 namespace DfrntDriveConfigurator.Core.Domain.Despatch;
 
-public partial class TblContactRole
+public partial class Permission
 {
-    public int ContactRoleId { get; set; }
+    public string PermissionKey { get; set; }
 
-    public string Name { get; set; }
+    public string DisplayName { get; set; }
 
-    public DateTime Created { get; set; }
+    public string Description { get; set; }
 
-    public string CreatedBy { get; set; }
-
-    public DateTime LastModified { get; set; }
-
-    public string LastModifiedBy { get; set; }
-
-    public string Notes { get; set; }
+    public string Category { get; set; }
 
     public virtual ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
 }

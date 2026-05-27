@@ -216,39 +216,23 @@ builder.Services.AddAuthorization(options =>
             return !string.IsNullOrEmpty(userGroupId);
         }));
 
-    // ─── Phase 5+28b §B.2 — Per-NP-role policies ─────────────────────────
-    // DF Admin (UserGroupID=1) bypasses all gates — admins can act on any
-    // tenant. NP users pass if their NpRoleId claim (emitted by Hub from
-    // tucClientContact.ContactRoleId) is in the allowlist. Claim absent →
-    // deny (defensive — a misconfigured NP user shouldn't accidentally
-    // gain admin rights).
+    // Phase 5+31 R3 retired the 9 hardcoded Np* policies that were
+    // registered here (NpManageUsers / NpEditSettings / NpViewFinancials /
+    // NpAssignCouriers / NpManageCouriers / NpManageFleet / NpViewDispatch /
+    // NpViewReports / NpViewDashboard) + their DfAdminOrNpRole helper.
+    // Matrix-driven [RequirePermission(key)] attribute filters replace
+    // them — same semantics (DF Admin bypass, NpRoleId claim lookup,
+    // deny-by-default) but data-driven via dbo.RolePermission so admins
+    // can toggle role-to-permission mappings at runtime via the matrix
+    // UI without redeploying. See:
+    //   Core/Application/Authorization/RequirePermissionAttribute.cs
+    //   Core/Application/Services/Permissions/RolePermissionResolver.cs
+    //   Migration 20260528090000_CreatePermissionAndRolePermissionMatrix.sql
     //
-    // Roles (matches DfrntDriveConfigurator.Core.Application.Services.Np.NpRole):
-    //   1 = NpAdmin       — finance / users / settings + everything below
-    //   2 = NpDispatcher  — operations, fleet, no finance / users / settings
-    //   3 = NpReadOnly    — view-only across the portal
-    //
-    // Permission matrix from Steve's brief §B.2 (rendered in the React
-    // Users page Role Permissions table). The 9 policies below are the
-    // server-side enforcement layer; UI hides matching buttons per role.
-    static bool DfAdminOrNpRole(Microsoft.AspNetCore.Authorization.AuthorizationHandlerContext ctx, params string[] allowedRoleIds)
-    {
-        if (ctx.User.FindFirst("UserGroupID")?.Value == "1") return true;
-        var role = ctx.User.FindFirst("NpRoleId")?.Value;
-        return !string.IsNullOrEmpty(role) && System.Linq.Enumerable.Contains(allowedRoleIds, role);
-    }
-
-    options.AddPolicy("NpManageUsers",    p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1")));            // NpAdmin
-    options.AddPolicy("NpEditSettings",   p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1")));            // NpAdmin
-    options.AddPolicy("NpViewFinancials", p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1")));            // NpAdmin
-
-    options.AddPolicy("NpAssignCouriers", p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2")));       // Admin + Dispatcher
-    options.AddPolicy("NpManageCouriers", p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2")));       // Admin + Dispatcher
-    options.AddPolicy("NpManageFleet",    p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2")));       // Admin + Dispatcher
-
-    options.AddPolicy("NpViewDispatch",   p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2", "3")));  // All 3
-    options.AddPolicy("NpViewReports",    p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2", "3")));  // All 3
-    options.AddPolicy("NpViewDashboard",  p => p.RequireAssertion(ctx => DfAdminOrNpRole(ctx, "1", "2", "3")));  // All 3
+    // The original 9 policies were only actually applied at 2 sites in
+    // NpUsersController (both NpManageUsers), so the retire was almost
+    // entirely dead-code cleanup. The matrix is the future enforcement
+    // layer for all NP and tenant action-gating.
 });
 
 builder.Services.AddHttpClient();
@@ -285,6 +269,15 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Features.IClientTypeFeatureResolver,
     DfrntDriveConfigurator.Core.Application.Services.Features.ClientTypeFeatureResolver>();
+
+// Phase 5+31 R3 — Role × Permission matrix resolver. Backs [RequirePermission]
+// attribute filters on controller methods + the matrix UI endpoints. DF Admin
+// bypass returns the full catalog; non-admins get their role's allow-set with
+// per-client overrides applied. Empty set for users with no NpRoleId claim
+// (defensive deny-by-default).
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Permissions.IRolePermissionResolver,
+    DfrntDriveConfigurator.Core.Application.Services.Permissions.RolePermissionResolver>();
 
 // Common infrastructure services (used by multiple lanes)
 builder.Services.AddScoped<

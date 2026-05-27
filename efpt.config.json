@@ -127,6 +127,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[Permission]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[ProspectAgent]",
          "ObjectType": 0
       },
@@ -140,6 +144,10 @@
       },
       {
          "Name": "[dbo].[RecruitmentStages]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[RolePermission]",
          "ObjectType": 0
       },
       {

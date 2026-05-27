@@ -67,6 +67,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<NpFeatureConfig> NpFeatureConfigs { get; set; }
 
+    public virtual DbSet<Permission> Permissions { get; set; }
+
     public virtual DbSet<ProspectAgent> ProspectAgents { get; set; }
 
     public virtual DbSet<QuotesPosting> QuotesPostings { get; set; }
@@ -74,6 +76,8 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<QuotesQuote> QuotesQuotes { get; set; }
 
     public virtual DbSet<RecruitmentStage> RecruitmentStages { get; set; }
+
+    public virtual DbSet<RolePermission> RolePermissions { get; set; }
 
     public virtual DbSet<Route> Routes { get; set; }
 
@@ -881,6 +885,20 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.UpdatedDate).HasDefaultValueSql("(getutcdate())");
         });
 
+        modelBuilder.Entity<Permission>(entity =>
+        {
+            entity.HasKey(e => e.PermissionKey);
+
+            entity.ToTable("Permission");
+
+            entity.Property(e => e.PermissionKey).HasMaxLength(80);
+            entity.Property(e => e.Category).HasMaxLength(40);
+            entity.Property(e => e.Description).HasMaxLength(400);
+            entity.Property(e => e.DisplayName)
+                .IsRequired()
+                .HasMaxLength(120);
+        });
+
         modelBuilder.Entity<ProspectAgent>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Prospect__3214EC07DE17A90A");
@@ -1014,6 +1032,40 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.StageName)
                 .IsRequired()
                 .HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.ToTable("RolePermission");
+
+            entity.HasIndex(e => new { e.ContactRoleId, e.PermissionKey }, "UX_RolePermission_Global")
+                .IsUnique()
+                .HasFilter("([ClientId] IS NULL)");
+
+            entity.HasIndex(e => new { e.ContactRoleId, e.PermissionKey, e.ClientId }, "UX_RolePermission_PerClient")
+                .IsUnique()
+                .HasFilter("([ClientId] IS NOT NULL)");
+
+            entity.Property(e => e.Allowed)
+                .HasDefaultValue(true)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_RolePermission_Allowed");
+            entity.Property(e => e.PermissionKey)
+                .IsRequired()
+                .HasMaxLength(80);
+
+            entity.HasOne(d => d.Client).WithMany(p => p.RolePermissions)
+                .HasForeignKey(d => d.ClientId)
+                .HasConstraintName("FK_RolePermission_TucClient");
+
+            entity.HasOne(d => d.ContactRole).WithMany(p => p.RolePermissions)
+                .HasForeignKey(d => d.ContactRoleId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RolePermission_ContactRole");
+
+            entity.HasOne(d => d.PermissionKeyNavigation).WithMany(p => p.RolePermissions)
+                .HasForeignKey(d => d.PermissionKey)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RolePermission_Permission");
         });
 
         modelBuilder.Entity<Route>(entity =>

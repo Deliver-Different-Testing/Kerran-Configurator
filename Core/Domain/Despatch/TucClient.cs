@@ -591,6 +591,8 @@ public partial class TucClient
 
     public virtual TucAgent NpAgent { get; set; }
 
+    public virtual ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
+
     public virtual TblSite Site { get; set; }
 
     public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();

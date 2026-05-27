@@ -749,6 +749,22 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
               <span className={`text-xs font-medium ${location.pathname === '/settings/feature-matrix' ? 'text-brand-cyan' : 'text-white/60'}`}>Feature Matrix</span>
             </button>
           )}
+
+          {/* DF Admin: Role × Permission matrix (Phase 5+31 R3) */}
+          {isDfAdmin && !collapsed && (
+            <button
+              onClick={() => navigate('/settings/role-permissions')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/5 ml-2 ${
+                location.pathname === '/settings/role-permissions' ? 'bg-brand-cyan/20 text-brand-cyan' : ''
+              }`}
+            >
+              <svg className={`w-4 h-4 flex-shrink-0 ${location.pathname === '/settings/role-permissions' ? 'text-brand-cyan' : 'text-white/50'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+              <span className={`text-xs font-medium ${location.pathname === '/settings/role-permissions' ? 'text-brand-cyan' : 'text-white/60'}`}>Role Permissions</span>
+            </button>
+          )}
         </div>
 
         {/* Import & Export */}

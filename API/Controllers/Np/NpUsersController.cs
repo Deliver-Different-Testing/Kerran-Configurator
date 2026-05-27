@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DfrntDriveConfigurator.Core.Application.Authorization;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
 using DfrntDriveConfigurator.Core.Application.Services.Np;
 using Microsoft.AspNetCore.Authorization;
@@ -39,7 +40,7 @@ public class NpUsersController(NpUserService npUserService) : BaseController
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Policy = "NpManageUsers")]      // Phase 5+28b — NpAdmin-only
+    [RequirePermission("manage-users")]      // Phase 5+31 R3 — matrix-driven (was [Authorize(Policy = "NpManageUsers")])
     public async Task<IActionResult> Update(int id, [FromBody] NpUserUpdateDto dto)
     {
         try
@@ -59,10 +60,13 @@ public class NpUsersController(NpUserService npUserService) : BaseController
     }
 
     // Phase 5+28b §B.2 — Add User from the NP team page. Creates a
-    // tucClientContact + triggers Hub invite cascade. Gated NpManageUsers
-    // (NpAdmin-only; DF Admin bypasses via the policy).
+    // tucClientContact + triggers Hub invite cascade. Phase 5+31 R3 swapped
+    // the gate from [Authorize(Policy="NpManageUsers")] to the matrix-driven
+    // [RequirePermission("manage-users")]; same effective behaviour
+    // (NpAdmin-only; DF Admin bypasses via resolver) but admin-toggleable
+    // at runtime via the matrix UI without a code change.
     [HttpPost]
-    [Authorize(Policy = "NpManageUsers")]
+    [RequirePermission("manage-users")]
     public async Task<IActionResult> Create([FromBody] NpUserCreateDto dto)
     {
         try

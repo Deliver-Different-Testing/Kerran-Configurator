@@ -228,7 +228,7 @@ export default function Users() {
               <label className="text-xs text-text-secondary uppercase tracking-wide">Role</label>
               <select
                 value={draft.role}
-                onChange={(e) => setDraft({ ...draft, role: e.target.value })}
+                onChange={(e) => setDraft({ ...draft, role: e.target.value as 'Admin' | 'Dispatcher' | 'Read-Only' })}
               >
                 <option value="Admin">Admin</option>
                 <option value="Dispatcher">Dispatcher</option>

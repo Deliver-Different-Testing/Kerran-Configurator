@@ -273,16 +273,18 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.N
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpRecruitmentStageService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpApplicantService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.CourierDocumentService>();
-builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpFeatureConfigService>();
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpScopeResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpScopeResolver>();
 builder.Services.AddScoped<
-    DfrntDriveConfigurator.Core.Application.Services.Np.INpFeatureResolver,
-    DfrntDriveConfigurator.Core.Application.Services.Np.NpFeatureResolver>();
-builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpRoleResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpRoleResolver>();
+
+// Phase 5+31 R2 §2 — ClientType × Feature matrix resolver. Cross-cutting:
+// every lane (DF admin / tenant / NP / customer) consumes via /api/me/visible-features.
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Features.IClientTypeFeatureResolver,
+    DfrntDriveConfigurator.Core.Application.Services.Features.ClientTypeFeatureResolver>();
 
 // Common infrastructure services (used by multiple lanes)
 builder.Services.AddScoped<

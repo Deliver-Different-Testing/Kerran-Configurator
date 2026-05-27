@@ -390,6 +390,8 @@ public partial class TucJobBooking
 
     public int? RouteId { get; set; }
 
+    public int? AgentId { get; set; }
+
     public virtual TucJobBooking BookingParent { get; set; }
 
     public virtual TucCourier Courier { get; set; }

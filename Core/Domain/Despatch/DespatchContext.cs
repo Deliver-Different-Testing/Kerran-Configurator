@@ -37,6 +37,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<ClientType> ClientTypes { get; set; }
 
+    public virtual DbSet<ClientTypeFeature> ClientTypeFeatures { get; set; }
+
     public virtual DbSet<ComplianceProfile> ComplianceProfiles { get; set; }
 
     public virtual DbSet<ComplianceProfileClient> ComplianceProfileClients { get; set; }
@@ -54,6 +56,8 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<DispatchRouteRoster> DispatchRouteRosters { get; set; }
 
     public virtual DbSet<DocumentType> DocumentTypes { get; set; }
+
+    public virtual DbSet<Feature> Features { get; set; }
 
     public virtual DbSet<JobBarcode> JobBarcodes { get; set; }
 
@@ -451,6 +455,30 @@ public partial class DespatchContext : DbContext
                 .HasMaxLength(50);
         });
 
+        modelBuilder.Entity<ClientTypeFeature>(entity =>
+        {
+            entity.ToTable("ClientTypeFeature");
+
+            entity.HasIndex(e => new { e.ClientTypeId, e.FeatureKey }, "UX_ClientTypeFeature_TypeFeature").IsUnique();
+
+            entity.Property(e => e.FeatureKey)
+                .IsRequired()
+                .HasMaxLength(80);
+            entity.Property(e => e.Visible)
+                .HasDefaultValue(true)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_ClientTypeFeature_Visible");
+
+            entity.HasOne(d => d.ClientType).WithMany(p => p.ClientTypeFeatures)
+                .HasForeignKey(d => d.ClientTypeId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClientTypeFeature_ClientType");
+
+            entity.HasOne(d => d.FeatureKeyNavigation).WithMany(p => p.ClientTypeFeatures)
+                .HasForeignKey(d => d.FeatureKey)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClientTypeFeature_Feature");
+        });
+
         modelBuilder.Entity<ComplianceProfile>(entity =>
         {
             entity.HasIndex(e => e.IsActive, "IX_ComplianceProfiles_IsActive");
@@ -761,6 +789,20 @@ public partial class DespatchContext : DbContext
                 .HasColumnName("TemplateS3Key");
         });
 
+        modelBuilder.Entity<Feature>(entity =>
+        {
+            entity.HasKey(e => e.FeatureKey);
+
+            entity.ToTable("Feature");
+
+            entity.Property(e => e.FeatureKey).HasMaxLength(80);
+            entity.Property(e => e.Category).HasMaxLength(40);
+            entity.Property(e => e.Description).HasMaxLength(400);
+            entity.Property(e => e.DisplayName)
+                .IsRequired()
+                .HasMaxLength(120);
+        });
+
         modelBuilder.Entity<JobBarcode>(entity =>
         {
             entity.ToTable("JobBarcode");
@@ -828,9 +870,6 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => e.AgentId, "UQ_NpFeatureConfig_Agent").IsUnique();
 
-            entity.Property(e => e.CanCreateTasks).HasDefaultValue(true);
-            entity.Property(e => e.CanManageApplicants).HasDefaultValue(true);
-            entity.Property(e => e.CanSeeFlightInfo).HasDefaultValue(true);
             entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getutcdate())");
             entity.Property(e => e.NotificationEmail).HasMaxLength(200);
             entity.Property(e => e.NotifyDigestFreq)
@@ -3566,6 +3605,8 @@ public partial class DespatchContext : DbContext
             entity.HasIndex(e => e.UcbkNextDue, "DespatchWebSearch2");
 
             entity.HasIndex(e => new { e.ShopId, e.ShopRef1, e.ShopRef2, e.ShopRef3, e.ShopRef4, e.ShopRef5 }, "IX_Shop");
+
+            entity.HasIndex(e => e.AgentId, "IX_tucJobBooking_AgentId");
 
             entity.HasIndex(e => e.FromAirportId, "IX_tucJobBooking_FromAirportID");
 

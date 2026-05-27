@@ -17,17 +17,16 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Np;
 // Tenant-wide; not NP-scoped. Mutating actions (advance / approve / reject)
 // are a later slice.
 //
-// Feature gate: every public method short-circuits with FeatureGateDenied
-// when the caller's per-NP NpFeatureConfig.CanManageApplicants is false.
-// DF Admin bypasses (NpFeatures.AllOn). See Phase 5+26 / NpFeatureResolver.
+// Phase 5+31 R2: the per-method NpFeatureConfig.CanManageApplicants gate
+// was retired here (matrix replaces NpFeatureConfig as the visibility
+// source). Sidebar already gates UI access via the courier-recruitment
+// feature key; API-level access remains gated by the 9 NP role policies
+// (NpManageApplicants etc.) wired in 5+28b §B.2. The service itself no
+// longer short-circuits on a feature flag.
 public class NpApplicantService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
-    IHttpContextAccessor httpContextAccessor,
-    INpFeatureResolver featureResolver) : BaseService(contextFactory)
+    IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
 {
-    private const string FeatureGateDeniedMessage =
-        "Applicant management is disabled for your network partner. Contact your DF Admin to enable it.";
-
     // The 7-stage React union. The legacy flags only pin down 5 of them —
     // Registration and Profile have no flag, so applicants surface in the
     // nearest flag-backed stage.
@@ -41,9 +40,6 @@ public class NpApplicantService(
 
     public async Task<NpApplicantsResponse> GetApplicants(Guid messageId)
     {
-        if (!(await featureResolver.ResolveAsync()).CanManageApplicants)
-            return FailApplicants(messageId, FeatureGateDeniedMessage);
-
         var rows = await Context.CourierApplicants.AsNoTracking()
             .OrderByDescending(a => a.Created)
             .ToListAsync();
@@ -54,9 +50,6 @@ public class NpApplicantService(
 
     public async Task<NpApplicantResponse> GetById(int id, Guid messageId)
     {
-        if (!(await featureResolver.ResolveAsync()).CanManageApplicants)
-            return FailApplicant(messageId, FeatureGateDeniedMessage);
-
         var row = await Context.CourierApplicants.AsNoTracking()
             .FirstOrDefaultAsync(a => a.Id == id);
         if (row is null)
@@ -70,9 +63,6 @@ public class NpApplicantService(
     // legacy flag. Stops at Approval — promoting to a courier is Slice C.
     public async Task<NpApplicantResponse> AdvanceAsync(int id, Guid messageId)
     {
-        if (!(await featureResolver.ResolveAsync()).CanManageApplicants)
-            return FailApplicant(messageId, FeatureGateDeniedMessage);
-
         var a = await Context.CourierApplicants.FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return FailApplicant(messageId, "Applicant not found.");
         if (a.RejectDate is not null) return FailApplicant(messageId, "Cannot advance a rejected applicant.");
@@ -101,9 +91,6 @@ public class NpApplicantService(
 
     public async Task<NpApplicantResponse> RejectAsync(int id, string reason, Guid messageId)
     {
-        if (!(await featureResolver.ResolveAsync()).CanManageApplicants)
-            return FailApplicant(messageId, FeatureGateDeniedMessage);
-
         var a = await Context.CourierApplicants.FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return FailApplicant(messageId, "Applicant not found.");
 
@@ -117,9 +104,6 @@ public class NpApplicantService(
     // Puts a rejected applicant back on the pipeline — clears the rejection.
     public async Task<NpApplicantResponse> ResubmitAsync(int id, Guid messageId)
     {
-        if (!(await featureResolver.ResolveAsync()).CanManageApplicants)
-            return FailApplicant(messageId, FeatureGateDeniedMessage);
-
         var a = await Context.CourierApplicants.FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return FailApplicant(messageId, "Applicant not found.");
 
@@ -136,9 +120,6 @@ public class NpApplicantService(
     // TucCourier shape. No Master-DB user sync — that's a Contact-level concern.
     public async Task<NpApplicantResponse> ApproveAsync(int id, NpApplicantApproveDto dto, Guid messageId)
     {
-        if (!(await featureResolver.ResolveAsync()).CanManageApplicants)
-            return FailApplicant(messageId, FeatureGateDeniedMessage);
-
         var a = await Context.CourierApplicants.FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return FailApplicant(messageId, "Applicant not found.");
         if (a.CourierId.HasValue) return FailApplicant(messageId, "Applicant is already approved.");
@@ -251,9 +232,6 @@ public class NpApplicantService(
 
     public async Task<NpPipelineSummaryResponse> GetPipelineSummary(Guid messageId)
     {
-        if (!(await featureResolver.ResolveAsync()).CanManageApplicants)
-            return FailSummary(messageId, FeatureGateDeniedMessage);
-
         // Only the flags are needed to derive the stage.
         var flags = await Context.CourierApplicants.AsNoTracking()
             .Select(a => new { a.CourierId, a.TrainingCompleted, a.DeclarationAgree, a.EmailVerified, a.RejectDate })

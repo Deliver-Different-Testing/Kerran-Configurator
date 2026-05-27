@@ -484,7 +484,7 @@ export function AgentList() {
                               {agent.npTier && <TierBadge tier={agent.npTier} />}
                             </div>
                           ) : agent.status === 'Pending NP' ? (
-                            <NpComplianceBar documents={agent.npDocs} />
+                            <NpComplianceBar documents={agent.npDocs ?? []} />
                           ) : (
                             <span className="text-xs text-text-muted">Agent</span>
                           )}
@@ -515,7 +515,7 @@ export function AgentList() {
                       {expanded && (
                         <tr className="border-t-2 border-slate-200 bg-slate-50/60">
                           <td colSpan={7} className="px-3 py-3">
-                            <AgentWorkspace agent={agent} variant="inline" />
+                            <AgentWorkspace agent={{ ...agent, npDocs: agent.npDocs ?? [] }} variant="inline" />
                           </td>
                         </tr>
                       )}

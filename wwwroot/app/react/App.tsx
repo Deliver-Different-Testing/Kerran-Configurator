@@ -49,7 +49,7 @@ import { TenantSettings } from './pages/tenant/Settings';
 
 // DF Admin–only page.
 import TenantConfigPage from './pages/settings/TenantConfig';
-import NpFeatureFlagsPage from './pages/settings/NpFeatureFlags';
+import FeatureMatrixPage from './pages/settings/FeatureMatrix';
 
 // Public (anonymous) routes — slice 2b external-carrier flow.
 import QuoteResponse from './pages/public/QuoteResponse';
@@ -116,7 +116,7 @@ export default function App() {
             <Route path="recruitment/portal-url" element={<PortalUrl />} />
             <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} isDfAdmin />} />
             <Route path="settings/tenant-config" element={<TenantConfigPage />} />
-            <Route path="settings/np-feature-flags" element={<NpFeatureFlagsPage />} />
+            <Route path="settings/feature-matrix" element={<FeatureMatrixPage />} />
             <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
             <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />
             <Route path="settings/contracts" element={<ContractSettings />} />

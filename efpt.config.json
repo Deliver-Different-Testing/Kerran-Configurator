@@ -67,6 +67,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[ClientTypeFeature]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[ComplianceProfileClient]",
          "ObjectType": 0
       },
@@ -100,6 +104,10 @@
       },
       {
          "Name": "[dbo].[DocumentTypes]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Feature]",
          "ObjectType": 0
       },
       {

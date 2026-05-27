@@ -25,6 +25,13 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.messages?.[0]?.message || `HTTP ${res.status}`);
   }
+  // 204 No Content (and any other body-less response) → return undefined.
+  // Callers that type the response as `unknown` or `void` ignore the value;
+  // callers expecting an object would have to opt into a JSON-returning
+  // endpoint instead.
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
   return res.json();
 }
 
@@ -115,4 +122,36 @@ export const lookupApi = {
 export const mobileApi = {
   getConfig: () => request<Record<string, unknown>>('/mobile/config'),
   getWorkflow: (jobId: number) => request<Record<string, unknown>>(`/mobile/workflow?jobId=${jobId}`),
+};
+
+// --- Features (Phase 5+31 R2 §2 — ClientType × Feature visibility matrix) ---
+export interface FeatureMatrixClientType { id: number; name: string }
+export interface FeatureMatrixFeature {
+  featureKey: string;
+  displayName: string;
+  description: string | null;
+  category: string | null;
+}
+export interface FeatureMatrixCell {
+  clientTypeId: number;
+  featureKey: string;
+  visible: boolean;
+}
+export interface FeatureMatrix {
+  clientTypes: FeatureMatrixClientType[];
+  features: FeatureMatrixFeature[];
+  matrix: FeatureMatrixCell[];
+}
+
+export const featuresApi = {
+  /** Current user's visible feature keys. Available to any authed user. */
+  getMyVisibleFeatures: () => request<string[]>('/me/visible-features'),
+  /** Full ClientType × Feature matrix for the DF-admin matrix UI. AdminOnly. */
+  getMatrix: () => request<FeatureMatrix>('/admin/client-type-features'),
+  /** Toggle a single (ClientTypeId, FeatureKey) cell. AdminOnly. */
+  setVisibility: (clientTypeId: number, featureKey: string, visible: boolean) =>
+    request<unknown>(
+      `/admin/client-type-features/${clientTypeId}/${encodeURIComponent(featureKey)}`,
+      { method: 'PUT', body: JSON.stringify({ visible }) }
+    ),
 };

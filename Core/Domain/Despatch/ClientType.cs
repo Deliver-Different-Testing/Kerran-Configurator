@@ -11,5 +11,7 @@ public partial class ClientType
 
     public string Name { get; set; }
 
+    public virtual ICollection<ClientTypeFeature> ClientTypeFeatures { get; set; } = new List<ClientTypeFeature>();
+
     public virtual ICollection<TucClient> TucClients { get; set; } = new List<TucClient>();
 }

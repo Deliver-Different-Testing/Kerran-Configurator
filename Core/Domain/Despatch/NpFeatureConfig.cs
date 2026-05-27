@@ -11,21 +11,9 @@ public partial class NpFeatureConfig
 
     public int AgentId { get; set; }
 
-    public bool CanCreateTasks { get; set; }
-
-    public bool CanAddStops { get; set; }
-
-    public bool CanSeeFlightInfo { get; set; }
-
-    public bool CanAccessScheduler { get; set; }
-
-    public bool CanManageApplicants { get; set; }
-
     public int? MaxCouriers { get; set; }
 
     public int? MaxUsersPerRole { get; set; }
-
-    public bool MultiClientEnabled { get; set; }
 
     public string CoverageAreasJson { get; set; }
 
@@ -36,8 +24,6 @@ public partial class NpFeatureConfig
     public bool NotifyOnJobUpdate { get; set; }
 
     public string NotifyDigestFreq { get; set; }
-
-    public bool AutoDispatchEnabled { get; set; }
 
     public DateTime CreatedDate { get; set; }
 

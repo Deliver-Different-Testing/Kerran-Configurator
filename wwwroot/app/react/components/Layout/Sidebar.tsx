@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useRole } from '@/context/RoleContext';
 import { useAuth } from '@/context/AuthContext';
 import { useTenantConfig } from '@/context/TenantConfigContext';
+import { useVisibleFeatures } from '@/hooks/useVisibleFeatures';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -26,6 +27,11 @@ interface NavSection {
   badge?: number;          // Alert count badge (yellow)
   alertDot?: boolean;      // Red dot instead of cyan when compliance issues exist
   upgradePrompt?: boolean; // NP locked upsell sections
+  // Phase 5+31 R2 §2 — optional feature gate. If set, section is hidden when
+  // the current user's visible-feature set (from /api/me/visible-features)
+  // doesn't contain this key. Absent = always show (e.g. Dashboard,
+  // Settings, Users — surfaces the matrix doesn't gate today).
+  featureKey?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -178,6 +184,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
       id: 'agent-nps',
       label: 'Agent/NPs',
       icon: icons.agents,
+      featureKey: 'multi-client',
       items: [
         { id: '/agents', label: 'Directory', implemented: true },
         { id: '/agents/find', label: 'Find/Add New', implemented: true },
@@ -188,6 +195,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
   if (cfg.courierRecruitmentEnabled) {
     sections.push({
       id: 'recruitment', label: 'Recruitment', icon: icons.recruitment,
+      featureKey: 'courier-recruitment',
       items: [
         { id: '/recruitment', label: 'Pipeline', implemented: true },
         { id: '/recruitment/portal-url', label: 'Applicant Portal', implemented: true },
@@ -199,6 +207,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
 
   sections.push({
     id: 'compliance', label: 'Compliance', icon: icons.compliance,
+    featureKey: 'courier-compliance',
     badge: 3, // e.g. 2 expiring docs + 1 pending approval
     alertDot: true, // Red dot: agents have expired/out-of-compliance docs
     items: [
@@ -255,6 +264,7 @@ function buildNpSections(): NavSection[] {
     },
     {
       id: 'recruitment', label: 'Recruitment', icon: icons.recruitment,
+      featureKey: 'courier-recruitment',
       items: [
         { id: '/recruitment', label: 'Pipeline', implemented: true },
         { id: '/recruitment/portal-url', label: 'Applicant Portal', implemented: true },
@@ -264,6 +274,7 @@ function buildNpSections(): NavSection[] {
     },
     {
       id: 'compliance', label: 'Compliance', icon: icons.compliance,
+      featureKey: 'courier-compliance',
       items: [
         { id: '/compliance', label: 'Compliance', implemented: true },
       ],
@@ -285,6 +296,7 @@ function buildNpSections(): NavSection[] {
     },
     {
       id: 'reports-section', label: 'Reports', icon: icons.reports,
+      featureKey: 'reports',
       items: [{ id: '/reports', label: 'Reports', implemented: true }],
     },
   ];
@@ -390,6 +402,12 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
   // the role permission matrix). DF Admin sees it regardless.
   const settingsVisible = role !== 'np' || npRole === 'NpAdmin';
   const { config } = useTenantConfig();
+  // Phase 5+31 R2 §2 — ClientType × Feature matrix gates nav sections via
+  // each NavSection's optional `featureKey`. While the fetch is in flight
+  // (visibleFeatures === null) we default-allow so the sidebar doesn't
+  // flash empty on first paint. DF Admin's resolver bypass returns the
+  // union of every visible key, so admins see all feature-gated sections.
+  const { visibleFeatures } = useVisibleFeatures();
   const location = useLocation();
   const navigate = useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -411,12 +429,15 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
     return (parts[0][0] + parts[1][0]).toUpperCase();
   })();
 
-  // Build sections based on role + config
+  // Build sections based on role + config, then apply the §2 feature gate.
   const sections: NavSection[] = useMemo(() => {
-    if (role === 'id') return idSections;
-    if (role === 'np') return buildNpSections();
-    // tenant and dfadmin both use tenant sections; dfadmin sees all toggles ON
-    if (isDfAdmin) {
+    let built: NavSection[];
+    if (role === 'id') {
+      built = idSections;
+    } else if (role === 'np') {
+      built = buildNpSections();
+    } else if (isDfAdmin) {
+      // tenant and dfadmin both use tenant sections; dfadmin sees all toggles ON
       const dfSections = buildTenantSections({
         directCouriersEnabled: true,
         agentsEnabled: true,
@@ -442,10 +463,21 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
         icon: icons.fleet,
         items: [{ id: '/df-drive-config', label: 'DF Drive Config', implemented: true }],
       });
-      return dfSections;
+      built = dfSections;
+    } else {
+      built = buildTenantSections(config);
     }
-    return buildTenantSections(config);
-  }, [config, isDfAdmin, role]);
+
+    // Phase 5+31 R2 §2 — filter sections by the ClientType × Feature matrix.
+    // Default-allow during loading (visibleFeatures === null) so the sidebar
+    // doesn't flash empty. Sections without a featureKey always pass.
+    if (visibleFeatures !== null) {
+      built = built.filter(section =>
+        !section.featureKey || visibleFeatures.has(section.featureKey)
+      );
+    }
+    return built;
+  }, [config, isDfAdmin, role, visibleFeatures]);
 
   const importOptions = role === 'tenant' || isDfAdmin ? tenantImportOptions : role === 'id' ? idImportOptions : npImportOptions;
   const branding = getRoleBranding(role || 'tenant');
@@ -700,21 +732,21 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
             </button>
           )}
 
-          {/* DF Admin: Per-NP Feature Flags link under settings (Phase 5+26) */}
+          {/* DF Admin: ClientType × Feature visibility matrix (Phase 5+31 R2 §2) */}
           {isDfAdmin && !collapsed && (
             <button
-              onClick={() => navigate('/settings/np-feature-flags')}
+              onClick={() => navigate('/settings/feature-matrix')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/5 ml-2 ${
-                location.pathname === '/settings/np-feature-flags' ? 'bg-brand-cyan/20 text-brand-cyan' : ''
+                location.pathname === '/settings/feature-matrix' ? 'bg-brand-cyan/20 text-brand-cyan' : ''
               }`}
             >
-              <svg className={`w-4 h-4 flex-shrink-0 ${location.pathname === '/settings/np-feature-flags' ? 'text-brand-cyan' : 'text-white/50'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 5h18M3 12h18M3 19h18" />
-                <circle cx="7" cy="5" r="1.2" fill="currentColor" />
-                <circle cx="14" cy="12" r="1.2" fill="currentColor" />
-                <circle cx="9" cy="19" r="1.2" fill="currentColor" />
+              <svg className={`w-4 h-4 flex-shrink-0 ${location.pathname === '/settings/feature-matrix' ? 'text-brand-cyan' : 'text-white/50'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
               </svg>
-              <span className={`text-xs font-medium ${location.pathname === '/settings/np-feature-flags' ? 'text-brand-cyan' : 'text-white/60'}`}>Per-NP Feature Flags</span>
+              <span className={`text-xs font-medium ${location.pathname === '/settings/feature-matrix' ? 'text-brand-cyan' : 'text-white/60'}`}>Feature Matrix</span>
             </button>
           )}
         </div>

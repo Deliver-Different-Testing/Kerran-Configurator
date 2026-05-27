@@ -237,6 +237,13 @@ export interface Agent {
   // 3 NetworkPartner, or any further seeded value). Null when no TucClient
   // is linked (non-NP agent).
   clientTypeId?: number | null;
+  // Optional NP compliance documents — populated for agents with status
+  // 'Pending NP' (rendered as a compliance bar in AgentList) and read by
+  // AgentWorkspace's inline expansion. May be absent on regular Agent
+  // records; consumers default to []. Added 2026-05-27 to silence the
+  // type-check that was tolerated by Vite's looser esbuild build but
+  // surfaced once CI's tsc --noEmit ran on the MR.
+  npDocs?: BusinessComplianceDocument[];
 }
 
 // Phase 5+29b §C — per-coverage-area detail for the chip render.
@@ -769,32 +776,9 @@ export interface QuizAttemptAnswer {
   isCorrect: boolean;
 }
 
-// ─── Per-NP feature toggles (Phase 5+26) ───
-// Backed by NpFeatureConfig table; managed via DF-Admin-only
-// GET/PUT /api/v1/np/feature-config. NPs without an explicit row appear
-// with hasConfigRow=false and schema defaults — the first PUT promotes
-// them to an explicit row.
-export interface NpFeatureConfig {
-  agentId: number;
-  agentName: string;
-  hasConfigRow: boolean;
-  canCreateTasks: boolean;
-  canAddStops: boolean;
-  canSeeFlightInfo: boolean;
-  canAccessScheduler: boolean;
-  canManageApplicants: boolean;
-  multiClientEnabled: boolean;
-  autoDispatchEnabled: boolean;
-  updatedDate: string | null;
-}
-
-export type NpFeatureConfigUpsert = Pick<
-  NpFeatureConfig,
-  | 'canCreateTasks'
-  | 'canAddStops'
-  | 'canSeeFlightInfo'
-  | 'canAccessScheduler'
-  | 'canManageApplicants'
-  | 'multiClientEnabled'
-  | 'autoDispatchEnabled'
->;
+// Per-NP feature toggles (Phase 5+26) retired in Phase 5+31 R2 — the
+// matrix at /settings/feature-matrix replaces this surface. The dbo.
+// NpFeatureConfig table itself is kept; only the 7 gate columns get
+// dropped (see dbmigrationsv2 slice D). Non-gate fields (notification
+// routing, capacity, coverage) are read directly by the consuming
+// services and never had React types here.

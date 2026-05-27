@@ -6,22 +6,10 @@ import TierBadge from '@/components/common/TierBadge';
 import { settingsService } from '@/services/np_settingsService';
 import { complianceProfileService } from '@/services/np_complianceProfileService';
 
-// ─── DF Admin Feature Toggles ───
-interface FeatureToggle {
-  key: string;
-  label: string;
-  description: string;
-}
-
-const FEATURE_TOGGLES: FeatureToggle[] = [
-  { key: 'CourierComplianceEnabled', label: 'Courier Compliance', description: 'Document verification, expiry tracking, and compliance dashboards' },
-  { key: 'CourierRecruitmentEnabled', label: 'Courier Recruitment', description: 'Applicant pipeline, recruitment advertising, and onboarding' },
-  { key: 'CourierPortalEnabled', label: 'Courier Portal', description: 'Self-service portal for couriers to manage documents and availability' },
-  { key: 'MultiClientEnabled', label: 'Multi-Client', description: 'Manage deliveries across multiple client accounts' },
-  { key: 'AutoDispatchEnabled', label: 'Auto Dispatch', description: 'Automated job assignment and route optimization' },
-  { key: 'ReportsEnabled', label: 'Reports', description: 'Analytics dashboards and exportable reports' },
-  { key: 'SettlementEnabled', label: 'Settlement', description: 'Driver payment processing and settlement runs' },
-];
+// Phase 5+31 R2 — the "DF Admin Feature Toggles" panel that previously
+// lived here was dead in-memory UI (one of the three parallel flag systems
+// Steve's brief identified for retirement). The matrix at
+// /settings/feature-matrix replaces it. Removed 2026-05-27.
 
 function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -163,12 +151,6 @@ export default function Settings({ onUpgrade, isDfAdmin = false }: Props) {
   const [areas, setAreas] = useState(settings.coverageAreas);
   const [newArea, setNewArea] = useState('');
   const [notifications, setNotifications] = useState(settings.notifications);
-  const [featureToggles, setFeatureToggles] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(FEATURE_TOGGLES.map(f => [f.key, true]))
-  );
-  const handleToggle = useCallback((key: string, val: boolean) => {
-    setFeatureToggles(prev => ({ ...prev, [key]: val }));
-  }, []);
 
   const addArea = () => {
     if (newArea.trim() && !areas.includes(newArea.trim())) {
@@ -180,34 +162,6 @@ export default function Settings({ onUpgrade, isDfAdmin = false }: Props) {
   return (
     <>
       <h2 className="text-xl font-bold mb-5">Settings</h2>
-
-      {/* DF Admin Feature Configuration — only visible to DF Admin */}
-      {isDfAdmin && (
-        <div className="bg-white border border-border rounded-lg mb-4 overflow-hidden">
-          <div className="px-5 py-4 border-b border-border" style={{ backgroundColor: '#0d0c2c' }}>
-            <div className="flex items-center gap-2.5">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-[#3bc7f4] text-[#0d0c2c]">
-                DF Admin
-              </span>
-              <h3 className="font-bold text-white">Feature Configuration</h3>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Enable or disable platform features for this tenant. Changes take effect immediately.
-            </p>
-          </div>
-          <div className="divide-y divide-border">
-            {FEATURE_TOGGLES.map(feature => (
-              <div key={feature.key} className="flex items-center justify-between px-5 py-3.5 hover:bg-[#f4f2f1]/50 transition-colors">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">{feature.label}</p>
-                  <p className="text-xs text-text-secondary mt-0.5">{feature.description}</p>
-                </div>
-                <ToggleSwitch checked={featureToggles[feature.key] ?? true} onChange={(v) => handleToggle(feature.key, v)} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Tenant Recruitment View — DF Admin only */}
       {isDfAdmin && (
@@ -256,21 +210,23 @@ export default function Settings({ onUpgrade, isDfAdmin = false }: Props) {
         </button>
       </div>
 
-      {/* Openforce Integration */}
-      {featureToggles['openforceEnabled'] !== false && (
-        <div className="bg-white border border-border rounded-lg p-5 mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="font-bold">Openforce Integration</h3>
-            <p className="text-xs text-text-secondary mt-0.5">Configure Openforce API credentials, activation codes, and monitor API connectivity.</p>
-          </div>
-          <button
-            onClick={() => navigate('/settings/openforce')}
-            className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow shrink-0"
-          >
-            Manage Openforce
-          </button>
+      {/* Openforce Integration — formerly gated on featureToggles['openforceEnabled']
+          but the FEATURE_TOGGLES dead UI was retired in Phase 5+31 R2 slice B
+          (matrix at /settings/feature-matrix replaces it). featureToggles always
+          defaulted to true so the conditional was a no-op; render unconditionally
+          now until a real toggle reason emerges. */}
+      <div className="bg-white border border-border rounded-lg p-5 mb-4 flex items-center justify-between">
+        <div>
+          <h3 className="font-bold">Openforce Integration</h3>
+          <p className="text-xs text-text-secondary mt-0.5">Configure Openforce API credentials, activation codes, and monitor API connectivity.</p>
         </div>
-      )}
+        <button
+          onClick={() => navigate('/settings/openforce')}
+          className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow shrink-0"
+        >
+          Manage Openforce
+        </button>
+      </div>
 
       {/* Company Profile */}
       <div className="bg-white border border-border rounded-lg p-5 mb-4">

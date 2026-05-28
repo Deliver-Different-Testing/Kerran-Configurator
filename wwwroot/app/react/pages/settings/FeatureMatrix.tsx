@@ -126,7 +126,7 @@ export default function FeatureMatrixPage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl">
+      <div>
         <h2 className="text-xl font-bold text-text-primary">Feature Visibility Matrix</h2>
         <p className="text-sm text-text-secondary mt-4">Loading…</p>
       </div>
@@ -134,7 +134,7 @@ export default function FeatureMatrixPage() {
   }
   if (!data) {
     return (
-      <div className="max-w-5xl">
+      <div>
         <h2 className="text-xl font-bold text-text-primary">Feature Visibility Matrix</h2>
         <p className="text-sm text-red-600 mt-4">{error ?? 'No data loaded.'}</p>
       </div>
@@ -142,7 +142,7 @@ export default function FeatureMatrixPage() {
   }
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <div className="mb-6">
         <h2 className="text-xl font-bold text-text-primary">Feature Visibility Matrix</h2>
         <p className="text-sm text-text-secondary mt-1">

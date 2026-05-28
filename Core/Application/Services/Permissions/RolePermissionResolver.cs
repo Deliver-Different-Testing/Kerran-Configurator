@@ -63,11 +63,12 @@ public class RolePermissionResolver(
 
         var user = httpCtx.User;
 
-        // DF Admin bypass — full catalog. Mirrors the R2
-        // ClientTypeFeatureResolver bypass; matrix toggles never lock out
-        // an admin (no foot-gun where an admin demotes themselves by
-        // editing the wrong row).
-        if (user.FindFirst("UserGroupID")?.Value == "1")
+        // DF Admin bypass — full catalog. Keyed on ClientType == 5
+        // (DFRNTAdmin); matrix toggles never lock out an admin (no foot-gun
+        // where an admin demotes themselves by editing the wrong row).
+        // (Was UserGroupID == 1; switched so a tenant Administrator on a
+        // ClientTypeId=4 client isn't treated as a DF admin.)
+        if (user.FindFirst("ClientTypeId")?.Value == "5")
         {
             await using var ctx = await contextFactory.CreateDbContextAsync();
             var allKeys = await ctx.Permissions

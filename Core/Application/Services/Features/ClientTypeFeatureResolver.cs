@@ -65,13 +65,13 @@ public class ClientTypeFeatureResolver(
 
         var user = httpCtx.User;
 
-        // DF Admin bypass — sees every feature regardless of tucClient
-        // assignment. Defensive cover for any DF admin still on a legacy
-        // Internal (1) or NULL ClientType row that hasn't been reparented
-        // to DFRNTAdmin (5) yet. Returns the union of every visible key
-        // across all ClientTypes so admins effectively see everything the
-        // matrix defines anywhere.
-        if (user.FindFirst("UserGroupID")?.Value == "1")
+        // DF Admin bypass — sees every feature. Keyed on ClientType == 5
+        // (DFRNTAdmin), the reparented DFRNT-staff client. Returns the union
+        // of every visible key across all ClientTypes so admins effectively
+        // see everything the matrix defines anywhere. (Was UserGroupID == 1;
+        // switched so a tenant Administrator on a ClientTypeId=4 client isn't
+        // treated as a DF admin.)
+        if (user.FindFirst("ClientTypeId")?.Value == "5")
         {
             await using var ctx = await contextFactory.CreateDbContextAsync();
             var allKeys = await ctx.ClientTypeFeatures

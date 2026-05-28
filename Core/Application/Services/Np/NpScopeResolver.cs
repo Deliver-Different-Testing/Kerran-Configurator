@@ -43,8 +43,12 @@ public class NpScopeResolver(
             return existing;
 
         var user = httpCtx.User;
-        var userGroupId = user.FindFirst("UserGroupID")?.Value;
-        if (userGroupId == "1")
+        // DF Admin bypass — no NP scope filter (sees all rows). Keyed on
+        // ClientType == 5 (DFRNTAdmin). (Was UserGroupID == 1; switched so a
+        // tenant Administrator on a ClientTypeId=4 client isn't treated as a
+        // DF admin.)
+        var clientTypeId = user.FindFirst("ClientTypeId")?.Value;
+        if (clientTypeId == "5")
         {
             var adminScope = new NpScope(IsAdmin: true, NpAgentId: null);
             httpCtx.Items[CacheKey] = adminScope;

@@ -48,9 +48,14 @@ public class HomeController(
 
             // Check if claims already enriched (e.g. page refresh) — skip re-querying
             var existingGroupClaim = HttpContext.User.Claims.FirstOrDefault(x => x.Type == "UserGroupID")?.Value;
-            if (!string.IsNullOrEmpty(existingGroupClaim))
+            var existingClientTypeClaim = HttpContext.User.Claims.FirstOrDefault(x => x.Type == "ClientTypeId")?.Value;
+            // Re-enrich if EITHER claim is missing. The ClientTypeId condition
+            // means sessions that predate the DF-admin-by-ClientType change get
+            // the new claim on their next page load (rather than being stuck on
+            // the old UserGroupID-only cookie).
+            if (!string.IsNullOrEmpty(existingGroupClaim) && !string.IsNullOrEmpty(existingClientTypeClaim))
             {
-                Log.Debug("UserGroupID claim already present ({GroupId}), skipping enrichment", existingGroupClaim);
+                Log.Debug("UserGroupID + ClientTypeId claims already present ({GroupId}/{ClientType}), skipping enrichment", existingGroupClaim, existingClientTypeClaim);
                 // Still need to ensure connection string is cached
                 await EnsureConnectionString();
                 return View(BuildBootstrap(HttpContext.User));
@@ -94,9 +99,26 @@ public class HomeController(
 
                     var existingClaims = HttpContext.User.Claims.ToList();
 
+                    // ClientType signal for the DF-admin lane + matrix bypasses.
+                    // Looked up from the ClientID claim (= tucClient.UcclId, set by
+                    // Hub at login). ClientTypeId == 5 (DFRNTAdmin) is now the SOLE
+                    // DF-admin signal — replaces the legacy UserGroupID == 1 check
+                    // so a tenant Administrator (UserGroupID=1, ClientTypeId=4) keeps
+                    // full AdminManager rights but lands in the Tenant lane here.
+                    var clientIdClaim = existingClaims.FirstOrDefault(c => c.Type == "ClientID")?.Value;
+                    int? clientTypeId = null;
+                    if (int.TryParse(clientIdClaim, out var clientId) && clientId > 0)
+                    {
+                        clientTypeId = await context.TucClients.AsNoTracking()
+                            .Where(c => c.UcclId == clientId)
+                            .Select(c => (int?)c.ClientTypeId)
+                            .FirstOrDefaultAsync();
+                    }
+
                     var newClaims = new List<Claim>
                     {
                         new("UserGroupID", user.UserGroupId.ToString()),
+                        new("ClientTypeId", clientTypeId?.ToString() ?? string.Empty),
                         new("name", user.UserName),
                         new("fullName", user.FullName),
                         new("staffID", user.StaffId.ToString() ?? string.Empty),
@@ -151,8 +173,12 @@ public class HomeController(
         int? ParseInt(string? v) =>
             int.TryParse(v, out var i) ? i : null;
 
-        var userGroupId = Get("UserGroupID");
-        var isAdmin = userGroupId == "1";
+        // DF-admin lane is driven by ClientType == 5 (DFRNTAdmin), not the
+        // legacy UserGroupID == 1. A tenant Administrator (UserGroupID=1 on a
+        // ClientTypeId=4 client) is a Tenant in the configurator while keeping
+        // full AdminManager rights. The ClientTypeId claim is set during
+        // enrichment in Index() from the user's ClientID.
+        var isAdmin = Get("ClientTypeId") == "5";
 
         return new AppUserBootstrap(
             IsAdmin: isAdmin,

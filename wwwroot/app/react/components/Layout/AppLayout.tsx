@@ -18,7 +18,7 @@ export default function AppLayout({ onUpgrade, selectedCourierId }: Props) {
     // h-screen + internal overflow-y-auto on the content area: the legacy
     // DF Drive CSS sets `body { overflow:hidden; height:100vh }`, so we can't
     // rely on body scroll. Each route's content scrolls inside this column.
-    <div className="flex h-screen bg-surface-light">
+    <div className="flex h-screen w-full bg-surface-light">
       <Sidebar collapsed={collapsed} onUpgrade={onUpgrade} selectedCourierId={selectedCourierId} />
       <div
         className={`flex-1 min-w-0 h-screen flex flex-col transition-[margin-left] duration-300 ${

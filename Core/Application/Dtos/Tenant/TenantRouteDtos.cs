@@ -13,6 +13,14 @@ public class TenantRouteDto
     public int? DefaultCourierId { get; set; }
     public string DefaultCourierName { get; set; } = string.Empty;
     public string DefaultCourierCode { get; set; } = string.Empty;
+    // Unified default target (Courier / Agent / NetworkPartner). Resolved
+    // server-side; DefaultCourierId/Name/Code are kept for the roster's
+    // courier-only fallback path. DefaultAgentId carries the agent/NP id.
+    public int? DefaultAgentId { get; set; }
+    public string? DefaultTargetType { get; set; }   // "Courier" | "Agent" | "NetworkPartner" | null
+    public int? DefaultTargetId { get; set; }
+    public string DefaultTargetName { get; set; } = string.Empty;
+    public string DefaultTargetHint { get; set; } = string.Empty;
     public bool Active { get; set; }
     public List<TenantRouteZipcodeDto> Zipcodes { get; set; } = new();
     public int RosterEntryCount { get; set; }
@@ -31,7 +39,11 @@ public class TenantRouteUpsertDto
 {
     public string Name { get; set; } = string.Empty;
     public string Area { get; set; } = string.Empty;
-    public int? DefaultCourierId { get; set; }
+    // Default target: Courier / Agent / NetworkPartner + the chosen id.
+    // Null type clears the default. NP = an agent with IsNetworkPartner = 1,
+    // so Agent + NetworkPartner both resolve to DefaultAgentId server-side.
+    public string? DefaultTargetType { get; set; }
+    public int? DefaultTargetId { get; set; }
     public bool Active { get; set; } = true;
     public List<int> ZipPolygonIds { get; set; } = new();
 }
@@ -105,4 +117,23 @@ public class TenantCourierLookupResponse : BaseResponse
 {
     public TenantCourierLookupResponse(Guid messageId) : base(messageId) { }
     public List<TenantCourierLookupDto> Couriers { get; set; } = new();
+}
+
+// ─── Assignable targets (Courier / Agent / NP picker) ─────────────────
+// Normalised to {Id, Name, Hint} per list so the React picker renders any
+// type uniformly. Mirrors RunViewer's assignable-targets contract so the
+// picker UI stays portable across the two apps.
+public class TenantAssignTargetDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Hint { get; set; } = string.Empty;   // courier code, or agent association
+}
+
+public class TenantAssignableTargetsResponse : BaseResponse
+{
+    public TenantAssignableTargetsResponse(Guid messageId) : base(messageId) { }
+    public List<TenantAssignTargetDto> Couriers { get; set; } = new();
+    public List<TenantAssignTargetDto> Agents { get; set; } = new();
+    public List<TenantAssignTargetDto> Nps { get; set; } = new();
 }

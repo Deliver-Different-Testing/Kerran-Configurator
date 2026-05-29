@@ -96,6 +96,25 @@ public class TenantRoutesController(TenantRouteService routeService) : BaseContr
         }
     }
 
+    // Assignable targets for the route-default Assign picker (Courier /
+    // Agent / NP). Relative route → /api/v1/tenant/routes/assignable-targets.
+    [HttpGet("assignable-targets")]
+    public async Task<IActionResult> AssignableTargets()
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            var response = await routeService.GetAssignableTargetsAsync(messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(new { couriers = response.Couriers, agents = response.Agents, nps = response.Nps });
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to load assignable targets");
+            throw;
+        }
+    }
+
     // ─── Roster (per-route sub-resource) ──────────────────────────────
 
     [HttpGet("{routeId:int}/roster")]

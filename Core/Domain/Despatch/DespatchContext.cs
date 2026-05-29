@@ -1072,6 +1072,8 @@ public partial class DespatchContext : DbContext
         {
             entity.HasIndex(e => new { e.Active, e.Name }, "IX_Routes_Active");
 
+            entity.HasIndex(e => e.DefaultAgentId, "IX_Routes_DefaultAgentId");
+
             entity.Property(e => e.Active).HasAnnotation("Relational:DefaultConstraintName", "DF_Routes_Active");
             entity.Property(e => e.Area)
                 .IsRequired()
@@ -1092,6 +1094,10 @@ public partial class DespatchContext : DbContext
                 .HasMaxLength(100);
             entity.Property(e => e.UpdatedAt).HasColumnType("datetime");
             entity.Property(e => e.UpdatedBy).HasMaxLength(100);
+
+            entity.HasOne(d => d.DefaultAgent).WithMany(p => p.Routes)
+                .HasForeignKey(d => d.DefaultAgentId)
+                .HasConstraintName("FK_Routes_tucAgents");
 
             entity.HasOne(d => d.DefaultCourier).WithMany(p => p.Routes)
                 .HasForeignKey(d => d.DefaultCourierId)

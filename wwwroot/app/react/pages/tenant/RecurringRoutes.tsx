@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import {
   routeService,
   TenantRoute,
@@ -6,16 +7,24 @@ import {
   CourierLookup,
   ZipcodeLookup,
   RouteUpsert,
+  AssignableTargets,
+  AssignTargetType,
 } from '@/services/tenant_routeService';
+import { AssignTargetPicker, AssignTargetValue } from '@/components/common/AssignTargetPicker';
 
 type Tab = 'routes' | 'roster';
 
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function RecurringRoutes() {
+  const { user } = useAuth();
+  const recurringJobsUrl = user.despatchWebBaseUrl
+    ? `${user.despatchWebBaseUrl}/#!/recurringJobs`
+    : null;
   const [activeTab, setActiveTab] = useState<Tab>('routes');
   const [routes, setRoutes] = useState<TenantRoute[]>([]);
   const [couriers, setCouriers] = useState<CourierLookup[]>([]);
+  const [targets, setTargets] = useState<AssignableTargets | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,9 +32,14 @@ export function RecurringRoutes() {
     setLoading(true);
     setError(null);
     try {
-      const [r, c] = await Promise.all([routeService.listRoutes(), routeService.listCouriers()]);
+      const [r, c, t] = await Promise.all([
+        routeService.listRoutes(),
+        routeService.listCouriers(),
+        routeService.getAssignableTargets(),
+      ]);
       setRoutes(r);
       setCouriers(c);
+      setTargets(t);
     } catch (e: unknown) {
       setError((e as Error).message ?? 'Failed to load routes');
     } finally {
@@ -59,6 +73,21 @@ export function RecurringRoutes() {
             {t === 'routes' ? 'Routes' : 'Route Roster'}
           </button>
         ))}
+        {recurringJobsUrl && (
+          <button
+            onClick={() => window.open(recurringJobsUrl, '_blank', 'noopener,noreferrer')}
+            title="Opens the Recurring Jobs view in DespatchWeb (new tab)"
+            className="flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-sm font-semibold text-text-secondary hover:bg-slate-50 transition-all"
+          >
+            Recurring Jobs
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {error && (
@@ -68,7 +97,7 @@ export function RecurringRoutes() {
       {loading ? (
         <div className="rounded-xl border border-border bg-white p-10 text-center text-sm text-text-secondary">Loading…</div>
       ) : activeTab === 'routes' ? (
-        <RoutesTab routes={routes} couriers={couriers} onChanged={refresh} />
+        <RoutesTab routes={routes} targets={targets} onChanged={refresh} />
       ) : (
         <RosterTab routes={routes} couriers={couriers} />
       )}
@@ -80,11 +109,11 @@ export function RecurringRoutes() {
 
 function RoutesTab({
   routes,
-  couriers,
+  targets,
   onChanged,
 }: {
   routes: TenantRoute[];
-  couriers: CourierLookup[];
+  targets: AssignableTargets | null;
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState<TenantRoute | 'new' | null>(null);
@@ -118,7 +147,7 @@ function RoutesTab({
               <tr className="text-left text-[12.5px] font-semibold text-text-secondary">
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Area</th>
-                <th className="px-4 py-3">Default Courier</th>
+                <th className="px-4 py-3">Default</th>
                 <th className="px-4 py-3">Zip Codes</th>
                 <th className="px-4 py-3">Roster</th>
                 <th className="px-4 py-3">Status</th>
@@ -133,10 +162,13 @@ function RoutesTab({
                   </td>
                   <td className="px-4 py-3.5 text-text-secondary">{r.area || '—'}</td>
                   <td className="px-4 py-3.5">
-                    {r.defaultCourierId ? (
+                    {r.defaultTargetName ? (
                       <div>
-                        <div className="text-[#0d0c2c]">{r.defaultCourierName || '—'}</div>
-                        <div className="text-[11px] text-text-secondary">{r.defaultCourierCode}</div>
+                        <div className="text-[#0d0c2c] flex items-center gap-1.5">
+                          {r.defaultTargetName}
+                          {r.defaultTargetType && <TargetTypeChip type={r.defaultTargetType} />}
+                        </div>
+                        {r.defaultTargetHint && <div className="text-[11px] text-text-secondary">{r.defaultTargetHint}</div>}
                       </div>
                     ) : <span className="text-text-secondary">—</span>}
                   </td>
@@ -167,7 +199,7 @@ function RoutesTab({
       {editing && (
         <RouteEditorModal
           route={editing === 'new' ? null : editing}
-          couriers={couriers}
+          targets={targets}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); onChanged(); }}
         />
@@ -178,18 +210,22 @@ function RoutesTab({
 
 function RouteEditorModal({
   route,
-  couriers,
+  targets,
   onClose,
   onSaved,
 }: {
   route: TenantRoute | null;
-  couriers: CourierLookup[];
+  targets: AssignableTargets | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [name, setName] = useState(route?.name ?? '');
   const [area, setArea] = useState(route?.area ?? '');
-  const [defaultCourierId, setDefaultCourierId] = useState<number | null>(route?.defaultCourierId ?? null);
+  const [target, setTarget] = useState<AssignTargetValue | null>(
+    route?.defaultTargetType && route?.defaultTargetId
+      ? { type: route.defaultTargetType, id: route.defaultTargetId }
+      : null,
+  );
   const [active, setActive] = useState(route?.active ?? false);
   const [zipcodes, setZipcodes] = useState<{ zipPolygonId: number; zip: string }[]>(route?.zipcodes ?? []);
   const [search, setSearch] = useState('');
@@ -218,7 +254,8 @@ function RouteEditorModal({
       const dto: RouteUpsert = {
         name: name.trim(),
         area: area.trim(),
-        defaultCourierId,
+        defaultTargetType: target?.type ?? null,
+        defaultTargetId: target?.id ?? null,
         active,
         zipPolygonIds: zipcodes.map(z => z.zipPolygonId),
       };
@@ -252,20 +289,18 @@ function RouteEditorModal({
               className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Area</label>
-              <input value={area} onChange={(e) => setArea(e.target.value)} placeholder="e.g. Westside"
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
-            </div>
-            <div>
-              <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Default Courier</label>
-              <select value={defaultCourierId ?? ''} onChange={(e) => setDefaultCourierId(e.target.value ? parseInt(e.target.value, 10) : null)}
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none">
-                <option value="">— None —</option>
-                {couriers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
-              </select>
-            </div>
+          <div>
+            <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Area</label>
+            <input value={area} onChange={(e) => setArea(e.target.value)} placeholder="e.g. Westside"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
+          </div>
+
+          <div>
+            <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Default Assignment</label>
+            <AssignTargetPicker targets={targets} value={target} onChange={setTarget} />
+            <p className="text-[11px] text-text-secondary mt-1">
+              Courier, Agent, or Network Partner used as this route's default. Roster day/date overrides still take precedence.
+            </p>
           </div>
 
           <div>
@@ -548,6 +583,16 @@ function FourteenDayPreview({
       })}
     </div>
   );
+}
+
+function TargetTypeChip({ type }: { type: AssignTargetType }) {
+  const label = type === 'NetworkPartner' ? 'NP' : type;
+  const tone = type === 'Courier'
+    ? 'bg-cyan-100 text-[#0d0c2c]'
+    : type === 'Agent'
+      ? 'bg-violet-100 text-violet-800'
+      : 'bg-amber-100 text-amber-800';
+  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tone}`}>{label}</span>;
 }
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {

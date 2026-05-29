@@ -7,6 +7,8 @@ export interface RouteZipcode {
   zip: string;
 }
 
+export type AssignTargetType = 'Courier' | 'Agent' | 'NetworkPartner';
+
 export interface TenantRoute {
   id: number;
   name: string;
@@ -14,6 +16,13 @@ export interface TenantRoute {
   defaultCourierId: number | null;
   defaultCourierName: string;
   defaultCourierCode: string;
+  // Unified default target (Courier / Agent / NP). defaultCourierId is kept
+  // for the roster's courier-only fallback path.
+  defaultAgentId: number | null;
+  defaultTargetType: AssignTargetType | null;
+  defaultTargetId: number | null;
+  defaultTargetName: string;
+  defaultTargetHint: string;
   active: boolean;
   zipcodes: RouteZipcode[];
   rosterEntryCount: number;
@@ -24,9 +33,22 @@ export interface TenantRoute {
 export interface RouteUpsert {
   name: string;
   area: string;
-  defaultCourierId: number | null;
+  defaultTargetType: AssignTargetType | null;
+  defaultTargetId: number | null;
   active: boolean;
   zipPolygonIds: number[];
+}
+
+export interface AssignTarget {
+  id: number;
+  name: string;
+  hint: string;
+}
+
+export interface AssignableTargets {
+  couriers: AssignTarget[];
+  agents: AssignTarget[];
+  nps: AssignTarget[];
 }
 
 export interface RosterEntry {
@@ -92,6 +114,10 @@ export const routeService = {
   },
   async listCouriers(): Promise<CourierLookup[]> {
     const { data } = await api.get<CourierLookup[]>('/couriers/lookup');
+    return data;
+  },
+  async getAssignableTargets(): Promise<AssignableTargets> {
+    const { data } = await api.get<AssignableTargets>('/routes/assignable-targets');
     return data;
   },
 };

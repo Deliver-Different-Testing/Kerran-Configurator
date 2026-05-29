@@ -105,6 +105,8 @@ public partial class TucAgent
 
     public virtual TucAgentRanking Ranking { get; set; }
 
+    public virtual ICollection<Route> Routes { get; set; } = new List<Route>();
+
     public virtual TucAgentStatus Status { get; set; }
 
     public virtual ICollection<TucClient> TucClients { get; set; } = new List<TucClient>();

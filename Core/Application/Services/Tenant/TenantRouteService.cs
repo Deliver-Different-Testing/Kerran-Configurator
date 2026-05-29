@@ -35,6 +35,11 @@ public class TenantRouteService(
                 Name = r.Name ?? string.Empty,
                 Area = r.Area ?? string.Empty,
                 DefaultCourierId = r.DefaultCourierId,
+                DefaultAgentId = r.DefaultAgentId,
+                DefaultTargetType = r.DefaultTargetType == 1 ? "Courier"
+                    : r.DefaultTargetType == 2 ? "Agent"
+                    : r.DefaultTargetType == 3 ? "NetworkPartner"
+                    : (r.DefaultCourierId != null ? "Courier" : null),
                 Active = r.Active,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
@@ -63,6 +68,34 @@ public class TenantRouteService(
             r.DefaultCourierCode = c.Code ?? string.Empty;
         }
 
+        // Resolve agent (incl. NP) default-target names in a single follow-up.
+        var agentIds = rows.Where(r => r.DefaultAgentId.HasValue).Select(r => r.DefaultAgentId!.Value).Distinct().ToList();
+        var agents = agentIds.Count == 0
+            ? new List<(int UcagId, string? UcagName, string? Association)>()
+            : (await Context.TucAgents.AsNoTracking()
+                .Where(a => agentIds.Contains(a.UcagId))
+                .Select(a => new { a.UcagId, a.UcagName, a.Association })
+                .ToListAsync())
+              .Select(a => (a.UcagId, a.UcagName, a.Association)).ToList();
+
+        // Populate the unified default-target fields (name + hint) per type.
+        foreach (var r in rows)
+        {
+            if (r.DefaultTargetType == "Courier" && r.DefaultCourierId.HasValue)
+            {
+                r.DefaultTargetId = r.DefaultCourierId;
+                r.DefaultTargetName = r.DefaultCourierName;
+                r.DefaultTargetHint = r.DefaultCourierCode;
+            }
+            else if ((r.DefaultTargetType == "Agent" || r.DefaultTargetType == "NetworkPartner") && r.DefaultAgentId.HasValue)
+            {
+                var a = agents.FirstOrDefault(x => x.UcagId == r.DefaultAgentId.Value);
+                r.DefaultTargetId = r.DefaultAgentId;
+                r.DefaultTargetName = a.UcagName ?? string.Empty;
+                r.DefaultTargetHint = a.Association ?? string.Empty;
+            }
+        }
+
         return new TenantRoutesResponse(messageId) { Success = true, Routes = rows };
     }
 
@@ -74,11 +107,14 @@ public class TenantRouteService(
             return FailRoute(messageId, "At least one zip code is required.");
 
         var actor = ResolveActor();
+        var (targetType, courierId, agentId) = MapTarget(dto.DefaultTargetType, dto.DefaultTargetId);
         var route = new Route
         {
             Name = dto.Name.Trim(),
             Area = dto.Area?.Trim() ?? string.Empty,
-            DefaultCourierId = dto.DefaultCourierId,
+            DefaultTargetType = targetType,
+            DefaultCourierId = courierId,
+            DefaultAgentId = agentId,
             Active = dto.Active,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = actor,
@@ -112,9 +148,12 @@ public class TenantRouteService(
         if (route == null) return FailRoute(messageId, "Route not found.");
 
         var actor = ResolveActor();
+        var (targetType, courierId, agentId) = MapTarget(dto.DefaultTargetType, dto.DefaultTargetId);
         route.Name = dto.Name.Trim();
         route.Area = dto.Area?.Trim() ?? string.Empty;
-        route.DefaultCourierId = dto.DefaultCourierId;
+        route.DefaultTargetType = targetType;
+        route.DefaultCourierId = courierId;
+        route.DefaultAgentId = agentId;
         route.Active = dto.Active;
         route.UpdatedAt = DateTime.UtcNow;
         route.UpdatedBy = actor;
@@ -280,7 +319,66 @@ public class TenantRouteService(
         return new TenantCourierLookupResponse(messageId) { Success = true, Couriers = rows };
     }
 
+    // Three lists (couriers / agents / NPs) for the route-default Assign
+    // picker, each normalised to {Id, Name, Hint}. NP = agent with
+    // IsNetworkPartner = 1; regular agents are the complement.
+    public async Task<TenantAssignableTargetsResponse> GetAssignableTargetsAsync(Guid messageId)
+    {
+        var couriers = await Context.TucCouriers.AsNoTracking()
+            .Where(c => c.Active)
+            .OrderBy(c => c.UccrSurname).ThenBy(c => c.UccrName)
+            .Select(c => new TenantAssignTargetDto
+            {
+                Id = c.UccrId,
+                Name = ((c.UccrName ?? string.Empty) + " " + (c.UccrSurname ?? string.Empty)).Trim(),
+                Hint = c.Code ?? string.Empty,
+            })
+            .ToListAsync();
+
+        var agents = await Context.TucAgents.AsNoTracking()
+            .Where(a => !a.IsNetworkPartner)
+            .OrderBy(a => a.UcagName)
+            .Select(a => new TenantAssignTargetDto
+            {
+                Id = a.UcagId,
+                Name = a.UcagName ?? string.Empty,
+                Hint = a.Association ?? string.Empty,
+            })
+            .ToListAsync();
+
+        var nps = await Context.TucAgents.AsNoTracking()
+            .Where(a => a.IsNetworkPartner)
+            .OrderBy(a => a.UcagName)
+            .Select(a => new TenantAssignTargetDto
+            {
+                Id = a.UcagId,
+                Name = a.UcagName ?? string.Empty,
+                Hint = a.Association ?? string.Empty,
+            })
+            .ToListAsync();
+
+        return new TenantAssignableTargetsResponse(messageId)
+        {
+            Success = true,
+            Couriers = couriers,
+            Agents = agents,
+            Nps = nps,
+        };
+    }
+
     // ─── HELPERS ──────────────────────────────────────────────────────
+
+    // Maps the picker's (type, id) onto the Route target columns. Agent + NP
+    // both land in DefaultAgentId (NP = agent w/ IsNetworkPartner=1);
+    // DefaultTargetType records which the operator chose. Unknown/empty type
+    // clears the default.
+    private static (byte? Type, int? CourierId, int? AgentId) MapTarget(string? type, int? id) => type switch
+    {
+        "Courier"        => ((byte?)1, id, null),
+        "Agent"          => ((byte?)2, null, id),
+        "NetworkPartner" => ((byte?)3, null, id),
+        _                => (null, null, null),
+    };
 
     private string ResolveActor() =>
         httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.Name)?.Value

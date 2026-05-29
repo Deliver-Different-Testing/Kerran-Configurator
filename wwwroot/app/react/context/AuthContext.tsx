@@ -24,6 +24,9 @@ export interface AppUser {
   // DespatchWebBaseUrl env var isn't set. Used to deep-link from Recurring
   // Routes to DespatchWeb's Recurring Jobs view.
   despatchWebBaseUrl: string | null;
+  // Per-tenant RunViewer base URL (no trailing slash) or null when unset.
+  // Used by the Operations page (Route Viewer + Print Manager links).
+  runViewerBaseUrl: string | null;
 }
 
 interface AuthContextValue {
@@ -48,6 +51,7 @@ const ANONYMOUS: AppUser = {
   tenantCode: null,
   npRoleId: null,
   despatchWebBaseUrl: null,
+  runViewerBaseUrl: null,
 };
 
 declare global {

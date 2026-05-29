@@ -47,4 +47,13 @@ public class AppSettings
     /// the "Recurring Jobs" tab (e.g. local dev with no DespatchWeb).
     /// </summary>
     public string DespatchWebBaseUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Base URL of the tenant's RunViewer app
+    /// (`https://runviewer.{tenant}.{env}.deliverdifferent.com`), no trailing
+    /// slash. Set per-tenant deployment via env var RunViewerBaseUrl. Surfaced
+    /// to the SPA so the Operations page can deep-link to RunViewer (Route
+    /// Viewer + Print Manager). Empty value leaves those links disabled.
+    /// </summary>
+    public string RunViewerBaseUrl { get; set; } = string.Empty;
 }

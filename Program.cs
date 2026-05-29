@@ -140,6 +140,7 @@ var appSettings = new AppSettings
     HubBaseUrl = (builder.Configuration["HubBaseUrl"] ?? string.Empty).TrimEnd('/'),
     HubAdminApiKey = builder.Configuration["HubAdminApiKey"] ?? string.Empty,
     DespatchWebBaseUrl = (builder.Configuration["DespatchWebBaseUrl"] ?? string.Empty).TrimEnd('/'),
+    RunViewerBaseUrl = (builder.Configuration["RunViewerBaseUrl"] ?? string.Empty).TrimEnd('/'),
 };
 builder.Services.AddSingleton(appSettings);
 
@@ -172,6 +173,15 @@ if (string.IsNullOrEmpty(appSettings.DespatchWebBaseUrl))
 else
 {
     Log.Information("DespatchWebBaseUrl: {Url}", appSettings.DespatchWebBaseUrl);
+}
+
+if (string.IsNullOrEmpty(appSettings.RunViewerBaseUrl))
+{
+    Log.Warning("RunViewerBaseUrl not set — the Operations page Route Viewer + Print Manager links will be disabled.");
+}
+else
+{
+    Log.Information("RunViewerBaseUrl: {Url}", appSettings.RunViewerBaseUrl);
 }
 
 builder.Services.Configure<CookiePolicyOptions>(options =>

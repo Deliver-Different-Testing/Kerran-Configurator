@@ -1,15 +1,21 @@
+import { useAuth } from '@/context/AuthContext';
+
 export default function Operations() {
+  const { user } = useAuth();
+  const despatch = user.despatchWebBaseUrl;
+  const runViewer = user.runViewerBaseUrl;
+
   const ops = [
-    { icon: '📦', title: 'Dispatch Board', desc: 'View and manage your assigned jobs in real-time. Create, edit, and track deliveries.', app: 'DispatchWeb', url: '' },
-    { icon: '🗺️', title: 'Route Viewer', desc: 'Track your couriers and routes in real-time on an interactive map.', app: 'Route Viewer (Read-Only)', url: '' },
-    { icon: '🖨️', title: 'Print Manager', desc: 'Print job labels, manifests, and delivery documentation.', app: 'Print Manager', url: '' },
+    { icon: '📦', title: 'Dispatch Board', desc: 'View and manage your assigned jobs in real-time. Create, edit, and track deliveries.', app: 'DispatchWeb', url: despatch ?? '' },
+    { icon: '🗺️', title: 'Route Viewer', desc: 'Track your couriers and routes in real-time on an interactive map.', app: 'Route Viewer (Read-Only)', url: runViewer ?? '' },
+    { icon: '🖨️', title: 'Print Manager', desc: 'Print job labels, manifests, and delivery documentation.', app: 'Print Manager', url: runViewer ? `${runViewer}/#/print` : '' },
   ];
 
   return (
     <>
       <h2 className="text-xl font-bold mb-5">Operations</h2>
       <p className="text-text-secondary text-sm mb-6">
-        Your operational tools open in their respective DFRNT applications, pre-filtered for Pacific Express Logistics.
+        Your operational tools open in their respective DFRNT applications.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {ops.map(op => (

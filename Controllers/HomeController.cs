@@ -31,7 +31,11 @@ public record AppUserBootstrap(
     // Per-tenant DespatchWeb base URL (from the DespatchWebBaseUrl env var).
     // Lets the Recurring Routes page deep-link to DespatchWeb's Recurring
     // Jobs view. Empty/null hides the link.
-    string? DespatchWebBaseUrl);
+    string? DespatchWebBaseUrl,
+    // Per-tenant RunViewer base URL (from the RunViewerBaseUrl env var). Lets
+    // the Operations page deep-link to RunViewer (Route Viewer + Print
+    // Manager). Empty/null leaves those links disabled.
+    string? RunViewerBaseUrl);
 
 [Authorize]
 public class HomeController(
@@ -63,7 +67,7 @@ public class HomeController(
                 Log.Debug("UserGroupID + ClientTypeId claims already present ({GroupId}/{ClientType}), skipping enrichment", existingGroupClaim, existingClientTypeClaim);
                 // Still need to ensure connection string is cached
                 await EnsureConnectionString();
-                return View(BuildBootstrap(HttpContext.User, appSettings.DespatchWebBaseUrl));
+                return View(BuildBootstrap(HttpContext.User, appSettings));
             }
 
             var connectionString = HttpContext.User.Claims.FirstOrDefault(x => x.Type == "Connection")?.Value;
@@ -158,7 +162,7 @@ public class HomeController(
                 Log.Warning("StaffID claim missing or not a valid integer: '{StaffIdClaim}'", staffIdClaim ?? "null");
             }
 
-            return View(BuildBootstrap(principalForBootstrap, appSettings.DespatchWebBaseUrl));
+            return View(BuildBootstrap(principalForBootstrap, appSettings));
         }
         catch (Exception ex)
         {
@@ -167,7 +171,7 @@ public class HomeController(
         }
     }
 
-    private static AppUserBootstrap BuildBootstrap(ClaimsPrincipal principal, string? despatchWebBaseUrl)
+    private static AppUserBootstrap BuildBootstrap(ClaimsPrincipal principal, AppSettings appSettings)
     {
         var claims = principal.Claims.ToList();
         string? Get(string type) => claims.FirstOrDefault(c => c.Type == type)?.Value;
@@ -196,7 +200,8 @@ public class HomeController(
             Email: Get(ClaimTypes.Name),
             TenantCode: Get("TenantCode"),
             NpRoleId: ParseInt(Get("NpRoleId")),
-            DespatchWebBaseUrl: string.IsNullOrEmpty(despatchWebBaseUrl) ? null : despatchWebBaseUrl);
+            DespatchWebBaseUrl: string.IsNullOrEmpty(appSettings.DespatchWebBaseUrl) ? null : appSettings.DespatchWebBaseUrl,
+            RunViewerBaseUrl: string.IsNullOrEmpty(appSettings.RunViewerBaseUrl) ? null : appSettings.RunViewerBaseUrl);
     }
 
     private async Task EnsureConnectionString()

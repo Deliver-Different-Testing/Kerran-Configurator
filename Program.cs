@@ -139,6 +139,7 @@ var appSettings = new AppSettings
     S3BucketComplianceUploads = builder.Configuration["S3BucketComplianceUploads"] ?? string.Empty,
     HubBaseUrl = (builder.Configuration["HubBaseUrl"] ?? string.Empty).TrimEnd('/'),
     HubAdminApiKey = builder.Configuration["HubAdminApiKey"] ?? string.Empty,
+    DespatchWebBaseUrl = (builder.Configuration["DespatchWebBaseUrl"] ?? string.Empty).TrimEnd('/'),
 };
 builder.Services.AddSingleton(appSettings);
 
@@ -162,6 +163,15 @@ if (string.IsNullOrEmpty(appSettings.HubBaseUrl) || string.IsNullOrEmpty(appSett
 else
 {
     Log.Information("HubBaseUrl: {Url}; HubAdminApiKey present.", appSettings.HubBaseUrl);
+}
+
+if (string.IsNullOrEmpty(appSettings.DespatchWebBaseUrl))
+{
+    Log.Warning("DespatchWebBaseUrl not set — the Recurring Jobs tab (deep-link to DespatchWeb) will be hidden.");
+}
+else
+{
+    Log.Information("DespatchWebBaseUrl: {Url}", appSettings.DespatchWebBaseUrl);
 }
 
 builder.Services.Configure<CookiePolicyOptions>(options =>

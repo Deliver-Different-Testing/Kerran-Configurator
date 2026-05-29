@@ -27,12 +27,17 @@ public record AppUserBootstrap(
     // 2=NpDispatcher, 3=NpReadOnly). Null for non-NP users or NP users
     // whose contact row has no role set. Frontend maps the ID to a
     // friendly role name + uses it to gate UI surfaces.
-    int? NpRoleId);
+    int? NpRoleId,
+    // Per-tenant DespatchWeb base URL (from the DespatchWebBaseUrl env var).
+    // Lets the Recurring Routes page deep-link to DespatchWeb's Recurring
+    // Jobs view. Empty/null hides the link.
+    string? DespatchWebBaseUrl);
 
 [Authorize]
 public class HomeController(
     IConnectionStringManager connectionStringManager,
-    IDbContextFactory<DespatchContext> contextFactory) : Controller
+    IDbContextFactory<DespatchContext> contextFactory,
+    AppSettings appSettings) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -58,7 +63,7 @@ public class HomeController(
                 Log.Debug("UserGroupID + ClientTypeId claims already present ({GroupId}/{ClientType}), skipping enrichment", existingGroupClaim, existingClientTypeClaim);
                 // Still need to ensure connection string is cached
                 await EnsureConnectionString();
-                return View(BuildBootstrap(HttpContext.User));
+                return View(BuildBootstrap(HttpContext.User, appSettings.DespatchWebBaseUrl));
             }
 
             var connectionString = HttpContext.User.Claims.FirstOrDefault(x => x.Type == "Connection")?.Value;
@@ -153,7 +158,7 @@ public class HomeController(
                 Log.Warning("StaffID claim missing or not a valid integer: '{StaffIdClaim}'", staffIdClaim ?? "null");
             }
 
-            return View(BuildBootstrap(principalForBootstrap));
+            return View(BuildBootstrap(principalForBootstrap, appSettings.DespatchWebBaseUrl));
         }
         catch (Exception ex)
         {
@@ -162,7 +167,7 @@ public class HomeController(
         }
     }
 
-    private static AppUserBootstrap BuildBootstrap(ClaimsPrincipal principal)
+    private static AppUserBootstrap BuildBootstrap(ClaimsPrincipal principal, string? despatchWebBaseUrl)
     {
         var claims = principal.Claims.ToList();
         string? Get(string type) => claims.FirstOrDefault(c => c.Type == type)?.Value;
@@ -190,7 +195,8 @@ public class HomeController(
             FullName: Get("fullName"),
             Email: Get(ClaimTypes.Name),
             TenantCode: Get("TenantCode"),
-            NpRoleId: ParseInt(Get("NpRoleId")));
+            NpRoleId: ParseInt(Get("NpRoleId")),
+            DespatchWebBaseUrl: string.IsNullOrEmpty(despatchWebBaseUrl) ? null : despatchWebBaseUrl);
     }
 
     private async Task EnsureConnectionString()

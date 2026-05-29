@@ -20,6 +20,10 @@ export interface AppUser {
   // Phase 5+28b — raw ContactRoleId (1/2/3) or null when the claim is
   // absent (non-NP users / NP users w/o a contact role).
   npRoleId: number | null;
+  // Per-tenant DespatchWeb base URL (no trailing slash) or null when the
+  // DespatchWebBaseUrl env var isn't set. Used to deep-link from Recurring
+  // Routes to DespatchWeb's Recurring Jobs view.
+  despatchWebBaseUrl: string | null;
 }
 
 interface AuthContextValue {
@@ -43,6 +47,7 @@ const ANONYMOUS: AppUser = {
   email: null,
   tenantCode: null,
   npRoleId: null,
+  despatchWebBaseUrl: null,
 };
 
 declare global {

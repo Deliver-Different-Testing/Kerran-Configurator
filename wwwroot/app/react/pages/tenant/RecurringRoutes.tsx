@@ -4,7 +4,6 @@ import {
   routeService,
   TenantRoute,
   RosterEntry,
-  CourierLookup,
   ZipcodeLookup,
   RouteUpsert,
   AssignableTargets,
@@ -23,7 +22,6 @@ export function RecurringRoutes() {
     : null;
   const [activeTab, setActiveTab] = useState<Tab>('routes');
   const [routes, setRoutes] = useState<TenantRoute[]>([]);
-  const [couriers, setCouriers] = useState<CourierLookup[]>([]);
   const [targets, setTargets] = useState<AssignableTargets | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,13 +30,11 @@ export function RecurringRoutes() {
     setLoading(true);
     setError(null);
     try {
-      const [r, c, t] = await Promise.all([
+      const [r, t] = await Promise.all([
         routeService.listRoutes(),
-        routeService.listCouriers(),
         routeService.getAssignableTargets(),
       ]);
       setRoutes(r);
-      setCouriers(c);
       setTargets(t);
     } catch (e: unknown) {
       setError((e as Error).message ?? 'Failed to load routes');
@@ -54,7 +50,7 @@ export function RecurringRoutes() {
       <div>
         <h1 className="font-display text-2xl font-semibold text-[#0d0c2c] leading-tight">Recurring Routes</h1>
         <p className="text-text-secondary text-sm mt-1">
-          Named routes covering a cluster of zip codes, rostered to a courier per day.
+          Named routes covering a cluster of zip codes, rostered to a courier, agent, or NP per day.
           The roster feeds nightly prebook job creation and surfaces in RunViewer.
         </p>
       </div>
@@ -99,7 +95,7 @@ export function RecurringRoutes() {
       ) : activeTab === 'routes' ? (
         <RoutesTab routes={routes} targets={targets} onChanged={refresh} />
       ) : (
-        <RosterTab routes={routes} couriers={couriers} />
+        <RosterTab routes={routes} targets={targets} />
       )}
     </div>
   );
@@ -353,7 +349,7 @@ function RouteEditorModal({
 
 // ─── Roster tab ───────────────────────────────────────────────────────
 
-function RosterTab({ routes, couriers }: { routes: TenantRoute[]; couriers: CourierLookup[] }) {
+function RosterTab({ routes, targets }: { routes: TenantRoute[]; targets: AssignableTargets | null }) {
   const activeRoutes = useMemo(() => routes.filter((r) => r.active), [routes]);
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(activeRoutes[0]?.id ?? null);
   const [entries, setEntries] = useState<RosterEntry[]>([]);
@@ -387,17 +383,17 @@ function RosterTab({ routes, couriers }: { routes: TenantRoute[]; couriers: Cour
 
   const weekly = entries.filter((e) => e.rosterDate === null);
   const overrides = entries.filter((e) => e.rosterDate !== null).sort((a, b) => (a.rosterDate ?? '').localeCompare(b.rosterDate ?? ''));
-  const dowMap: Record<number, number> = {};
-  weekly.forEach((e) => { if (e.dayOfWeek != null) dowMap[e.dayOfWeek] = e.courierId; });
+  const dowEntry: Record<number, RosterEntry> = {};
+  weekly.forEach((e) => { if (e.dayOfWeek != null) dowEntry[e.dayOfWeek] = e; });
 
-  const setDow = async (dow: number, courierId: number | null) => {
+  const setDow = async (dow: number, value: AssignTargetValue | null) => {
     // Replace any existing active entry for this DOW. Backend deactivates the
     // collision automatically; deletion of an active row requires the entry id.
     const existing = weekly.find((e) => e.dayOfWeek === dow);
-    if (existing && courierId === null) {
-      await routeService.deleteRosterEntry(route.id, existing.id);
-    } else if (courierId !== null) {
-      await routeService.createRosterEntry(route.id, { courierId, rosterDate: null, dayOfWeek: dow });
+    if (value === null) {
+      if (existing) await routeService.deleteRosterEntry(route.id, existing.id);
+    } else {
+      await routeService.createRosterEntry(route.id, { targetType: value.type, targetId: value.id, rosterDate: null, dayOfWeek: dow });
     }
     refresh();
   };
@@ -417,17 +413,17 @@ function RosterTab({ routes, couriers }: { routes: TenantRoute[]; couriers: Cour
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="space-y-5">
-          <Card title="Default Weekly Pattern" subtitle="Courier rostered on each day of week. Leave blank to fall back to the route's default courier.">
-            <div className="space-y-2">
+          <Card title="Default Weekly Pattern" subtitle="Courier / Agent / NP rostered on each day of week. Leave blank to fall back to the route's default.">
+            <div className="space-y-1.5">
               {[1, 2, 3, 4, 5, 6, 0].map((dow) => (
-                <div key={dow} className="flex items-center gap-3">
-                  <div className="w-10 text-[12.5px] font-medium text-[#0d0c2c]">{DOW_LABELS[dow]}</div>
-                  <select value={dowMap[dow] ?? ''} onChange={(e) => setDow(dow, e.target.value ? parseInt(e.target.value, 10) : null)}
-                    className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none">
-                    <option value="">— Use default ({route.defaultCourierCode || '—'}) —</option>
-                    {couriers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
-                  </select>
-                </div>
+                <WeeklyDayRow
+                  key={dow}
+                  dow={dow}
+                  entry={dowEntry[dow] ?? null}
+                  route={route}
+                  targets={targets}
+                  onSet={(v) => setDow(dow, v)}
+                />
               ))}
             </div>
           </Card>
@@ -435,19 +431,112 @@ function RosterTab({ routes, couriers }: { routes: TenantRoute[]; couriers: Cour
           <DateOverrides
             route={route}
             overrides={overrides}
-            couriers={couriers}
+            targets={targets}
             onChanged={refresh}
           />
         </div>
 
         <div>
-          <Card title="14-Day Preview" subtitle="Who's rostered for this route over the next 14 days. Date overrides → weekly pattern → default courier.">
-            <FourteenDayPreview route={route} entries={entries} couriers={couriers} />
+          <Card title="14-Day Preview" subtitle="Who's rostered for this route over the next 14 days. Date overrides → weekly pattern → default.">
+            <FourteenDayPreview route={route} entries={entries} />
           </Card>
           <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-[12.5px] text-[#0d0c2c]">
             <div className="font-display font-semibold mb-1">How this is used downstream</div>
-            The same precedence logic (date override → DOW pattern → default courier) runs in <code className="bg-white px-1.5 py-0.5 rounded text-[11.5px] font-mono">uspPrebookSet</code> each night.
-            The courier it picks is written to <code className="bg-white px-1.5 py-0.5 rounded text-[11.5px] font-mono">tucJob.ucjbCourierID</code> for every materialised recurring job in this route. RunViewer then displays each day's run with the rostered courier.
+            The same precedence logic (date override → DOW pattern → default) runs in <code className="bg-white px-1.5 py-0.5 rounded text-[11.5px] font-mono">uspPrebookSet</code> each night.
+            For <strong>Courier</strong> assignments the picked courier is written to <code className="bg-white px-1.5 py-0.5 rounded text-[11.5px] font-mono">tucJob.ucjbCourierID</code> for every materialised recurring job, and RunViewer displays each day's run with that courier.
+            <div className="mt-2 text-[12px]">
+              <strong>Agent / NP</strong> assignments are recorded here for configuration, but are <strong>not yet materialised into jobs</strong> — prebook still resolves a courier only. Use a Courier target for any day that must dispatch today.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One compact weekday row: shows the current assignment (or "use default") and
+// opens the shared Courier/Agent/NP picker in a small modal on Edit.
+function WeeklyDayRow({
+  dow,
+  entry,
+  route,
+  targets,
+  onSet,
+}: {
+  dow: number;
+  entry: RosterEntry | null;
+  route: TenantRoute;
+  targets: AssignableTargets | null;
+  onSet: (v: AssignTargetValue | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const current: AssignTargetValue | null =
+    entry?.targetType && entry?.targetId ? { type: entry.targetType, id: entry.targetId } : null;
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-10 text-[12.5px] font-medium text-[#0d0c2c]">{DOW_LABELS[dow]}</div>
+      <div className="flex-1 flex items-center justify-between border border-border rounded-lg px-3 py-2">
+        {entry?.targetName ? (
+          <span className="text-sm text-[#0d0c2c] flex items-center gap-1.5">
+            {entry.targetName}
+            {entry.targetType && <TargetTypeChip type={entry.targetType} />}
+            {entry.targetHint && <span className="text-[11px] text-text-secondary">{entry.targetHint}</span>}
+          </span>
+        ) : (
+          <span className="text-sm text-text-secondary">— Use default ({route.defaultTargetHint || route.defaultTargetName || '—'}) —</span>
+        )}
+        <button onClick={() => setEditing(true)} className="text-[12px] text-text-secondary hover:text-brand-cyan font-medium">Edit</button>
+      </div>
+      {editing && (
+        <RosterPickerModal
+          title={`${DOW_LABELS[dow]} assignment`}
+          targets={targets}
+          value={current}
+          onClose={() => setEditing(false)}
+          onSave={(v) => { setEditing(false); onSet(v); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Small modal hosting AssignTargetPicker, with Save + Clear (→ use default).
+function RosterPickerModal({
+  title,
+  targets,
+  value,
+  onClose,
+  onSave,
+}: {
+  title: string;
+  targets: AssignableTargets | null;
+  value: AssignTargetValue | null;
+  onClose: () => void;
+  onSave: (v: AssignTargetValue | null) => void;
+}) {
+  const [picked, setPicked] = useState<AssignTargetValue | null>(value);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-display text-base font-semibold text-[#0d0c2c]">{title}</h3>
+          <button onClick={onClose} className="text-text-secondary hover:text-[#0d0c2c] text-2xl leading-none w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">×</button>
+        </div>
+        <div className="px-5 py-5">
+          <AssignTargetPicker targets={targets} value={picked} onChange={setPicked} />
+        </div>
+        <div className="px-5 py-3 border-t border-border bg-slate-50 flex items-center justify-between">
+          {value
+            ? <button onClick={() => onSave(null)} className="text-[12.5px] text-text-secondary hover:text-red-600 font-medium">Clear (use default)</button>
+            : <span />}
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-[13px] text-text-secondary hover:text-[#0d0c2c] hover:bg-white rounded-full font-medium">Cancel</button>
+            <button onClick={() => onSave(picked)} disabled={!picked}
+              className="bg-brand-cyan text-[#0d0c2c] font-medium text-[13px] px-5 py-2 rounded-full disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed hover:shadow-cyan-glow transition-shadow">
+              Save
+            </button>
           </div>
         </div>
       </div>
@@ -458,21 +547,22 @@ function RosterTab({ routes, couriers }: { routes: TenantRoute[]; couriers: Cour
 function DateOverrides({
   route,
   overrides,
-  couriers,
+  targets,
   onChanged,
 }: {
   route: TenantRoute;
   overrides: RosterEntry[];
-  couriers: CourierLookup[];
+  targets: AssignableTargets | null;
   onChanged: () => void;
 }) {
   const [date, setDate] = useState('');
-  const [courierId, setCourierId] = useState<number | null>(couriers[0]?.id ?? null);
+  const [target, setTarget] = useState<AssignTargetValue | null>(null);
 
   const add = async () => {
-    if (!date || !courierId) return;
-    await routeService.createRosterEntry(route.id, { courierId, rosterDate: date, dayOfWeek: null });
+    if (!date || !target) return;
+    await routeService.createRosterEntry(route.id, { targetType: target.type, targetId: target.id, rosterDate: date, dayOfWeek: null });
     setDate('');
+    setTarget(null);
     onChanged();
   };
   const remove = async (id: number) => {
@@ -489,34 +579,37 @@ function DateOverrides({
               const d = o.rosterDate ? new Date(o.rosterDate) : null;
               return (
                 <div key={o.id} className="flex items-center justify-between bg-orange-50 border border-orange-200 px-3 py-2 rounded-lg">
-                  <div>
+                  <div className="flex items-center gap-1.5">
                     <span className="text-[13px] font-medium text-[#0d0c2c]">
                       {d ? d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'}
                     </span>
-                    <span className="text-[13px] text-[#0d0c2c] ml-3">→ {o.courierName} ({o.courierCode})</span>
+                    <span className="text-[13px] text-[#0d0c2c] ml-2">→ {o.targetName || '—'}</span>
+                    {o.targetType && <TargetTypeChip type={o.targetType} />}
+                    {o.targetHint && <span className="text-[11px] text-text-secondary">{o.targetHint}</span>}
                   </div>
                   <button onClick={() => remove(o.id)} className="text-text-secondary hover:text-red-600 text-[12px] font-medium">Remove</button>
                 </div>
               );
             })}
       </div>
-      <div className="flex items-end gap-2 pt-3 border-t border-border">
-        <div className="flex-1">
-          <label className="block text-[12px] font-medium text-text-secondary mb-1">Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-            className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
+      <div className="pt-3 border-t border-border space-y-2">
+        <div className="flex gap-2">
+          <div className="w-44">
+            <label className="block text-[12px] font-medium text-text-secondary mb-1">Date</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
+          </div>
+          <div className="flex-1">
+            <label className="block text-[12px] font-medium text-text-secondary mb-1">Assignment</label>
+            <AssignTargetPicker targets={targets} value={target} onChange={setTarget} />
+          </div>
         </div>
-        <div className="flex-1">
-          <label className="block text-[12px] font-medium text-text-secondary mb-1">Courier</label>
-          <select value={courierId ?? ''} onChange={(e) => setCourierId(e.target.value ? parseInt(e.target.value, 10) : null)}
-            className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none">
-            {couriers.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
-          </select>
+        <div className="flex justify-end">
+          <button onClick={add} disabled={!date || !target}
+            className="bg-brand-cyan text-[#0d0c2c] font-medium text-[13px] px-4 py-2 rounded-full disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed hover:shadow-cyan-glow transition-shadow">
+            Add Override
+          </button>
         </div>
-        <button onClick={add} disabled={!date || !courierId}
-          className="bg-brand-cyan text-[#0d0c2c] font-medium text-[13px] px-4 py-2 rounded-full disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed hover:shadow-cyan-glow transition-shadow">
-          Add
-        </button>
       </div>
     </Card>
   );
@@ -525,17 +618,10 @@ function DateOverrides({
 function FourteenDayPreview({
   route,
   entries,
-  couriers,
 }: {
   route: TenantRoute;
   entries: RosterEntry[];
-  couriers: CourierLookup[];
 }) {
-  const courierById = useCallback(
-    (id: number | null | undefined) => (id == null ? null : couriers.find((c) => c.id === id)),
-    [couriers],
-  );
-
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const days = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(today); d.setDate(today.getDate() + i);
@@ -543,14 +629,12 @@ function FourteenDayPreview({
     const dow = d.getDay();
     const dateOverride = entries.find((e) => e.rosterDate?.slice(0, 10) === iso);
     const dowPattern = entries.find((e) => e.rosterDate === null && e.dayOfWeek === dow);
-    let courierId: number | null = null;
+    let name = route.defaultTargetName || 'Unassigned';
+    let type: AssignTargetType | null = route.defaultTargetType;
     let source: 'override' | 'pattern' | 'default' = 'default';
-    if (dateOverride) { courierId = dateOverride.courierId; source = 'override'; }
-    else if (dowPattern) { courierId = dowPattern.courierId; source = 'pattern'; }
-    else if (route.defaultCourierId) { courierId = route.defaultCourierId; source = 'default'; }
-    const c = courierById(courierId);
-    const cName = c ? `${c.name} (${c.code})` : (route.defaultCourierName || 'Unassigned');
-    return { date: d, source, cName };
+    if (dateOverride) { name = dateOverride.targetName || name; type = dateOverride.targetType; source = 'override'; }
+    else if (dowPattern) { name = dowPattern.targetName || name; type = dowPattern.targetType; source = 'pattern'; }
+    return { date: d, source, name, type };
   });
 
   return (
@@ -574,8 +658,9 @@ function FourteenDayPreview({
               </div>
               {i === 0 && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan-100 text-[#0d0c2c]">Today</span>}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-[#0d0c2c]">{p.cName}</div>
+            <div className="flex items-center gap-2">
+              <div className="text-[#0d0c2c]">{p.name}</div>
+              {p.type && <TargetTypeChip type={p.type} />}
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeTone}`}>{p.source}</span>
             </div>
           </div>

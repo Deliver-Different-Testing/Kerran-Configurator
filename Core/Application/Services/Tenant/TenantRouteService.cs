@@ -206,22 +206,46 @@ public class TenantRouteService(
             .ThenBy(rr => rr.RosterDate)
             .ToListAsync();
 
-        var courierIds = entries.Select(e => e.CourierId).Distinct().ToList();
+        var courierIds = entries.Where(e => e.CourierId != null).Select(e => e.CourierId!.Value).Distinct().ToList();
         var couriers = await Context.TucCouriers.AsNoTracking()
             .Where(c => courierIds.Contains(c.UccrId))
             .Select(c => new { c.UccrId, c.UccrName, c.UccrSurname, c.Code })
             .ToListAsync();
 
+        var agentIds = entries.Where(e => e.AgentId != null).Select(e => e.AgentId!.Value).Distinct().ToList();
+        var agents = await Context.TucAgents.AsNoTracking()
+            .Where(a => agentIds.Contains(a.UcagId))
+            .Select(a => new { a.UcagId, a.UcagName, a.Association })
+            .ToListAsync();
+
         var dtos = entries.Select(e =>
         {
-            var c = couriers.FirstOrDefault(x => x.UccrId == e.CourierId);
+            var c = e.CourierId == null ? null : couriers.FirstOrDefault(x => x.UccrId == e.CourierId);
+            var a = e.AgentId == null ? null : agents.FirstOrDefault(x => x.UcagId == e.AgentId);
+            var courierName = c == null ? string.Empty : $"{c.UccrName} {c.UccrSurname}".Trim();
+
+            // Resolve the unified target. Legacy/untyped rows with a courier fall
+            // back to Courier so the picker still renders them.
+            var type = TargetTypeName(e.TargetType) ?? (e.CourierId != null ? "Courier" : null);
+            var (targetId, targetName, targetHint) = type switch
+            {
+                "Courier"        => ((int?)e.CourierId, courierName, c?.Code ?? string.Empty),
+                "Agent"          => ((int?)e.AgentId, a?.UcagName ?? string.Empty, a?.Association ?? string.Empty),
+                "NetworkPartner" => ((int?)e.AgentId, a?.UcagName ?? string.Empty, a?.Association ?? string.Empty),
+                _                => ((int?)null, string.Empty, string.Empty),
+            };
+
             return new TenantRouteRosterEntryDto
             {
                 Id = e.RouteRosterId,
                 RouteId = e.RouteId,
                 CourierId = e.CourierId,
-                CourierName = c == null ? string.Empty : $"{c.UccrName} {c.UccrSurname}".Trim(),
+                CourierName = courierName,
                 CourierCode = c?.Code ?? string.Empty,
+                TargetType = type,
+                TargetId = targetId,
+                TargetName = targetName,
+                TargetHint = targetHint,
                 RosterDate = e.RosterDate,
                 DayOfWeek = e.DayOfWeek,
                 IsActive = e.IsActive,
@@ -234,7 +258,9 @@ public class TenantRouteService(
 
     public async Task<TenantRouteRosterEntryResponse> CreateRosterAsync(int routeId, TenantRouteRosterUpsertDto dto, Guid messageId)
     {
-        if (dto.CourierId <= 0) return FailRosterEntry(messageId, "CourierId is required.");
+        var (targetType, courierId, agentId) = MapTarget(dto.TargetType, dto.TargetId);
+        if (targetType == null || (dto.TargetId ?? 0) <= 0)
+            return FailRosterEntry(messageId, "A Courier, Agent, or Network Partner target is required.");
         if (dto.RosterDate == null && dto.DayOfWeek == null)
             return FailRosterEntry(messageId, "Either RosterDate or DayOfWeek must be set.");
         if (dto.RosterDate != null && dto.DayOfWeek != null)
@@ -252,7 +278,9 @@ public class TenantRouteService(
         var entry = new DispatchRouteRoster
         {
             RouteId = routeId,
-            CourierId = dto.CourierId,
+            TargetType = targetType,
+            CourierId = courierId,
+            AgentId = agentId,
             RosterDate = dto.RosterDate?.Date,
             DayOfWeek = dto.DayOfWeek,
             IsActive = true,
@@ -378,6 +406,16 @@ public class TenantRouteService(
         "Agent"          => ((byte?)2, null, id),
         "NetworkPartner" => ((byte?)3, null, id),
         _                => (null, null, null),
+    };
+
+    // Inverse of MapTarget: the stored target-type byte back to the picker's
+    // string. Null for untyped/unknown rows.
+    private static string? TargetTypeName(byte? type) => type switch
+    {
+        1 => "Courier",
+        2 => "Agent",
+        3 => "NetworkPartner",
+        _ => null,
     };
 
     private string ResolveActor() =>

@@ -65,9 +65,17 @@ public class TenantRouteRosterEntryDto
 {
     public int Id { get; set; }
     public int RouteId { get; set; }
-    public int CourierId { get; set; }
+    // Courier fields kept for the prebook courier-only path: populated when the
+    // row's target is a Courier, null/empty for Agent/NP rows.
+    public int? CourierId { get; set; }
     public string CourierName { get; set; } = string.Empty;
     public string CourierCode { get; set; } = string.Empty;
+    // Unified target (Courier / Agent / NetworkPartner). Resolved server-side so
+    // the React picker renders any type uniformly. Mirrors TenantRouteDto.
+    public string? TargetType { get; set; }   // "Courier" | "Agent" | "NetworkPartner" | null
+    public int? TargetId { get; set; }
+    public string TargetName { get; set; } = string.Empty;
+    public string TargetHint { get; set; } = string.Empty;
     public DateTime? RosterDate { get; set; }
     public byte? DayOfWeek { get; set; }
     public bool IsActive { get; set; }
@@ -76,7 +84,11 @@ public class TenantRouteRosterEntryDto
 
 public class TenantRouteRosterUpsertDto
 {
-    public int CourierId { get; set; }
+    // Target: Courier / Agent / NetworkPartner + the chosen id. NP = an agent
+    // with IsNetworkPartner = 1, so Agent + NetworkPartner both resolve to
+    // AgentId server-side (same MapTarget helper as the route default).
+    public string? TargetType { get; set; }
+    public int? TargetId { get; set; }
     public DateTime? RosterDate { get; set; }
     public byte? DayOfWeek { get; set; }   // Required when RosterDate is null
 }

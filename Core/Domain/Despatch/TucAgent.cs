@@ -103,6 +103,8 @@ public partial class TucAgent
 
     public virtual ICollection<AgentCoverageArea> AgentCoverageAreas { get; set; } = new List<AgentCoverageArea>();
 
+    public virtual ICollection<DispatchRouteRoster> DispatchRouteRosters { get; set; } = new List<DispatchRouteRoster>();
+
     public virtual TucAgentRanking Ranking { get; set; }
 
     public virtual ICollection<Route> Routes { get; set; } = new List<Route>();

@@ -724,6 +724,8 @@ public partial class DespatchContext : DbContext
 
             entity.ToTable("Dispatch_RouteRoster");
 
+            entity.HasIndex(e => e.AgentId, "IX_DispatchRouteRoster_AgentId");
+
             entity.HasIndex(e => new { e.RouteId, e.IsActive }, "IX_DispatchRouteRoster_RouteActive");
 
             entity.HasIndex(e => new { e.RouteId, e.RosterDate }, "UX_DispatchRouteRoster_RouteDate_Active")
@@ -748,9 +750,12 @@ public partial class DespatchContext : DbContext
                 .HasAnnotation("Relational:DefaultConstraintName", "DF_DispatchRouteRoster_IsActive");
             entity.Property(e => e.RosterDate).HasColumnType("datetime");
 
+            entity.HasOne(d => d.Agent).WithMany(p => p.DispatchRouteRosters)
+                .HasForeignKey(d => d.AgentId)
+                .HasConstraintName("FK_DispatchRouteRoster_tucAgents");
+
             entity.HasOne(d => d.Courier).WithMany(p => p.DispatchRouteRosters)
                 .HasForeignKey(d => d.CourierId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_DispatchRouteRoster_tucCourier");
 
             entity.HasOne(d => d.Route).WithMany(p => p.DispatchRouteRosters)

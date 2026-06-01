@@ -54,9 +54,16 @@ export interface AssignableTargets {
 export interface RosterEntry {
   id: number;
   routeId: number;
-  courierId: number;
+  // Courier fields kept for the prebook courier-only path; null/empty for
+  // Agent/NP rows.
+  courierId: number | null;
   courierName: string;
   courierCode: string;
+  // Unified target (Courier / Agent / NP) — feeds the AssignTargetPicker.
+  targetType: AssignTargetType | null;
+  targetId: number | null;
+  targetName: string;
+  targetHint: string;
   rosterDate: string | null;   // ISO date when date-specific
   dayOfWeek: number | null;    // 0 = Sun .. 6 = Sat for weekly pattern
   isActive: boolean;
@@ -64,7 +71,8 @@ export interface RosterEntry {
 }
 
 export interface RosterUpsert {
-  courierId: number;
+  targetType: AssignTargetType | null;
+  targetId: number | null;
   rosterDate: string | null;
   dayOfWeek: number | null;
 }

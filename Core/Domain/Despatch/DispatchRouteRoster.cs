@@ -11,7 +11,7 @@ public partial class DispatchRouteRoster
 
     public int RouteId { get; set; }
 
-    public int CourierId { get; set; }
+    public int? CourierId { get; set; }
 
     public DateTime? RosterDate { get; set; }
 
@@ -22,6 +22,12 @@ public partial class DispatchRouteRoster
     public DateTime CreatedAt { get; set; }
 
     public string CreatedBy { get; set; }
+
+    public byte? TargetType { get; set; }
+
+    public int? AgentId { get; set; }
+
+    public virtual TucAgent Agent { get; set; }
 
     public virtual TucCourier Courier { get; set; }
 

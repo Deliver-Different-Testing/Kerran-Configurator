@@ -597,6 +597,8 @@ public partial class TucClient
 
     public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();
 
+    public virtual ICollection<TblBulkRunSchedule> TblBulkRunSchedules { get; set; } = new List<TblBulkRunSchedule>();
+
     public virtual ICollection<TblSite> TblSiteDefaultDeliveryClients { get; set; } = new List<TblSite>();
 
     public virtual ICollection<TblSite> TblSiteDefaultPickupClients { get; set; } = new List<TblSite>();

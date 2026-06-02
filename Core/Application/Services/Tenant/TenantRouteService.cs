@@ -40,6 +40,7 @@ public class TenantRouteService(
                     : r.DefaultTargetType == 2 ? "Agent"
                     : r.DefaultTargetType == 3 ? "NetworkPartner"
                     : (r.DefaultCourierId != null ? "Courier" : null),
+                ScheduleId = r.ScheduleId,
                 Active = r.Active,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
@@ -96,6 +97,23 @@ public class TenantRouteService(
             }
         }
 
+        // Resolve the bound schedule's display fields (name + window + days) from
+        // the grouped lookup, keyed by the representative id stored on the route.
+        if (rows.Any(r => r.ScheduleId.HasValue))
+        {
+            var byId = (await BuildScheduleLookupAsync()).ToDictionary(s => s.Id);
+            foreach (var r in rows)
+            {
+                if (r.ScheduleId is int sid && byId.TryGetValue(sid, out var s))
+                {
+                    r.ScheduleName = s.Name;
+                    r.ScheduleStartTime = s.StartTime;
+                    r.ScheduleEndTime = s.EndTime;
+                    r.ScheduleDays = s.Days;
+                }
+            }
+        }
+
         return new TenantRoutesResponse(messageId) { Success = true, Routes = rows };
     }
 
@@ -115,6 +133,7 @@ public class TenantRouteService(
             DefaultTargetType = targetType,
             DefaultCourierId = courierId,
             DefaultAgentId = agentId,
+            ScheduleId = dto.ScheduleId,
             Active = dto.Active,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = actor,
@@ -158,6 +177,7 @@ public class TenantRouteService(
             DefaultTargetType = targetType,
             DefaultCourierId = courierId,
             DefaultAgentId = agentId,
+            ScheduleId = dto.ScheduleId,
             Active = true,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = actor,
@@ -198,6 +218,7 @@ public class TenantRouteService(
         route.DefaultTargetType = targetType;
         route.DefaultCourierId = courierId;
         route.DefaultAgentId = agentId;
+        route.ScheduleId = dto.ScheduleId;
         route.Active = dto.Active;
         route.UpdatedAt = DateTime.UtcNow;
         route.UpdatedBy = actor;
@@ -436,6 +457,52 @@ public class TenantRouteService(
             Agents = agents,
             Nps = nps,
         };
+    }
+
+    // Logical schedules for the Route→Schedule binding picker. tblBulkRunSchedule
+    // is one-row-per-weekday, so we pull the rows and group in memory (the table
+    // is small per tenant) by (Name, window, ClientId, Region, SpeedId). Each
+    // group → one option with the representative MIN(BulkRunScheduleId) as Id and
+    // the set of ISO DayOfWeek values. Grouping in memory also sidesteps EF
+    // translating TimeOnly.ToString / multi-key GroupBy.
+    public async Task<TenantScheduleLookupResponse> GetSchedulesLookupAsync(Guid messageId)
+        => new(messageId) { Success = true, Schedules = await BuildScheduleLookupAsync() };
+
+    // Shared grouping used by both the lookup endpoint and GetAll's schedule
+    // resolution. tblBulkRunSchedule is one-row-per-weekday, so group rows
+    // sharing (Name, window, ClientId, Region, SpeedId) into one logical schedule
+    // keyed by the representative MIN(BulkRunScheduleId). Done in memory (small
+    // table) to sidestep EF translating TimeOnly.ToString / multi-key GroupBy.
+    private async Task<List<TenantScheduleLookupDto>> BuildScheduleLookupAsync()
+    {
+        var rows = await Context.TblBulkRunSchedules.AsNoTracking()
+            .Select(s => new
+            {
+                s.BulkRunScheduleId,
+                s.Name,
+                s.DayOfWeek,
+                s.StartTime,
+                s.EndTime,
+                s.ClientId,
+                s.Region,
+                s.SpeedId,
+            })
+            .ToListAsync();
+
+        return rows
+            .GroupBy(s => new { s.Name, s.StartTime, s.EndTime, s.ClientId, s.Region, s.SpeedId })
+            .Select(g => new TenantScheduleLookupDto
+            {
+                Id = g.Min(x => x.BulkRunScheduleId),
+                Name = g.Key.Name ?? string.Empty,
+                StartTime = g.Key.StartTime.ToString("HH\\:mm"),
+                EndTime = g.Key.EndTime.ToString("HH\\:mm"),
+                Days = g.Select(x => (int)x.DayOfWeek).Distinct().OrderBy(d => d).ToList(),
+                ClientId = g.Key.ClientId,
+            })
+            .OrderBy(d => d.Name)
+            .ThenBy(d => d.StartTime)
+            .ToList();
     }
 
     // ─── HELPERS ──────────────────────────────────────────────────────

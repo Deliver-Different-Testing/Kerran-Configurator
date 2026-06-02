@@ -83,6 +83,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<TblBulkJob> TblBulkJobs { get; set; }
 
+    public virtual DbSet<TblBulkRunSchedule> TblBulkRunSchedules { get; set; }
+
     public virtual DbSet<TblContactRole> TblContactRoles { get; set; }
 
     public virtual DbSet<TblSite> TblSites { get; set; }
@@ -1079,6 +1081,9 @@ public partial class DespatchContext : DbContext
 
             entity.HasIndex(e => e.DefaultAgentId, "IX_Routes_DefaultAgentId");
 
+            // Logical reference only — no HasOne/FK to tblBulkRunSchedule.
+            entity.HasIndex(e => e.ScheduleId, "IX_Routes_ScheduleId");
+
             entity.Property(e => e.Active).HasAnnotation("Relational:DefaultConstraintName", "DF_Routes_Active");
             entity.Property(e => e.Area)
                 .IsRequired()
@@ -1277,6 +1282,35 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.Speed)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_tblBulkJob_tucJobType");
+        });
+
+        modelBuilder.Entity<TblBulkRunSchedule>(entity =>
+        {
+            entity.HasKey(e => e.BulkRunScheduleId);
+
+            entity.ToTable("tblBulkRunSchedule");
+
+            entity.HasIndex(e => e.ClientId, "idx_ClientId");
+
+            entity.HasIndex(e => e.Region, "idx_Region");
+
+            entity.HasIndex(e => e.SpeedId, "idx_SpeedId");
+
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.DropOffLocationId).HasColumnName("DropOffLocationID");
+            entity.Property(e => e.Name).HasMaxLength(250);
+
+            entity.HasOne(d => d.Client).WithMany(p => p.TblBulkRunSchedules)
+                .HasForeignKey(d => d.ClientId)
+                .HasConstraintName("FK_tblBulkRunSchedule_tucClient");
+
+            entity.HasOne(d => d.ParentSpeed).WithMany(p => p.TblBulkRunScheduleParentSpeeds)
+                .HasForeignKey(d => d.ParentSpeedId)
+                .HasConstraintName("FK_tblBulkRunSchedule_tucJobType2");
+
+            entity.HasOne(d => d.Speed).WithMany(p => p.TblBulkRunScheduleSpeeds)
+                .HasForeignKey(d => d.SpeedId)
+                .HasConstraintName("FK_tblBulkRunSchedule_tucJobType");
         });
 
         modelBuilder.Entity<TblContactRole>(entity =>

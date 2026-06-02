@@ -136,6 +136,26 @@ public class TenantRoutesController(TenantRouteService routeService) : BaseContr
         }
     }
 
+    // Client Manager schedules for the Route→Schedule binding picker. One entry
+    // per logical schedule (grouped from one-row-per-weekday tblBulkRunSchedule).
+    // Relative route → /api/v1/tenant/routes/schedules/lookup.
+    [HttpGet("schedules/lookup")]
+    public async Task<IActionResult> SchedulesLookup()
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            var response = await routeService.GetSchedulesLookupAsync(messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Schedules);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to load schedules lookup");
+            throw;
+        }
+    }
+
     // ─── Roster (per-route sub-resource) ──────────────────────────────
 
     [HttpGet("{routeId:int}/roster")]

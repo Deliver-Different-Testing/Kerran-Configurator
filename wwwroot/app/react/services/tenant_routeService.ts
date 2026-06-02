@@ -23,6 +23,12 @@ export interface TenantRoute {
   defaultTargetId: number | null;
   defaultTargetName: string;
   defaultTargetHint: string;
+  // Bound logical schedule (resolved). scheduleId null = unbound.
+  scheduleId: number | null;
+  scheduleName: string;
+  scheduleStartTime: string;   // "HH:mm"
+  scheduleEndTime: string;     // "HH:mm"
+  scheduleDays: number[];      // ISO 1=Mon … 7=Sun
   active: boolean;
   zipcodes: RouteZipcode[];
   rosterEntryCount: number;
@@ -35,6 +41,7 @@ export interface RouteUpsert {
   area: string;
   defaultTargetType: AssignTargetType | null;
   defaultTargetId: number | null;
+  scheduleId: number | null;
   active: boolean;
   zipPolygonIds: number[];
 }
@@ -45,6 +52,7 @@ export interface RouteCopy {
   name: string;
   defaultTargetType: AssignTargetType | null;
   defaultTargetId: number | null;
+  scheduleId: number | null;
   copyZipcodes: boolean;
 }
 
@@ -97,6 +105,17 @@ export interface CourierLookup {
   code: string;
 }
 
+// One logical Client Manager schedule for the Route→Schedule binding picker.
+// id = representative BulkRunScheduleId. days are ISO-8601 (1=Mon … 7=Sun).
+export interface ScheduleLookup {
+  id: number;
+  name: string;
+  startTime: string;   // "HH:mm"
+  endTime: string;     // "HH:mm"
+  days: number[];
+  clientId: number | null;
+}
+
 export const routeService = {
   async listRoutes(): Promise<TenantRoute[]> {
     const { data } = await api.get<TenantRoute[]>('/routes');
@@ -139,6 +158,10 @@ export const routeService = {
   },
   async getAssignableTargets(): Promise<AssignableTargets> {
     const { data } = await api.get<AssignableTargets>('/routes/assignable-targets');
+    return data;
+  },
+  async listSchedules(): Promise<ScheduleLookup[]> {
+    const { data } = await api.get<ScheduleLookup[]>('/routes/schedules/lookup');
     return data;
   },
 };

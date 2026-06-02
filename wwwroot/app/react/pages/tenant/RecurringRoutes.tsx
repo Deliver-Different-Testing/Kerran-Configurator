@@ -9,6 +9,7 @@ import {
   RouteCopy,
   AssignableTargets,
   AssignTargetType,
+  ScheduleLookup,
 } from '@/services/tenant_routeService';
 import { AssignTargetPicker, AssignTargetValue } from '@/components/common/AssignTargetPicker';
 
@@ -24,6 +25,7 @@ export function RecurringRoutes() {
   const [activeTab, setActiveTab] = useState<Tab>('routes');
   const [routes, setRoutes] = useState<TenantRoute[]>([]);
   const [targets, setTargets] = useState<AssignableTargets | null>(null);
+  const [schedules, setSchedules] = useState<ScheduleLookup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,12 +33,14 @@ export function RecurringRoutes() {
     setLoading(true);
     setError(null);
     try {
-      const [r, t] = await Promise.all([
+      const [r, t, s] = await Promise.all([
         routeService.listRoutes(),
         routeService.getAssignableTargets(),
+        routeService.listSchedules().catch(() => [] as ScheduleLookup[]),
       ]);
       setRoutes(r);
       setTargets(t);
+      setSchedules(s);
     } catch (e: unknown) {
       setError((e as Error).message ?? 'Failed to load routes');
     } finally {
@@ -94,7 +98,7 @@ export function RecurringRoutes() {
       {loading ? (
         <div className="rounded-xl border border-border bg-white p-10 text-center text-sm text-text-secondary">Loading…</div>
       ) : activeTab === 'routes' ? (
-        <RoutesTab routes={routes} targets={targets} onChanged={refresh} />
+        <RoutesTab routes={routes} targets={targets} schedules={schedules} onChanged={refresh} />
       ) : (
         <RosterTab routes={routes} targets={targets} />
       )}
@@ -107,10 +111,12 @@ export function RecurringRoutes() {
 function RoutesTab({
   routes,
   targets,
+  schedules,
   onChanged,
 }: {
   routes: TenantRoute[];
   targets: AssignableTargets | null;
+  schedules: ScheduleLookup[];
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState<TenantRoute | 'new' | null>(null);
@@ -145,6 +151,7 @@ function RoutesTab({
               <tr className="text-left text-[12.5px] font-semibold text-text-secondary">
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Area</th>
+                <th className="px-4 py-3">Schedule</th>
                 <th className="px-4 py-3">Default</th>
                 <th className="px-4 py-3">Zip Codes</th>
                 <th className="px-4 py-3">Roster</th>
@@ -159,6 +166,14 @@ function RoutesTab({
                     <button onClick={() => setEditing(r)} className="text-[#0d0c2c] font-medium hover:text-brand-cyan">{r.name}</button>
                   </td>
                   <td className="px-4 py-3.5 text-text-secondary">{r.area || '—'}</td>
+                  <td className="px-4 py-3.5">
+                    {r.scheduleId ? (
+                      <div>
+                        <ScheduleChip name={r.scheduleName} startTime={r.scheduleStartTime} endTime={r.scheduleEndTime} />
+                        <div className="text-[11px] text-text-secondary mt-1">{formatScheduleDays(r.scheduleDays)}</div>
+                      </div>
+                    ) : <span className="text-text-secondary text-[12.5px]">— Unbound —</span>}
+                  </td>
                   <td className="px-4 py-3.5">
                     {r.defaultTargetName ? (
                       <div>
@@ -199,6 +214,7 @@ function RoutesTab({
         <RouteEditorModal
           route={editing === 'new' ? null : editing}
           targets={targets}
+          schedules={schedules}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); onChanged(); }}
         />
@@ -208,6 +224,7 @@ function RoutesTab({
         <CopyRouteModal
           source={copying}
           targets={targets}
+          schedules={schedules}
           onClose={() => setCopying(null)}
           onCopied={() => { setCopying(null); onChanged(); }}
         />
@@ -222,11 +239,13 @@ function RoutesTab({
 function CopyRouteModal({
   source,
   targets,
+  schedules,
   onClose,
   onCopied,
 }: {
   source: TenantRoute;
   targets: AssignableTargets | null;
+  schedules: ScheduleLookup[];
   onClose: () => void;
   onCopied: () => void;
 }) {
@@ -236,6 +255,7 @@ function CopyRouteModal({
       ? { type: source.defaultTargetType, id: source.defaultTargetId }
       : null,
   );
+  const [scheduleId, setScheduleId] = useState<number | null>(source.scheduleId ?? null);
   const [copyZipcodes, setCopyZipcodes] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -250,6 +270,7 @@ function CopyRouteModal({
         name: name.trim(),
         defaultTargetType: target?.type ?? null,
         defaultTargetId: target?.id ?? null,
+        scheduleId,
         copyZipcodes,
       };
       await routeService.copyRoute(source.id, dto);
@@ -286,6 +307,9 @@ function CopyRouteModal({
               className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
           </div>
 
+          <ScheduleSection schedules={schedules} value={scheduleId} onChange={setScheduleId}
+            hint="Most-common reason to Copy is splitting AM and PM with the same geometry." />
+
           <div>
             <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Default assignment</label>
             <AssignTargetPicker targets={targets} value={target} onChange={setTarget} />
@@ -319,11 +343,13 @@ function CopyRouteModal({
 function RouteEditorModal({
   route,
   targets,
+  schedules,
   onClose,
   onSaved,
 }: {
   route: TenantRoute | null;
   targets: AssignableTargets | null;
+  schedules: ScheduleLookup[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -334,6 +360,7 @@ function RouteEditorModal({
       ? { type: route.defaultTargetType, id: route.defaultTargetId }
       : null,
   );
+  const [scheduleId, setScheduleId] = useState<number | null>(route?.scheduleId ?? null);
   const [active, setActive] = useState(route?.active ?? false);
   const [zipcodes, setZipcodes] = useState<{ zipPolygonId: number; zip: string }[]>(route?.zipcodes ?? []);
   const [search, setSearch] = useState('');
@@ -364,6 +391,7 @@ function RouteEditorModal({
         area: area.trim(),
         defaultTargetType: target?.type ?? null,
         defaultTargetId: target?.id ?? null,
+        scheduleId,
         active,
         zipPolygonIds: zipcodes.map(z => z.zipPolygonId),
       };
@@ -402,6 +430,9 @@ function RouteEditorModal({
             <input value={area} onChange={(e) => setArea(e.target.value)} placeholder="e.g. Westside"
               className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
           </div>
+
+          <ScheduleSection schedules={schedules} value={scheduleId} onChange={setScheduleId}
+            hint="This route serves the chosen schedule's pickup time window. Day-of-week is set on the schedule; the route supplies geometry." />
 
           <div>
             <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Default Assignment</label>
@@ -790,6 +821,76 @@ function TargetTypeChip({ type }: { type: AssignTargetType }) {
       ? 'bg-violet-100 text-violet-800'
       : 'bg-amber-100 text-amber-800';
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tone}`}>{label}</span>;
+}
+
+const ISO_DAY_LABELS: Record<number, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };
+
+// ISO day list (1=Mon … 7=Sun) → compact label: "Mon–Fri", "Every day", or a
+// comma list for non-contiguous sets.
+function formatScheduleDays(days: number[]): string {
+  if (!days || days.length === 0) return '—';
+  const sorted = [...days].sort((a, b) => a - b);
+  if (sorted.length === 7) return 'Every day';
+  const contiguous = sorted.every((d, i) => i === 0 || d === sorted[i - 1] + 1);
+  if (contiguous && sorted.length >= 3) return `${ISO_DAY_LABELS[sorted[0]]}–${ISO_DAY_LABELS[sorted[sorted.length - 1]]}`;
+  return sorted.map((d) => ISO_DAY_LABELS[d] ?? String(d)).join(', ');
+}
+
+// Tint a schedule chip by start-of-window hour — AM / midday / evening, mirroring
+// the mockup's orange / purple / reflex coding.
+function scheduleTone(startTime: string): string {
+  const hour = parseInt(startTime.slice(0, 2), 10);
+  if (Number.isNaN(hour)) return 'bg-slate-100 text-slate-700';
+  if (hour < 12) return 'bg-amber-100 text-amber-800';
+  if (hour < 17) return 'bg-violet-100 text-violet-800';
+  return 'bg-blue-100 text-blue-800';
+}
+
+function ScheduleChip({ name, startTime, endTime }: { name: string; startTime: string; endTime: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${scheduleTone(startTime)}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+      {name}{startTime && endTime ? ` · ${startTime}–${endTime}` : ''}
+    </span>
+  );
+}
+
+// Schedule dropdown + live preview (Time window / Days). Holiday handling is
+// intentionally omitted — it's per-booking (tucJobBooking.HolidayDeliveryOption),
+// not a schedule attribute. Optional: a route may stay unbound until backfilled.
+function ScheduleSection({
+  schedules,
+  value,
+  onChange,
+  hint,
+}: {
+  schedules: ScheduleLookup[];
+  value: number | null;
+  onChange: (id: number | null) => void;
+  hint: string;
+}) {
+  const selected = value != null ? schedules.find((s) => s.id === value) ?? null : null;
+  return (
+    <div>
+      <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Schedule</label>
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value ? parseInt(e.target.value, 10) : null)}
+        className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none">
+        <option value="">— No schedule (unbound) —</option>
+        {schedules.map((s) => (
+          <option key={s.id} value={s.id}>{s.name} — {formatScheduleDays(s.days)} {s.startTime}–{s.endTime}</option>
+        ))}
+      </select>
+      {selected && (
+        <div className="mt-2 rounded-lg bg-cyan-50 border border-cyan-100 px-3 py-2.5 text-[12px] text-[#0d0c2c]">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-cyan-700 mb-1">Selected schedule</div>
+          <div className="flex justify-between py-0.5"><span className="text-text-secondary">Time window</span><span className="tabular-nums">{selected.startTime} – {selected.endTime}</span></div>
+          <div className="flex justify-between py-0.5"><span className="text-text-secondary">Days</span><span>{formatScheduleDays(selected.days)}</span></div>
+        </div>
+      )}
+      {schedules.length === 0 && <p className="text-[11px] text-text-secondary mt-1">No schedules available for this tenant yet.</p>}
+      <p className="text-[11px] text-text-secondary mt-1">{hint}</p>
+    </div>
+  );
 }
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {

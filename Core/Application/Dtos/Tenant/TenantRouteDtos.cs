@@ -21,6 +21,13 @@ public class TenantRouteDto
     public int? DefaultTargetId { get; set; }
     public string DefaultTargetName { get; set; } = string.Empty;
     public string DefaultTargetHint { get; set; } = string.Empty;
+    // Bound logical schedule (resolved from the representative BulkRunScheduleId).
+    // Null/empty when the route has no schedule binding yet.
+    public int? ScheduleId { get; set; }
+    public string ScheduleName { get; set; } = string.Empty;
+    public string ScheduleStartTime { get; set; } = string.Empty;   // "HH:mm"
+    public string ScheduleEndTime { get; set; } = string.Empty;     // "HH:mm"
+    public List<int> ScheduleDays { get; set; } = new();            // ISO 1=Mon … 7=Sun
     public bool Active { get; set; }
     public List<TenantRouteZipcodeDto> Zipcodes { get; set; } = new();
     public int RosterEntryCount { get; set; }
@@ -44,6 +51,7 @@ public class TenantRouteUpsertDto
     // so Agent + NetworkPartner both resolve to DefaultAgentId server-side.
     public string? DefaultTargetType { get; set; }
     public int? DefaultTargetId { get; set; }
+    public int? ScheduleId { get; set; }   // representative BulkRunScheduleId; null = unbound
     public bool Active { get; set; } = true;
     public List<int> ZipPolygonIds { get; set; } = new();
 }
@@ -61,6 +69,7 @@ public class TenantRouteCopyDto
     // unified shape + MapTarget path as TenantRouteUpsertDto). Null clears it.
     public string? DefaultTargetType { get; set; }
     public int? DefaultTargetId { get; set; }
+    public int? ScheduleId { get; set; }   // schedule binding for the new route
     public bool CopyZipcodes { get; set; } = true;
 }
 
@@ -164,4 +173,25 @@ public class TenantAssignableTargetsResponse : BaseResponse
     public List<TenantAssignTargetDto> Couriers { get; set; } = new();
     public List<TenantAssignTargetDto> Agents { get; set; } = new();
     public List<TenantAssignTargetDto> Nps { get; set; } = new();
+}
+
+// ─── Schedule lookup (Route→Schedule binding picker) ──────────────────
+// One entry per LOGICAL schedule — tblBulkRunSchedule is one-row-per-weekday,
+// so we group rows sharing (Name, StartTime, EndTime, ClientId, Region, SpeedId)
+// and expose the representative MIN(BulkRunScheduleId) as Id. Days are ISO-8601
+// (1=Mon … 7=Sun). StartTime/EndTime are pre-formatted "HH:mm" strings.
+public class TenantScheduleLookupDto
+{
+    public int Id { get; set; }                 // representative BulkRunScheduleId
+    public string Name { get; set; } = string.Empty;
+    public string StartTime { get; set; } = string.Empty;
+    public string EndTime { get; set; } = string.Empty;
+    public List<int> Days { get; set; } = new();
+    public int? ClientId { get; set; }
+}
+
+public class TenantScheduleLookupResponse : BaseResponse
+{
+    public TenantScheduleLookupResponse(Guid messageId) : base(messageId) { }
+    public List<TenantScheduleLookupDto> Schedules { get; set; } = new();
 }

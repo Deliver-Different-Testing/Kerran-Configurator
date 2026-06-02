@@ -87,6 +87,10 @@ public partial class TucJobType
 
     public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();
 
+    public virtual ICollection<TblBulkRunSchedule> TblBulkRunScheduleParentSpeeds { get; set; } = new List<TblBulkRunSchedule>();
+
+    public virtual ICollection<TblBulkRunSchedule> TblBulkRunScheduleSpeeds { get; set; } = new List<TblBulkRunSchedule>();
+
     public virtual ICollection<TucEventTemplate> TucEventTemplates { get; set; } = new List<TucEventTemplate>();
 
     public virtual ICollection<TucJob> TucJobAcceptedJobTypes { get; set; } = new List<TucJob>();

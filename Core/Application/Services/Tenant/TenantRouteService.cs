@@ -135,6 +135,50 @@ public class TenantRouteService(
         return await ReadRouteAsync(route.RouteId, messageId);
     }
 
+    // Copy a route's geometry + default target into a brand-new route. The copy
+    // gets a fresh, empty roster and no booking associations: copying a route is
+    // a geometry operation, not a booking migration. Re-assigning recurring
+    // bookings to the copy is operator-driven in the Dispatch app / Route Viewer.
+    public async Task<TenantRouteResponse> CopyAsync(int sourceRouteId, TenantRouteCopyDto dto, Guid messageId)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            return FailRoute(messageId, "Name is required.");
+
+        var src = await Context.Routes
+            .Include(r => r.ZipPolygons)
+            .FirstOrDefaultAsync(r => r.RouteId == sourceRouteId);
+        if (src == null) return FailRoute(messageId, "Source route not found.");
+
+        var actor = ResolveActor();
+        var (targetType, courierId, agentId) = MapTarget(dto.DefaultTargetType, dto.DefaultTargetId);
+        var copy = new Route
+        {
+            Name = dto.Name.Trim(),
+            Area = src.Area ?? string.Empty,
+            DefaultTargetType = targetType,
+            DefaultCourierId = courierId,
+            DefaultAgentId = agentId,
+            Active = true,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = actor,
+        };
+
+        if (dto.CopyZipcodes)
+        {
+            // Re-attach the SAME ZipPolygon rows by reference; EF inserts fresh
+            // RouteZipcodes junction rows for the copy on save (no polygon dupes).
+            foreach (var z in src.ZipPolygons)
+                copy.ZipPolygons.Add(z);
+        }
+
+        // Deliberately no Dispatch_RouteRoster copy and no tucJobBooking.RouteId
+        // re-stamp — see method summary.
+        Context.Routes.Add(copy);
+        await Context.SaveChangesAsync();
+
+        return await ReadRouteAsync(copy.RouteId, messageId);
+    }
+
     public async Task<TenantRouteResponse> UpdateAsync(int id, TenantRouteUpsertDto dto, Guid messageId)
     {
         if (string.IsNullOrWhiteSpace(dto.Name))

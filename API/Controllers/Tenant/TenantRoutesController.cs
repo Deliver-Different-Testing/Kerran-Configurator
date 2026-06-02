@@ -75,6 +75,27 @@ public class TenantRoutesController(TenantRouteService routeService) : BaseContr
         }
     }
 
+    // Copy a route's geometry + default target into a new route. Does NOT copy
+    // the roster or re-stamp bookings — see TenantRouteService.CopyAsync.
+    [HttpPost("{sourceRouteId:int}/copy")]
+    public async Task<IActionResult> Copy(int sourceRouteId, [FromBody] TenantRouteCopyDto dto)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await routeService.CopyAsync(sourceRouteId, dto, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Route);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to copy tenant route {Id}", sourceRouteId);
+            throw;
+        }
+    }
+
     // Soft-delete (Active = 0). Hard delete is intentionally NOT exposed —
     // tucJobBooking.RouteId FK depends on Routes existing.
     [HttpDelete("{id:int}")]

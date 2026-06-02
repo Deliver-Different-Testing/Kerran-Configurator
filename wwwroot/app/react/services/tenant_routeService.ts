@@ -39,6 +39,15 @@ export interface RouteUpsert {
   zipPolygonIds: number[];
 }
 
+// Copy a route's geometry + default target into a new route. No roster copy,
+// no booking re-stamp. ScheduleId is deferred until Route→Schedule binding lands.
+export interface RouteCopy {
+  name: string;
+  defaultTargetType: AssignTargetType | null;
+  defaultTargetId: number | null;
+  copyZipcodes: boolean;
+}
+
 export interface AssignTarget {
   id: number;
   name: string;
@@ -103,6 +112,10 @@ export const routeService = {
   },
   async softDeleteRoute(id: number): Promise<TenantRoute> {
     const { data } = await api.delete<TenantRoute>(`/routes/${id}`);
+    return data;
+  },
+  async copyRoute(sourceRouteId: number, dto: RouteCopy): Promise<TenantRoute> {
+    const { data } = await api.post<TenantRoute>(`/routes/${sourceRouteId}/copy`, dto);
     return data;
   },
   async listRoster(routeId: number): Promise<RosterEntry[]> {

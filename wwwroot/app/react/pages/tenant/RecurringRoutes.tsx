@@ -6,6 +6,7 @@ import {
   RosterEntry,
   ZipcodeLookup,
   RouteUpsert,
+  RouteCopy,
   AssignableTargets,
   AssignTargetType,
 } from '@/services/tenant_routeService';
@@ -113,6 +114,7 @@ function RoutesTab({
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState<TenantRoute | 'new' | null>(null);
+  const [copying, setCopying] = useState<TenantRoute | null>(null);
 
   const handleSoftDelete = async (r: TenantRoute) => {
     if (!confirm(`Soft-delete "${r.name}"? It will be hidden but not removed.`)) return;
@@ -182,6 +184,7 @@ function RoutesTab({
                       : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200 text-slate-700">Inactive</span>}
                   </td>
                   <td className="px-4 py-3.5 text-right text-[12.5px] space-x-3">
+                    <button onClick={() => setCopying(r)} className="text-text-secondary hover:text-brand-cyan font-medium">Copy</button>
                     <button onClick={() => setEditing(r)} className="text-text-secondary hover:text-brand-cyan font-medium">Edit</button>
                     <button onClick={() => handleSoftDelete(r)} className="text-text-secondary hover:text-red-600 font-medium">Delete</button>
                   </td>
@@ -200,6 +203,115 @@ function RoutesTab({
           onSaved={() => { setEditing(null); onChanged(); }}
         />
       )}
+
+      {copying && (
+        <CopyRouteModal
+          source={copying}
+          targets={targets}
+          onClose={() => setCopying(null)}
+          onCopied={() => { setCopying(null); onChanged(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Copies a route's geometry + default target into a new route. Mirrors the
+// Edit Route modal shape. Bookings + roster are NOT copied — the amber callout
+// makes the booking contract unmissable.
+function CopyRouteModal({
+  source,
+  targets,
+  onClose,
+  onCopied,
+}: {
+  source: TenantRoute;
+  targets: AssignableTargets | null;
+  onClose: () => void;
+  onCopied: () => void;
+}) {
+  const [name, setName] = useState(`${source.name} (copy)`);
+  const [target, setTarget] = useState<AssignTargetValue | null>(
+    source.defaultTargetType && source.defaultTargetId
+      ? { type: source.defaultTargetType, id: source.defaultTargetId }
+      : null,
+  );
+  const [copyZipcodes, setCopyZipcodes] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const valid = name.trim().length > 0;
+
+  const submit = async () => {
+    setErr(null);
+    setSaving(true);
+    try {
+      const dto: RouteCopy = {
+        name: name.trim(),
+        defaultTargetType: target?.type ?? null,
+        defaultTargetId: target?.id ?? null,
+        copyZipcodes,
+      };
+      await routeService.copyRoute(source.id, dto);
+      onCopied();
+    } catch (e: unknown) {
+      setErr((e as Error).message ?? 'Copy failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-border">
+          <h2 className="font-display text-lg font-semibold text-[#0d0c2c]">Copy Route</h2>
+          <p className="text-[12.5px] text-text-secondary mt-0.5">Copies geometry + default assignment. Existing bookings stay on the source route.</p>
+        </div>
+
+        <div className="px-6 py-5 overflow-y-auto space-y-4">
+          {err && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
+
+          <div className="flex items-center justify-between bg-slate-50 border border-border rounded-lg px-3 py-2.5">
+            <div>
+              <div className="text-[11px] font-medium text-text-secondary uppercase tracking-wide">Source</div>
+              <div className="text-sm text-[#0d0c2c]">{source.name}</div>
+            </div>
+            <div className="text-[12.5px] text-text-secondary">{source.zipcodes.length} zipcode{source.zipcodes.length === 1 ? '' : 's'}</div>
+          </div>
+
+          <div>
+            <label className="block text-[12.5px] font-medium text-text-secondary mb-1">New route name *</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Central Valley PM"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
+          </div>
+
+          <div>
+            <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Default assignment</label>
+            <AssignTargetPicker targets={targets} value={target} onChange={setTarget} />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={copyZipcodes} onChange={(e) => setCopyZipcodes(e.target.checked)} className="w-4 h-4 accent-brand-cyan" />
+            <span>Copy {source.zipcodes.length} zipcode{source.zipcodes.length === 1 ? '' : 's'} <span className="text-text-secondary">(uncheck to start with an empty geometry)</span></span>
+          </label>
+
+          <div className="flex gap-2.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-[12.5px] text-[#7c2d12]">
+            <span aria-hidden="true">⚠</span>
+            <div>
+              <strong>Bookings are not copied.</strong> Existing recurring bookings stay attached to <em>{source.name}</em>. Re-assign bookings to the new route from the Dispatch app's Recurring list / Route Viewer.
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-border bg-slate-50 flex justify-end gap-2">
+          <button onClick={onClose} className="px-5 py-2 text-[13px] text-text-secondary hover:text-[#0d0c2c] hover:bg-white rounded-full font-medium">Cancel</button>
+          <button onClick={submit} disabled={!valid || saving}
+            className="bg-brand-cyan text-[#0d0c2c] font-medium text-[13px] px-5 py-2 rounded-full disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed hover:shadow-cyan-glow transition-shadow">
+            {saving ? 'Copying…' : 'Copy route'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

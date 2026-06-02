@@ -48,6 +48,22 @@ public class TenantRouteUpsertDto
     public List<int> ZipPolygonIds { get; set; } = new();
 }
 
+// ─── Route copy ───────────────────────────────────────────────────────
+// Copies geometry (zipcodes) + default target into a NEW route. Deliberately
+// does not copy Dispatch_RouteRoster rows or re-stamp tucJobBooking.RouteId —
+// booking↔route association stays operator-driven (Dispatch app / Route Viewer).
+// ScheduleId is intentionally absent until the Route→Schedule binding lands
+// (Step 2/3 of the schedule-binding work) — Routes has no ScheduleId yet.
+public class TenantRouteCopyDto
+{
+    public string Name { get; set; } = string.Empty;
+    // Default target: Courier / Agent / NetworkPartner + the chosen id (same
+    // unified shape + MapTarget path as TenantRouteUpsertDto). Null clears it.
+    public string? DefaultTargetType { get; set; }
+    public int? DefaultTargetId { get; set; }
+    public bool CopyZipcodes { get; set; } = true;
+}
+
 public class TenantRoutesResponse : BaseResponse
 {
     public TenantRoutesResponse(Guid messageId) : base(messageId) { }

@@ -10,6 +10,7 @@ import {
   AssignableTargets,
   AssignTargetType,
   ScheduleLookup,
+  RouteBooking,
 } from '@/services/tenant_routeService';
 import { AssignTargetPicker, AssignTargetValue } from '@/components/common/AssignTargetPicker';
 
@@ -155,6 +156,7 @@ function RoutesTab({
                 <th className="px-4 py-3">Default</th>
                 <th className="px-4 py-3">Zip Codes</th>
                 <th className="px-4 py-3">Roster</th>
+                <th className="px-4 py-3">Bookings</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -192,6 +194,10 @@ function RoutesTab({
                   <td className="px-4 py-3.5 text-text-secondary">
                     <span className="text-[#0d0c2c] font-display font-semibold">{r.rosterEntryCount}</span>
                     <span className="text-[11px] ml-1">entries</span>
+                  </td>
+                  <td className="px-4 py-3.5 text-text-secondary">
+                    <span className="text-[#0d0c2c] font-display font-semibold">{r.bookingCount}</span>
+                    <span className="text-[11px] ml-1">booking{r.bookingCount === 1 ? '' : 's'}</span>
                   </td>
                   <td className="px-4 py-3.5">
                     {r.active
@@ -471,6 +477,8 @@ function RouteEditorModal({
               )}
             </div>
           </div>
+
+          {route && <RouteBookingsSection route={route} />}
 
           <label className="flex items-center gap-2 text-sm pt-2">
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="w-4 h-4 accent-brand-cyan" />
@@ -821,6 +829,80 @@ function TargetTypeChip({ type }: { type: AssignTargetType }) {
       ? 'bg-violet-100 text-violet-800'
       : 'bg-amber-100 text-amber-800';
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tone}`}>{label}</span>;
+}
+
+// Collapsible read-only summary of live recurring bookings on a route. Lazy-loads
+// the detail on first expand (the count is already on the route). Re-assignment is
+// operator-driven in the Dispatch app / Route Viewer — this is view-only.
+function RouteBookingsSection({ route }: { route: TenantRoute }) {
+  const [open, setOpen] = useState(false);
+  const [bookings, setBookings] = useState<RouteBooking[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const toggle = async () => {
+    const next = !open;
+    setOpen(next);
+    if (next && bookings === null && !loading) {
+      setLoading(true); setErr(null);
+      try {
+        setBookings(await routeService.listBookings(route.id));
+      } catch (e: unknown) {
+        setErr((e as Error).message ?? 'Failed to load bookings');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const fmtNextDue = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+  return (
+    <div className="border border-border rounded-lg">
+      <button type="button" onClick={toggle}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+        <span className="text-[12.5px] font-medium text-[#0d0c2c]">
+          Bookings on this route <span className="text-text-secondary">({route.bookingCount})</span>
+        </span>
+        <span className="text-text-secondary text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 border-t border-border">
+          {loading && <div className="text-[12px] text-text-secondary py-3">Loading bookings…</div>}
+          {err && <div className="text-[12px] text-red-700 py-3">{err}</div>}
+          {!loading && !err && bookings && bookings.length === 0 && (
+            <div className="text-[12px] text-text-secondary py-3">No live recurring bookings on this route.</div>
+          )}
+          {!loading && !err && bookings && bookings.length > 0 && (
+            <table className="w-full text-[12.5px] mt-2">
+              <thead>
+                <tr className="text-left text-[11px] font-semibold text-text-secondary border-b border-border">
+                  <th className="py-1.5 pr-2">Client</th>
+                  <th className="py-1.5 pr-2">Pickup</th>
+                  <th className="py-1.5 pr-2">Days</th>
+                  <th className="py-1.5">Next due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.map((b) => (
+                  <tr key={b.id} className="border-b border-border last:border-b-0">
+                    <td className="py-1.5 pr-2 text-[#0d0c2c]">{b.clientName || '—'}</td>
+                    <td className="py-1.5 pr-2 tabular-nums">{b.pickupWindow || '—'}</td>
+                    <td className="py-1.5 pr-2">{b.days || '—'}</td>
+                    <td className="py-1.5 tabular-nums">{fmtNextDue(b.nextDue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="text-[11px] text-text-secondary mt-2">
+            Read-only. Re-assign bookings to a different route from the Dispatch app's Recurring list / Route Viewer.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const ISO_DAY_LABELS: Record<number, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };

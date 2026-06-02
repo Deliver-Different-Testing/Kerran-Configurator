@@ -31,6 +31,9 @@ public class TenantRouteDto
     public bool Active { get; set; }
     public List<TenantRouteZipcodeDto> Zipcodes { get; set; } = new();
     public int RosterEntryCount { get; set; }
+    // Count of live recurring bookings attached to this route
+    // (tucJobBooking UcbkActive = 1 AND UcbkDone <> 1). Operator-driven binding.
+    public int BookingCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
@@ -194,4 +197,22 @@ public class TenantScheduleLookupResponse : BaseResponse
 {
     public TenantScheduleLookupResponse(Guid messageId) : base(messageId) { }
     public List<TenantScheduleLookupDto> Schedules { get; set; } = new();
+}
+
+// ─── Bookings on a route (read-only summary) ──────────────────────────
+// Live recurring bookings attached to a route. Read-only — booking↔route
+// association is operator-driven in the Dispatch app / Route Viewer.
+public class TenantRouteBookingDto
+{
+    public int Id { get; set; }                              // UcbkId
+    public string ClientName { get; set; } = string.Empty;
+    public string PickupWindow { get; set; } = string.Empty; // UcbkTime "HH:mm"
+    public string Days { get; set; } = string.Empty;         // UcbkDays (legacy pattern)
+    public DateTime? NextDue { get; set; }                   // UcbkNextDue
+}
+
+public class TenantRouteBookingsResponse : BaseResponse
+{
+    public TenantRouteBookingsResponse(Guid messageId) : base(messageId) { }
+    public List<TenantRouteBookingDto> Bookings { get; set; } = new();
 }

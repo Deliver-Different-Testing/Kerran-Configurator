@@ -32,8 +32,19 @@ export interface TenantRoute {
   active: boolean;
   zipcodes: RouteZipcode[];
   rosterEntryCount: number;
+  bookingCount: number;
   createdAt: string;
   updatedAt: string | null;
+}
+
+// Read-only: a live recurring booking attached to a route. Re-assignment is
+// operator-driven in the Dispatch app / Route Viewer.
+export interface RouteBooking {
+  id: number;
+  clientName: string;
+  pickupWindow: string;   // "HH:mm"
+  days: string;           // legacy day pattern
+  nextDue: string | null; // ISO datetime
 }
 
 export interface RouteUpsert {
@@ -162,6 +173,10 @@ export const routeService = {
   },
   async listSchedules(): Promise<ScheduleLookup[]> {
     const { data } = await api.get<ScheduleLookup[]>('/routes/schedules/lookup');
+    return data;
+  },
+  async listBookings(routeId: number): Promise<RouteBooking[]> {
+    const { data } = await api.get<RouteBooking[]>(`/routes/${routeId}/bookings`);
     return data;
   },
 };

@@ -114,7 +114,55 @@ public class TenantRouteService(
             }
         }
 
+        // Live recurring-booking count per route (operator-driven binding) for the
+        // list badge. Single grouped query; backed by IX_tucJobBooking_RouteId.
+        if (rows.Count > 0)
+        {
+            var routeIds = rows.Select(r => r.Id).ToList();
+            var counts = await Context.TucJobBookings.AsNoTracking()
+                .Where(b => b.RouteId != null && routeIds.Contains(b.RouteId.Value)
+                    && b.UcbkActive == true && b.UcbkDone != true)
+                .GroupBy(b => b.RouteId!.Value)
+                .Select(g => new { RouteId = g.Key, Count = g.Count() })
+                .ToListAsync();
+            var countById = counts.ToDictionary(x => x.RouteId, x => x.Count);
+            foreach (var r in rows)
+                if (countById.TryGetValue(r.Id, out var n)) r.BookingCount = n;
+        }
+
         return new TenantRoutesResponse(messageId) { Success = true, Routes = rows };
+    }
+
+    // Read-only: live recurring bookings attached to a route (UcbkActive = 1 AND
+    // UcbkDone <> 1). Powers the count badge + the bookings table in the Edit
+    // panel. Booking↔route association is set by operators in the Dispatch app /
+    // Route Viewer — the configurator never writes tucJobBooking here.
+    public async Task<TenantRouteBookingsResponse> GetBookingsAsync(int routeId, Guid messageId)
+    {
+        var rows = await Context.TucJobBookings.AsNoTracking()
+            .Where(b => b.RouteId == routeId && b.UcbkActive == true && b.UcbkDone != true)
+            .OrderBy(b => b.UcbkTime)
+            .Select(b => new
+            {
+                b.UcbkId,
+                ClientName = b.UcbkClient != null ? b.UcbkClient.UcclName : null,
+                b.UcbkClientCode,
+                b.UcbkTime,
+                b.UcbkDays,
+                b.UcbkNextDue,
+            })
+            .ToListAsync();
+
+        var bookings = rows.Select(b => new TenantRouteBookingDto
+        {
+            Id = b.UcbkId,
+            ClientName = !string.IsNullOrWhiteSpace(b.ClientName) ? b.ClientName : (b.UcbkClientCode ?? string.Empty),
+            PickupWindow = b.UcbkTime?.ToString("HH\\:mm") ?? string.Empty,
+            Days = b.UcbkDays ?? string.Empty,
+            NextDue = b.UcbkNextDue,
+        }).ToList();
+
+        return new TenantRouteBookingsResponse(messageId) { Success = true, Bookings = bookings };
     }
 
     public async Task<TenantRouteResponse> CreateAsync(TenantRouteUpsertDto dto, Guid messageId)

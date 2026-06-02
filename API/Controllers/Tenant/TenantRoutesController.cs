@@ -136,6 +136,27 @@ public class TenantRoutesController(TenantRouteService routeService) : BaseContr
         }
     }
 
+    // Read-only summary of live recurring bookings on a route (count badge +
+    // Edit-panel table). Booking↔route association is operator-driven elsewhere.
+    [HttpGet("{routeId:int}/bookings")]
+    public async Task<IActionResult> Bookings(int routeId)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await routeService.GetBookingsAsync(routeId, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Bookings);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to load bookings for route {RouteId}", routeId);
+            throw;
+        }
+    }
+
     // Client Manager schedules for the Route→Schedule binding picker. One entry
     // per logical schedule (grouped from one-row-per-weekday tblBulkRunSchedule).
     // Relative route → /api/v1/tenant/routes/schedules/lookup.

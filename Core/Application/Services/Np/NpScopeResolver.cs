@@ -17,10 +17,12 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Np;
 //                                            empty (do not silently fall back
 //                                            to "show everything").
 //
-// Lookup: ClientID claim → tucClient.UcclId → tucClient.NpAgentId. The Hub
-// populates ClientID at login from tucClientContact.UcctClientId, so it's the
-// user's tucClient row directly. Result is cached on HttpContext.Items so a
-// single request doesn't hit the DB more than once.
+// Source: the NpAgentId claim, which Hub stamps at login (2026-06-03) from
+// tucClient.NpAgentId — no DB call needed. For cookies minted before that Hub
+// change the claim is absent, in which case we fall back to the legacy lookup
+// (ClientID claim → tucClient.UcclId → tucClient.NpAgentId). An empty (present
+// but blank) claim is authoritative "no linkage" and does NOT trigger the
+// fallback. Result is cached on HttpContext.Items per request.
 public record NpScope(bool IsAdmin, int? NpAgentId);
 
 public interface INpScopeResolver
@@ -57,14 +59,26 @@ public class NpScopeResolver(
 
         var clientIdClaim = user.FindFirst("ClientID")?.Value;
         int? npAgentId = null;
-        if (int.TryParse(clientIdClaim, out var clientId) && clientId > 0)
+
+        // Claim-first: Hub stamps NpAgentId at login. null = claim absent
+        // (pre-2026-06-03 cookie) → legacy DB fallback; "" or non-positive =
+        // Hub-authoritative "no linkage" → leave npAgentId null, no DB call.
+        var npAgentClaim = user.FindFirst("NpAgentId")?.Value;
+        if (npAgentClaim is null)
         {
-            await using var ctx = await contextFactory.CreateDbContextAsync();
-            npAgentId = await ctx.TucClients
-                .AsNoTracking()
-                .Where(c => c.UcclId == clientId)
-                .Select(c => c.NpAgentId)
-                .FirstOrDefaultAsync();
+            if (int.TryParse(clientIdClaim, out var clientId) && clientId > 0)
+            {
+                await using var ctx = await contextFactory.CreateDbContextAsync();
+                npAgentId = await ctx.TucClients
+                    .AsNoTracking()
+                    .Where(c => c.UcclId == clientId)
+                    .Select(c => c.NpAgentId)
+                    .FirstOrDefaultAsync();
+            }
+        }
+        else if (int.TryParse(npAgentClaim, out var claimedNpAgentId) && claimedNpAgentId > 0)
+        {
+            npAgentId = claimedNpAgentId;
         }
 
         if (npAgentId is null)

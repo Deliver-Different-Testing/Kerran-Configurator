@@ -14,9 +14,11 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 //   POST   /api/v1/np/document-types        — create
 //   PUT    /api/v1/np/document-types/{id}   — update
 //   DELETE /api/v1/np/document-types/{id}   — deactivate (soft delete)
+// Reference data (no NP filter), also read by the Tenant lane's CourierSetup
+// Documents tab — TenantStaffOrAdmin so tenant staff can load document types.
 [Route("api/v1/np/document-types")]
 [ApiController]
-[Authorize(Policy = "NetworkPartnerOrAdmin")]
+[Authorize(Policy = "TenantStaffOrAdmin")]
 public class NpDocumentTypeController(NpDocumentTypeService service) : BaseController
 {
     [HttpGet]

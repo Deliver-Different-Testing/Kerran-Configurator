@@ -1,12 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
+using DfrntDriveConfigurator.Core.Application.Utilities;
 using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
+using DfrntDriveConfigurator.Core.Domain.Master;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using System.Security.Claims;
 
 namespace DfrntDriveConfigurator.Core.Application.Services.Np;
@@ -14,6 +18,7 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Np;
 public class NpFleetService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
     INpScopeResolver scopeResolver,
+    MasterContext masterContext,
     IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
 {
     public async Task<NpFleetCouriersResponse> GetAll(Guid messageId)
@@ -45,11 +50,43 @@ public class NpFleetService(
             .Select(ProjectToDto)
             .ToListAsync();
 
+        await ApplyHasMobileLogin(rows);
+
         return new NpFleetCouriersResponse(messageId)
         {
             Success = true,
             Couriers = rows,
         };
+    }
+
+    // Sets HasMobileLogin on each row by looking up which emails have a
+    // master-controller courier login. One IN query; tolerant of a master DB
+    // read failure (leaves the flag null = "unknown" so the UI doesn't lie).
+    private async Task ApplyHasMobileLogin(IReadOnlyCollection<NpFleetCourierDto> rows)
+    {
+        var emails = rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.Email))
+            .Select(r => r.Email)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (emails.Count == 0) return;
+
+        try
+        {
+            var withLogin = await masterContext.Users.AsNoTracking()
+                .Where(u => u.IsCourier == true && emails.Contains(u.Email))
+                .Select(u => u.Email)
+                .ToListAsync();
+            var set = new HashSet<string>(withLogin, StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows)
+            {
+                r.HasMobileLogin = !string.IsNullOrWhiteSpace(r.Email) && set.Contains(r.Email);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not determine mobile-login status from the master-controller DB; leaving it unknown");
+        }
     }
 
     public async Task<NpFleetCourierResponse> UpdateAsync(int id, NpFleetCourierUpdateDto dto, Guid messageId)
@@ -78,6 +115,11 @@ public class NpFleetService(
             return Fail(messageId, "Courier not found or outside your scope.");
         }
 
+        // Captured before ApplyUpdate mutates it — used to keep the courier's
+        // master-controller login email in sync if the email is changed here
+        // (the login username IS the email; an un-migrated change breaks login).
+        var originalEmail = courier.UccrEmail;
+
         ApplyUpdate(courier, dto);
 
         // Audit fields. Email claim is set by Hub at login (ClaimTypes.Name).
@@ -89,11 +131,47 @@ public class NpFleetService(
 
         await Context.SaveChangesAsync();
 
+        // Keep the master-controller login email in sync with an email change.
+        // Best-effort + logged: the courier edit (the primary action) has already
+        // committed, and the fallback if this is skipped is "login still works
+        // under the old email" — far less severe than the create path, which is
+        // why this doesn't roll back. Provisioning a login for couriers that
+        // never had one (self-heal) needs a password and is a separate slice.
+        var newEmail = courier.UccrEmail;
+        if (!string.IsNullOrWhiteSpace(originalEmail) &&
+            !string.IsNullOrWhiteSpace(newEmail) &&
+            !string.Equals(originalEmail, newEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var login = await masterContext.Users
+                    .FirstOrDefaultAsync(u => u.Email == originalEmail && u.IsCourier == true);
+                if (login is not null)
+                {
+                    var clash = await masterContext.Users.AsNoTracking().AnyAsync(u => u.Email == newEmail);
+                    if (clash)
+                    {
+                        Log.Warning("Courier {Id} email changed to {Email} but a login already exists there; mobile login email not migrated", id, newEmail);
+                    }
+                    else
+                    {
+                        login.Email = newEmail;
+                        await masterContext.SaveChangesAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to migrate master-controller login email for courier {Id}", id);
+            }
+        }
+
         // Re-project so the response shape exactly matches GetAll's read model.
         var read = await Context.TucCouriers.AsNoTracking()
             .Where(c => c.UccrId == id)
             .Select(ProjectToDto)
             .FirstOrDefaultAsync();
+        if (read is not null) await ApplyHasMobileLogin(new[] { read }); // email may have changed
 
         return new NpFleetCourierResponse(messageId)
         {
@@ -124,6 +202,34 @@ public class NpFleetService(
         if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(surName))
         {
             return Fail(messageId, "First name and surname are required.");
+        }
+
+        var password = dto.Password ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return Fail(messageId, "Email is required — the courier signs in to the mobile app with it.");
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            return Fail(messageId, "Password is required — the courier needs it to sign in to the mobile app.");
+        }
+
+        // The master-controller login is bound to a tenant (marsapi resolves the
+        // courier's Despatch DB via User.CurrentTenant). Without it the login row
+        // would be unusable, so require the claim up front.
+        var currentTenantIdClaim = httpContextAccessor.HttpContext?.User.FindFirst("CurrentTenantID")?.Value;
+        if (!int.TryParse(currentTenantIdClaim, out var currentTenantId))
+        {
+            return Fail(messageId, "Could not determine the current tenant — cannot provision the courier's mobile login.");
+        }
+
+        // A master-controller login is keyed by email (unique across the whole
+        // User table — couriers and contacts). Pre-check so a clash surfaces
+        // cleanly instead of as a unique-index violation when we add the row.
+        if (await masterContext.Users.AsNoTracking().AnyAsync(u => u.Email == email))
+        {
+            return Fail(messageId, $"A login already exists for \"{email}\". Use a different email.");
         }
 
         // Code, name and email pre-checks — tenant-wide. tucCourier has a
@@ -169,6 +275,13 @@ public class NpFleetService(
             CourierTypeId = 2,
             Active = true,
 
+            // Plaintext on tucCourier for AdminManager parity (its Update path
+            // re-hashes from here); the hashed copy goes to master-controller
+            // below. Web-enabled so the tenant-side MARSWS_stpIsValidLogin gate
+            // (called by marsapi after the password check) also passes.
+            UccrPassword = password,
+            UccrWebEnabled = true,
+
             // NP users' new couriers belong to their own NP scope; couriers
             // created by an admin stay unassigned (NpAgentId null) until an
             // NP picks them up.
@@ -183,11 +296,164 @@ public class NpFleetService(
         Context.TucCouriers.Add(courier);
         await Context.SaveChangesAsync();
 
+        // Provision the master-controller login (IsCourier = 1) so the courier
+        // can sign in to the mobile app. The two databases can't share a
+        // transaction (separate servers/connections), so on failure we
+        // compensate by removing the courier we just inserted — the operation is
+        // all-or-nothing from the operator's view, and they can cleanly retry.
+        // This is deliberately NOT AdminManager's swallow-and-return-success.
+        try
+        {
+            var hashed = CourierPasswordHasher.SaltHashNewPassword(password);
+            masterContext.Users.Add(new User
+            {
+                Email = email,
+                Password = hashed.Hashed,
+                Salt = hashed.Salt,
+                CurrentTenantId = currentTenantId,
+                IsCourier = true,
+                IsLegacyHash = false,
+            });
+            await masterContext.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to provision master-controller login for courier {Code}; rolling back tenant insert", code);
+            try
+            {
+                Context.TucCouriers.Remove(courier);
+                await Context.SaveChangesAsync();
+            }
+            catch (Exception rollbackEx)
+            {
+                Log.Error(rollbackEx, "Rollback of courier {Code} (id {Id}) failed after login-provisioning error", code, courier.UccrId);
+                return Fail(messageId,
+                    $"The courier was created but their mobile login could not be set up, and automatic cleanup failed. Please remove courier #{courier.UccrId} and try again.");
+            }
+
+            return Fail(messageId,
+                "The courier's mobile login could not be set up, so no courier was created. Please try again.");
+        }
+
         // Re-project so the response shape exactly matches GetAll's read model.
         var read = await Context.TucCouriers.AsNoTracking()
             .Where(c => c.UccrId == courier.UccrId)
             .Select(ProjectToDto)
             .FirstOrDefaultAsync();
+        if (read is not null) read.HasMobileLogin = true; // just provisioned above
+
+        return new NpFleetCourierResponse(messageId)
+        {
+            Success = true,
+            Courier = read,
+        };
+    }
+
+    // Set / reset the courier's mobile-app login password. Upserts the
+    // master-controller User row: updates it if present, CREATES it if missing
+    // (so this also provisions/heals couriers that never had a login — e.g.
+    // those added before login provisioning existed). The login username is the
+    // courier's email, so it must be set first.
+    public async Task<NpFleetCourierResponse> ResetLoginAsync(int id, NpFleetCourierResetLoginDto dto, Guid messageId)
+    {
+        var scope = await scopeResolver.ResolveAsync();
+
+        if (!scope.IsAdmin && scope.NpAgentId is null)
+        {
+            return Fail(messageId, "No NP scope configured for this user.");
+        }
+
+        var query = Context.TucCouriers.AsQueryable();
+        if (!scope.IsAdmin)
+        {
+            query = query.Where(c => c.NpAgentId == scope.NpAgentId!.Value);
+        }
+
+        var courier = await query.FirstOrDefaultAsync(c => c.UccrId == id);
+        if (courier is null)
+        {
+            return Fail(messageId, "Courier not found or outside your scope.");
+        }
+
+        var password = dto.Password ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            return Fail(messageId, "Password is required.");
+        }
+
+        var courierEmail = (courier.UccrEmail ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(courierEmail))
+        {
+            return Fail(messageId, "This courier has no email address. Add an email on the Profile tab before setting a mobile-app password (it's their sign-in username).");
+        }
+
+        var currentTenantIdClaim = httpContextAccessor.HttpContext?.User.FindFirst("CurrentTenantID")?.Value;
+        if (!int.TryParse(currentTenantIdClaim, out var currentTenantId))
+        {
+            return Fail(messageId, "Could not determine the current tenant — cannot set the courier's mobile login.");
+        }
+
+        // Tenant-side write first: web-enable (so the marsapi login's
+        // MARSWS_stpIsValidLogin gate passes) and store the plaintext for
+        // AdminManager parity. Both are benign + idempotent, so no rollback is
+        // needed if the master write below fails — a retry just re-applies them.
+        var actor = httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.Name)?.Value
+                    ?? httpContextAccessor.HttpContext?.User.FindFirst("name")?.Value
+                    ?? "system";
+        courier.UccrPassword = password;
+        courier.UccrWebEnabled = true;
+        courier.LastModified = DateTime.UtcNow;
+        courier.LastModifiedBy = actor;
+        await Context.SaveChangesAsync();
+
+        try
+        {
+            var hashed = CourierPasswordHasher.SaltHashNewPassword(password);
+            var login = await masterContext.Users
+                .FirstOrDefaultAsync(u => u.Email == courierEmail && u.IsCourier == true);
+
+            if (login is null)
+            {
+                // Provision / heal. Don't collide with a non-courier login on the
+                // same email (the unique index spans the whole User table).
+                var nonCourierClash = await masterContext.Users.AsNoTracking()
+                    .AnyAsync(u => u.Email == courierEmail && (u.IsCourier == null || u.IsCourier == false));
+                if (nonCourierClash)
+                {
+                    return Fail(messageId, $"A non-courier login already exists for \"{courierEmail}\", so a courier login can't be created for it.");
+                }
+
+                masterContext.Users.Add(new User
+                {
+                    Email = courierEmail,
+                    Password = hashed.Hashed,
+                    Salt = hashed.Salt,
+                    CurrentTenantId = currentTenantId,
+                    IsCourier = true,
+                    IsLegacyHash = false,
+                });
+            }
+            else
+            {
+                login.Password = hashed.Hashed;
+                login.Salt = hashed.Salt;
+                login.IsLegacyHash = false;
+                login.CurrentTenantId ??= currentTenantId; // don't move an existing login to another tenant
+            }
+
+            await masterContext.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to set master-controller login for courier {Id}", id);
+            return Fail(messageId, "The mobile-app password could not be set. Please try again.");
+        }
+
+        var read = await Context.TucCouriers.AsNoTracking()
+            .Where(c => c.UccrId == id)
+            .Select(ProjectToDto)
+            .FirstOrDefaultAsync();
+        if (read is not null) read.HasMobileLogin = true; // just provisioned above
 
         return new NpFleetCourierResponse(messageId)
         {

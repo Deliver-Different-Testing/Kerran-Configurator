@@ -6,10 +6,26 @@ import ComplianceBadge from '@/components/common/ComplianceBadge';
 import { complianceProfileService } from '@/services/np_complianceProfileService';
 import { driverApprovalService } from '@/services/np_driverApprovalService';
 import { fleetService } from '@/services/np_fleetService';
-import type { ComplianceProfile } from '@/types';
+import type { ComplianceProfile, Courier } from '@/types';
 
 interface Props {
   onSelectCourier: (id: number) => void;
+}
+
+// Amber pill flagging a courier with no mobile-app login. Only shows on an
+// explicit false — null/undefined (status unknown) shows nothing so we never
+// imply "no login" when the check couldn't run. Fix is Courier Setup →
+// Device & Settings → Mobile App Login.
+function NoLoginBadge({ courier }: { courier: Courier }) {
+  if (courier.hasMobileLogin !== false) return null;
+  return (
+    <span
+      title="No mobile-app login — set a password in Courier Setup → Device & Settings"
+      className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[10px] border border-amber-300 bg-amber-50 text-amber-700 whitespace-nowrap align-middle"
+    >
+      No app login
+    </span>
+  );
 }
 
 export default function FleetOverview({ onSelectCourier }: Props) {
@@ -234,7 +250,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
                   <td className="px-3 py-2.5 text-sm border-b border-border whitespace-nowrap">{m.phone}</td>
                   <td className="px-3 py-2.5 text-sm border-b border-border">{m.vehicle}</td>
                   <td className="px-3 py-2.5 text-sm border-b border-border">{mDepot}</td>
-                  <td className="px-3 py-2.5 text-sm border-b border-border"><StatusBadge status={m.status} /></td>
+                  <td className="px-3 py-2.5 text-sm border-b border-border"><StatusBadge status={m.status} /><NoLoginBadge courier={m} /></td>
                   <td className="px-3 py-2.5 text-sm border-b border-border"><ComplianceBadge status={m.compliance} /></td>
                   <td className="px-3 py-2.5 border-b border-border">{renderQualifications(m.id)}</td>
                   <td className="px-3 py-2.5 text-sm border-b border-border" onClick={e => e.stopPropagation()}>
@@ -250,7 +266,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
                       <td className="px-3 py-2.5 text-sm border-b border-border whitespace-nowrap">{s.phone}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border">{s.vehicle}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border">{sDepot}</td>
-                      <td className="px-3 py-2.5 text-sm border-b border-border"><StatusBadge status={s.status} /></td>
+                      <td className="px-3 py-2.5 text-sm border-b border-border"><StatusBadge status={s.status} /><NoLoginBadge courier={s} /></td>
                       <td className="px-3 py-2.5 text-sm border-b border-border"><ComplianceBadge status={s.compliance} /></td>
                       <td className="px-3 py-2.5 border-b border-border">{renderQualifications(s.id)}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border" onClick={e => e.stopPropagation()}>

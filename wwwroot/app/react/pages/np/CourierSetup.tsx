@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { courierService } from '@/services/np_courierService';
 import { lookupService, LookupItem } from '@/services/np_lookupService';
 import FormField from '@/components/common/FormField';
+import PasswordInput from '@/components/common/PasswordInput';
 import DocumentUpload from '@/components/common/DocumentUpload';
 import { useDocumentTypes, useCourierDocuments, useComplianceSummary } from '@/hooks/useDocuments';
 import type { Courier, DocumentStatus } from '@/types';
@@ -42,6 +43,11 @@ export default function CourierSetup({ onSelectCourier }: Props) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  // Mobile App Login (set/reset password) — independent of the main Save.
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginSaving, setLoginSaving] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginSuccess, setLoginSuccess] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -159,6 +165,29 @@ export default function CourierSetup({ onSelectCourier }: Props) {
     setDraft(courier);
     setSaveError(null);
     setSaveSuccess(false);
+  }
+
+  async function handleResetLogin() {
+    if (!draft) return;
+    setLoginError(null);
+    setLoginSuccess(false);
+    setLoginSaving(true);
+    try {
+      const updated = await courierService.resetLogin(draft.id, loginPassword);
+      // Provisioning web-enables the courier — reflect that in both the saved
+      // baseline and the draft so the Web Enabled checkbox stays accurate
+      // without clobbering the operator's other unsaved edits.
+      setCourier(updated);
+      setDraft(d => (d ? { ...d, webEnabled: updated.webEnabled } : d));
+      setLoginPassword('');
+      setLoginSuccess(true);
+      setTimeout(() => setLoginSuccess(false), 4000);
+    } catch (e) {
+      const ax = e as { response?: { data?: { messages?: { message?: string }[] } } };
+      setLoginError(ax.response?.data?.messages?.[0]?.message ?? 'Could not set the mobile-app password. Please try again.');
+    } finally {
+      setLoginSaving(false);
+    }
   }
 
   return (
@@ -350,10 +379,42 @@ export default function CourierSetup({ onSelectCourier }: Props) {
             <FormField label="Show Client Phone" type="checkbox" {...bindBool('showClientPhone')} />
             <FormField label="Mobile Advert Courier" type="checkbox" checked={c.mobileAdvert} />
             <FormField label="Display on Web" type="checkbox" {...bindBool('displayWeb')} />
-            <Section title="Security & POD" />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Password" type="password" value="••••••••" readonly />
+            <Section title="Mobile App Login" />
+            {c.hasMobileLogin === false && (
+              <div className="inline-block px-2 py-0.5 rounded text-[11px] border border-amber-300 bg-amber-50 text-amber-700 mb-2">● No login yet — this courier can't sign in to the mobile app</div>
+            )}
+            {c.hasMobileLogin === true && (
+              <div className="inline-block px-2 py-0.5 rounded text-[11px] border border-green-200 bg-green-50 text-green-700 mb-2">● Login active — set a new password below to reset it</div>
+            )}
+            <p className="text-xs text-text-secondary -mt-1 mb-2">
+              Set or reset the password the courier signs in to the mobile app with — their username is their <span className="font-medium">email</span>. If they don't have a login yet, this creates one. This is separate from the Save button below and applies immediately.
+            </p>
+            {!c.email?.trim() && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-xs mb-2">
+                Add an email on the Profile tab first — it's the courier's sign-in username.
+              </div>
+            )}
+            <div className="flex items-end gap-2 max-w-lg">
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-xs text-text-secondary uppercase tracking-wide">New Password</label>
+                <PasswordInput value={loginPassword} onChange={setLoginPassword} maxLength={100} placeholder="Password to give the courier" />
+              </div>
+              <button
+                type="button"
+                onClick={handleResetLogin}
+                disabled={loginSaving || !loginPassword.trim() || !c.email?.trim()}
+                className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {loginSaving ? 'Setting…' : 'Set / Reset Password'}
+              </button>
             </div>
+            {loginError && (
+              <div className="mt-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs max-w-lg">⚠️ {loginError}</div>
+            )}
+            {loginSuccess && (
+              <div className="mt-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-xs max-w-lg">✅ Mobile app password set.</div>
+            )}
+            <Section title="Security & POD" />
             <FormField label="POD Required" type="checkbox" {...bindBool('podRequired')} />
             <Section title="Working Hours" />
             <div className="grid grid-cols-2 gap-4">

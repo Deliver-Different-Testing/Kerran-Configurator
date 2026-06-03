@@ -89,6 +89,11 @@ interface NpFleetCourierApi {
   createdBy: string;
   modified: string;
   modifiedBy: string;
+
+  // Whether a master-controller mobile-app login exists for this courier.
+  // null = couldn't be determined (master DB unreachable) — UI treats only an
+  // explicit false as "no login".
+  hasMobileLogin: boolean | null;
 }
 
 // Trim ISO datetime down to YYYY-MM-DD for <input type="date"> binding;
@@ -201,6 +206,7 @@ function toCourier(dto: NpFleetCourierApi): Courier {
     createdBy: dto.createdBy,
     modified: dateOnly(dto.modified),
     modifiedBy: dto.modifiedBy,
+    hasMobileLogin: dto.hasMobileLogin,
 
     location: '',
     compliance: 'ok',
@@ -372,6 +378,8 @@ export const courierService = {
       mobile: courier.phone ?? '',
       vehicleType: courier.vehicle ?? '',
       notes: courier.notes ?? '',
+      // Mobile-app login password — provisions the master-controller User row.
+      password: courier.password ?? '',
     };
     const { data } = await api.post<NpFleetCourierApi>('/fleet', payload);
     if (!data) throw new Error('Server returned no courier');
@@ -381,6 +389,14 @@ export const courierService = {
   async update(id: number, courier: Partial<Courier>): Promise<Courier> {
     const payload = toUpdatePayload(courier);
     const { data } = await api.put<NpFleetCourierApi>(`/fleet/${id}`, payload);
+    if (!data) throw new Error('Server returned no courier');
+    return toCourier(data);
+  },
+
+  // Set / reset the courier's mobile-app login password. Also provisions the
+  // master-controller login if the courier never had one (heal path).
+  async resetLogin(id: number, password: string): Promise<Courier> {
+    const { data } = await api.post<NpFleetCourierApi>(`/fleet/${id}/reset-login`, { password });
     if (!data) throw new Error('Server returned no courier');
     return toCourier(data);
   },

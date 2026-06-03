@@ -71,4 +71,26 @@ public class NpFleetController(NpFleetService npFleetService) : BaseController
             throw;
         }
     }
+
+    // Set / reset the courier's mobile-app login password (provisions the
+    // master-controller login if the courier never had one). Called from
+    // CourierSetup's "Mobile App Login" section.
+    [HttpPost("{id:int}/reset-login")]
+    public async Task<IActionResult> ResetLogin(int id, [FromBody] NpFleetCourierResetLoginDto dto)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await npFleetService.ResetLoginAsync(id, dto, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Courier);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to reset NP courier login {Id}", id);
+            throw;
+        }
+    }
 }

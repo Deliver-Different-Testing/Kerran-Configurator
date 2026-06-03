@@ -98,6 +98,7 @@ The **MirrorToAgentPortal** flag exposes workflows to the Agent Portal (InboundA
 | `Domain` | Cookie domain — must match Hub (e.g. `deliverdifferent.com`) |
 | `RedisConfig` | Redis connection string (shared with Hub/AdminManager) |
 | `SQLHealthCheckConnection` | Master controller DB connection for health check |
+| `MasterSQLConnection` | Master controller DB connection used to provision courier mobile-app logins (`[User]` rows, `IsCourier=1`). Needs write access to `[User]`. Falls back to `SQLHealthCheckConnection` if unset (same DB), so set this explicitly per environment. |
 | `SQLCredentials` | Tenant database credentials |
 | `PublicPath` | Hub login URL for auth redirects |
 | `ASPNETCORE_ENVIRONMENT` | `Development` / `Production` |

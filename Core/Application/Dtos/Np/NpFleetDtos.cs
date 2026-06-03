@@ -105,6 +105,13 @@ public class NpFleetCourierDto
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime Modified { get; set; }
     public string ModifiedBy { get; set; } = string.Empty;
+
+    // Whether a master-controller login (IsCourier=1) exists for this courier's
+    // email — i.e. can they sign in to the mobile app. Computed against the
+    // master DB after projection, not part of ProjectToDto. Nullable: null means
+    // "couldn't determine" (e.g. master DB unreachable), so the UI only flags an
+    // explicit false and never shows a misleading "no login" on a failed check.
+    public bool? HasMobileLogin { get; set; }
 }
 
 public class NpFleetCouriersResponse : BaseResponse
@@ -214,10 +221,25 @@ public class NpFleetCourierCreateDto
     public string Mobile { get; set; } = string.Empty;       // personal mobile
     public string VehicleType { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+
+    // Required: the courier signs in to the mobile app with Email + Password.
+    // The service hashes this into the master-controller User row (IsCourier=1)
+    // that marsapi validates against, and stores the plaintext on
+    // tucCourier.UccrPassword for AdminManager parity.
+    public string Password { get; set; } = string.Empty;
 }
 
 public class NpFleetCourierResponse : BaseResponse
 {
     public NpFleetCourierResponse(Guid messageId) : base(messageId) { }
     public NpFleetCourierDto? Courier { get; set; }
+}
+
+// Set / reset the courier's mobile-app login password. Upserts the
+// master-controller User row (heals couriers that never had a login), so the
+// only input is the new password — the email (login username) comes from the
+// courier record.
+public class NpFleetCourierResetLoginDto
+{
+    public string Password { get; set; } = string.Empty;
 }

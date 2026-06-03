@@ -97,6 +97,8 @@ export interface Courier {
   trainingInit: number;
   trainingFollow: number;
   documents: CourierDocumentLegacy[];
+  /** Whether a mobile-app login exists. false = none (flagged in UI); null/undefined = unknown. */
+  hasMobileLogin?: boolean | null;
 }
 
 /** Legacy shape used by mock data — will be removed when mock data is replaced by API */

@@ -335,6 +335,30 @@ builder.Services.AddScoped<IDbContextFactory<DynamicDespatchDbContext>>(sp =>
     return new DynamicDespatchDbContextFactoryAdapter(inner);
 });
 
+// MasterContext — single fixed connection onto the master-controller (auth) DB.
+// Used to provision courier login rows (IsCourier = 1) so new couriers can sign
+// in to the mobile app. Same MasterSQLConnection env var AdminManager uses.
+//
+// Fall back to SQLHealthCheckConnection (which already points at the SAME
+// master-controller DB in every environment — see README) so a deploy that
+// lands before the dedicated MasterSQLConnection var is set still STARTS rather
+// than crash-looping every pod. If the fallback login lacks write perms, courier
+// provisioning degrades gracefully (the create path rolls back and returns a
+// clear error) instead of taking the app down. Set MasterSQLConnection with
+// write access to [User] to make provisioning work in each environment.
+var masterConnectionString = Environment.GetEnvironmentVariable("MasterSQLConnection");
+if (string.IsNullOrEmpty(masterConnectionString))
+{
+    masterConnectionString = Environment.GetEnvironmentVariable("SQLHealthCheckConnection");
+    if (!string.IsNullOrEmpty(masterConnectionString))
+        Log.Warning("MasterSQLConnection not set — falling back to SQLHealthCheckConnection for the master-controller DB. Courier login provisioning needs a login with write access to [User].");
+}
+if (string.IsNullOrEmpty(masterConnectionString))
+    throw new InvalidOperationException(
+        "Neither 'MasterSQLConnection' nor 'SQLHealthCheckConnection' env var is set — cannot reach the master-controller DB.");
+builder.Services.AddDbContext<DfrntDriveConfigurator.Core.Domain.Master.MasterContext>(options =>
+    options.UseSqlServer(masterConnectionString));
+
 
 var domain = Environment.GetEnvironmentVariable("Domain") ?? string.Empty;
 if (string.IsNullOrEmpty(domain))

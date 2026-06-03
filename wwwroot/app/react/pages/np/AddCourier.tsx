@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useRole } from '@/context/RoleContext';
 import StepWizard from '@/components/common/StepWizard';
 import FormField from '@/components/common/FormField';
+import PasswordInput from '@/components/common/PasswordInput';
 import ScanToFill, { AiConfidenceBadge } from '@/components/common/ScanToFill';
 import { courierService } from '@/services/np_courierService';
 import { fleetService } from '@/services/np_fleetService';
@@ -81,12 +82,15 @@ function QuickAddForm({ onCancel }: { onCancel: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     code: '', firstName: '', surname: '', email: '', mobile: '',
-    vehicleType: '', notes: '',
+    vehicleType: '', notes: '', password: '',
   });
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
+  // Email + password are required: the courier signs in to the mobile app with
+  // them, and the backend provisions the master-controller login from them.
   const canSave = !!form.code.trim() && !!form.firstName.trim()
-    && !!form.surname.trim() && !!form.mobile.trim();
+    && !!form.surname.trim() && !!form.mobile.trim()
+    && !!form.email.trim() && !!form.password.trim();
 
   const handleSave = async () => {
     setError(null);
@@ -100,6 +104,7 @@ function QuickAddForm({ onCancel }: { onCancel: () => void }) {
         phone: form.mobile,        // Courier.phone is the personal mobile
         vehicle: form.vehicleType,
         notes: form.notes,
+        password: form.password,
       });
       navigate('/fleet');
     } catch (e) {
@@ -140,10 +145,21 @@ function QuickAddForm({ onCancel }: { onCancel: () => void }) {
               <input value={form.surname} onChange={e => set('surname', e.target.value)} maxLength={50} placeholder="e.g. Smith" />
             </div>
             <div className="flex flex-col gap-1 col-span-full">
-              <label className="text-xs text-text-secondary uppercase tracking-wide">Email</label>
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Email <span className="text-red-500">*</span></label>
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} maxLength={100} placeholder="john@example.com" />
             </div>
           </div>
+        </div>
+
+        <div>
+          <div className="text-sm font-bold text-brand-cyan mb-3 pb-1.5 border-b border-border">Mobile App Login</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Password <span className="text-red-500">*</span></label>
+              <PasswordInput value={form.password} onChange={v => set('password', v)} maxLength={100} placeholder="Sign-in password for the courier" />
+            </div>
+          </div>
+          <p className="text-xs text-text-secondary mt-2">The courier signs in to the mobile app with their <span className="font-medium">email</span> and this password.</p>
         </div>
 
         <div>

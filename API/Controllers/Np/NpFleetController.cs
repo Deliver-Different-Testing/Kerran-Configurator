@@ -10,9 +10,12 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 
 // React frontend calls GET /api/v1/np/fleet for the NP Fleet (drivers) page,
 // and PUT /api/v1/np/fleet/{id} from CourierSetup's Save action.
+// Shared by the Tenant lane's "My Couriers" menu (same React pages), so the
+// policy is TenantStaffOrAdmin — NPs and DF admins still pass; tenant staff
+// resolve to a tenant-wide scope via NpScopeResolver (see its comment).
 [Route("api/v1/np/fleet")]
 [ApiController]
-[Authorize(Policy = "NetworkPartnerOrAdmin")]
+[Authorize(Policy = "TenantStaffOrAdmin")]
 public class NpFleetController(NpFleetService npFleetService) : BaseController
 {
     [HttpGet]

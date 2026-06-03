@@ -224,16 +224,36 @@ builder.Services.AddAuthorization(options =>
                 || string.Equals(isNp, "True", StringComparison.OrdinalIgnoreCase);
         }));
 
-    // Tenant-scope endpoints (`/api/v1/tenant/*`) — agents directory, quotes
-    // marketplace, etc. — are visible to any tenant staff member (anyone
-    // whose tblUser row was enriched at HomeController.Index, i.e. has a
-    // UserGroupID claim) plus DF Admins. NPs also get in via this policy
-    // because they're staff at their own tenant.
+    // Tenant-scope endpoints (`/api/v1/tenant/*`, plus the courier surface
+    // shared from `/api/v1/np/*`) — agents directory, quotes marketplace,
+    // My Couriers, etc. — are visible to any staff member of the current
+    // tenant, plus DF Admins. Two ways a caller qualifies:
+    //
+    //   1. Legacy despatch staff: a `tblUser` row enriched at
+    //      HomeController.Index → a non-empty `UserGroupID` claim.
+    //   2. Hub-native tenant staff: users provisioned through this app
+    //      (NpUserService.CreateAsync) get a Hub identity + a tucClientContact
+    //      with StaffId=null — NEVER a tblUser — so Hub emits no StaffID and
+    //      enrichment never stamps UserGroupID for them. They are still
+    //      legitimate staff of the tenant Hub scoped them to, identified by a
+    //      present `CurrentTenantID` claim. We admit any such tenant-scoped
+    //      user who is NOT a courier (couriers belong to the portal lane, not
+    //      the tenant management surface).
+    //
+    // NPs and DF Admins also satisfy (2) — they carry CurrentTenantID and
+    // aren't couriers — so they keep their access. Anonymous callers have
+    // neither claim and are denied. Per-action `[RequirePermission(...)]`
+    // attributes still apply on top of this coarse gate.
     options.AddPolicy("TenantStaffOrAdmin", policy =>
         policy.RequireAssertion(context =>
         {
             var userGroupId = context.User.FindFirst("UserGroupID")?.Value;
-            return !string.IsNullOrEmpty(userGroupId);
+            if (!string.IsNullOrEmpty(userGroupId)) return true;
+
+            var currentTenantId = context.User.FindFirst("CurrentTenantID")?.Value;
+            var isCourier = context.User.FindFirst("IsCourier")?.Value;
+            return !string.IsNullOrEmpty(currentTenantId)
+                && !string.Equals(isCourier, "True", StringComparison.OrdinalIgnoreCase);
         }));
 
     // Phase 5+31 R3 retired the 9 hardcoded Np* policies that were

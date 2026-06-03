@@ -11,9 +11,11 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 //   GET /api/v1/np/lookups/vehicle-makes
 //   GET /api/v1/np/lookups/insurance-companies
 //   GET /api/v1/np/lookups/courier-fleets
+// Reference data (no NP filter), shared by the Tenant lane's CourierSetup
+// dropdowns — TenantStaffOrAdmin so tenant staff can load them too.
 [Route("api/v1/np/lookups")]
 [ApiController]
-[Authorize(Policy = "NetworkPartnerOrAdmin")]
+[Authorize(Policy = "TenantStaffOrAdmin")]
 public class NpLookupController(NpLookupService lookupService) : BaseController
 {
     [HttpGet("vehicle-makes")]

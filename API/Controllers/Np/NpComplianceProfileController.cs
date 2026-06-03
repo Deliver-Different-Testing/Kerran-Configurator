@@ -13,9 +13,13 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 //   POST   /api/v1/np/compliance-profiles        — create
 //   PUT    /api/v1/np/compliance-profiles/{id}   — update (reconciles children)
 //   DELETE /api/v1/np/compliance-profiles/{id}   — deactivate (soft delete)
+// Tenant-wide reference data (NpComplianceProfileService applies no NP scope
+// filter). Read by the Tenant lane's Courier List (FleetOverview compliance
+// badges) and its Compliance section, so TenantStaffOrAdmin admits tenant
+// staff alongside NPs and DF admins.
 [Route("api/v1/np/compliance-profiles")]
 [ApiController]
-[Authorize(Policy = "NetworkPartnerOrAdmin")]
+[Authorize(Policy = "TenantStaffOrAdmin")]
 public class NpComplianceProfileController(NpComplianceProfileService service) : BaseController
 {
     [HttpGet]

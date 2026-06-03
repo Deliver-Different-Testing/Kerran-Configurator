@@ -9,7 +9,15 @@ using Serilog;
 namespace DfrntDriveConfigurator.Core.Application.Services.Np;
 
 // Resolves NP-scope for the current request. Two outcomes that matter to callers:
-//   IsAdmin=true                          → no filter, return all rows
+//   IsAdmin=true                          → no filter, return all rows in the
+//                                            current tenant DB. Covers BOTH DF
+//                                            admins (ClientTypeId=5) AND ordinary
+//                                            tenant staff (not a Network Partner):
+//                                            for tenant staff the tenant Despatch
+//                                            DB connection is itself the scope
+//                                            boundary, so "no NpAgentId filter"
+//                                            is the correct, tenant-wide view
+//                                            (mirrors TenantAgentService).
 //   IsAdmin=false, NpAgentId=<int>        → filter rows by NpAgentId
 //   IsAdmin=false, NpAgentId=null         → caller is an NP user without a
 //                                            configured tucClient.NpAgentId
@@ -55,6 +63,28 @@ public class NpScopeResolver(
             var adminScope = new NpScope(IsAdmin: true, NpAgentId: null);
             httpCtx.Items[CacheKey] = adminScope;
             return adminScope;
+        }
+
+        // Tenant staff (not a Network Partner, and not a DF admin handled above)
+        // operate tenant-wide: the tenant Despatch DB connection is itself the
+        // scope boundary, so they see/manage every courier in their tenant —
+        // exactly like TenantAgentService, which applies no per-user filter.
+        // This is deliberately distinct from an NP user with a MISSING linkage
+        // (resolved below to NpAgentId=null → empty): the IsNetworkPartner claim
+        // is the differentiator, so tenant staff must NOT fall through to the
+        // "no linkage → empty" path. They resolve to the same unscoped view as
+        // an admin (within the current tenant DB, IsAdmin just means "no
+        // NpAgentId filter"). In practice this branch is only reached on the
+        // courier endpoints broadened to TenantStaffOrAdmin (NpFleet /
+        // CourierDocuments / NpLookup / NpDocumentType); genuine NP and DF-admin
+        // callers never take it, so behaviour on the other (still
+        // NetworkPartnerOrAdmin) NP controllers is unchanged.
+        var isNetworkPartner = user.FindFirst("IsNetworkPartner")?.Value;
+        if (!string.Equals(isNetworkPartner, "True", StringComparison.OrdinalIgnoreCase))
+        {
+            var tenantScope = new NpScope(IsAdmin: true, NpAgentId: null);
+            httpCtx.Items[CacheKey] = tenantScope;
+            return tenantScope;
         }
 
         var clientIdClaim = user.FindFirst("ClientID")?.Value;

@@ -15,9 +15,12 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 /// metadata + lifecycle lives in the CourierDocuments table.
 /// Download is proxied through the API so cookie-auth + audit are end-to-end.
 /// </summary>
+// Shared by the Tenant lane's "My Couriers" surface (CourierSetup Documents
+// tab); TenantStaffOrAdmin admits tenant staff, who resolve tenant-wide via
+// NpScopeResolver. CanAccessCourierAsync still gates per-courier access.
 [Route("api/v1/np/couriers/{courierId:int}/documents")]
 [ApiController]
-[Authorize(Policy = "NetworkPartnerOrAdmin")]
+[Authorize(Policy = "TenantStaffOrAdmin")]
 public class CourierDocumentsController(CourierDocumentService service) : BaseController
 {
     [HttpGet]

@@ -108,31 +108,43 @@ public class HomeController(
 
                     var existingClaims = HttpContext.User.Claims.ToList();
 
-                    // ClientType signal for the DF-admin lane + matrix bypasses.
-                    // Looked up from the ClientID claim (= tucClient.UcclId, set by
-                    // Hub at login). ClientTypeId == 5 (DFRNTAdmin) is now the SOLE
-                    // DF-admin signal — replaces the legacy UserGroupID == 1 check
-                    // so a tenant Administrator (UserGroupID=1, ClientTypeId=4) keeps
-                    // full AdminManager rights but lands in the Tenant lane here.
-                    var clientIdClaim = existingClaims.FirstOrDefault(c => c.Type == "ClientID")?.Value;
-                    int? clientTypeId = null;
-                    if (int.TryParse(clientIdClaim, out var clientId) && clientId > 0)
-                    {
-                        clientTypeId = await context.TucClients.AsNoTracking()
-                            .Where(c => c.UcclId == clientId)
-                            .Select(c => (int?)c.ClientTypeId)
-                            .FirstOrDefaultAsync();
-                    }
-
+                    // UserGroupID is configurator-only enrichment — Hub never
+                    // emits it — so we always have to query tblUser for it.
                     var newClaims = new List<Claim>
                     {
                         new("UserGroupID", user.UserGroupId.ToString()),
-                        new("ClientTypeId", clientTypeId?.ToString() ?? string.Empty),
                         new("name", user.UserName),
                         new("fullName", user.FullName),
                         new("staffID", user.StaffId.ToString() ?? string.Empty),
                         new("active", user.Active.ToString())
                     };
+
+                    // ClientType signal for the DF-admin lane + matrix bypasses.
+                    // ClientTypeId == 5 (DFRNTAdmin) is the SOLE DF-admin signal —
+                    // a tenant Administrator (UserGroupID=1, ClientTypeId=4) keeps
+                    // full AdminManager rights but lands in the Tenant lane here.
+                    //
+                    // Claim-first: Hub stamps ClientTypeId at login (2026-06-03),
+                    // so for fresh cookies we carry it through untouched (it's
+                    // already in existingClaims). Only for pre-2026-06-03 cookies
+                    // — where the claim is absent — do we fall back to the legacy
+                    // tucClient lookup. This lookup is transitional and can be
+                    // removed once all Hub sessions have refreshed.
+                    var hubClientTypeClaim = existingClaims.FirstOrDefault(c => c.Type == "ClientTypeId")?.Value;
+                    if (string.IsNullOrEmpty(hubClientTypeClaim))
+                    {
+                        var clientIdClaim = existingClaims.FirstOrDefault(c => c.Type == "ClientID")?.Value;
+                        int? clientTypeId = null;
+                        if (int.TryParse(clientIdClaim, out var clientId) && clientId > 0)
+                        {
+                            clientTypeId = await context.TucClients.AsNoTracking()
+                                .Where(c => c.UcclId == clientId)
+                                .Select(c => (int?)c.ClientTypeId)
+                                .FirstOrDefaultAsync();
+                        }
+
+                        newClaims.Add(new("ClientTypeId", clientTypeId?.ToString() ?? string.Empty));
+                    }
 
                     var allClaims = existingClaims.Concat(newClaims).ToList();
                     var newIdentity = new ClaimsIdentity(allClaims, "Identity.Application");

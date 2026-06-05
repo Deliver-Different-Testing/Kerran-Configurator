@@ -49,7 +49,7 @@ public record RoleCellDto(string PermissionKey, bool Allowed, byte? AccessLevel,
 public class CreateRoleDto
 {
     public string Name { get; set; }
-    public string Description { get; set; }
+    public string? Description { get; set; }   // optional — nullable so [ApiController] doesn't treat it as required
     public int? TenantClientId { get; set; }     // null = global default
     public List<int> ClientTypeIds { get; set; } = new();
 }
@@ -57,7 +57,7 @@ public class CreateRoleDto
 public class UpdateRoleDto
 {
     public string Name { get; set; }
-    public string Description { get; set; }
+    public string? Description { get; set; }   // optional — nullable so [ApiController] doesn't treat it as required
     public bool IsActive { get; set; }
     public List<int> ClientTypeIds { get; set; } = new();
 }

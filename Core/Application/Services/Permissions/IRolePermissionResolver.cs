@@ -34,12 +34,30 @@ public interface IRolePermissionResolver
     Task<HashSet<string>> ResolveAllowedPermissionsAsync(int contactRoleId, int? clientId);
 
     /// <summary>
-    /// Returns the allowed permission keys for the current request's user.
-    /// DF Admin (UserGroupID=1) bypass: returns the full catalog set.
-    /// Otherwise reads the user's NpRoleId claim (emitted by Hub from
-    /// tucClientContact.ContactRoleId) + ClientID claim (their tucClient)
-    /// and resolves with per-client overrides applied. Returns an empty
-    /// set when the user has no NpRoleId claim (defensive deny).
+    /// Returns the allowed permission keys (AccessLevel >= View) for the
+    /// current request's user. DF Admin (ClientTypeId=5) bypass returns the
+    /// full catalog. Otherwise resolves the union of the contact's stacked
+    /// roles (tblContactContactRole via the ContactID claim, falling back to
+    /// the single RoleId/NpRoleId claim) with per-client overrides + tier
+    /// cascade applied. Empty set when the user has no resolvable role.
     /// </summary>
     Task<HashSet<string>> ResolveForCurrentUserAsync();
+
+    /// <summary>
+    /// Unified Permissions §6 — like <see cref="ResolveForCurrentUserAsync"/>
+    /// but returns the graded AccessLevel per permission key (0=None, 1=View,
+    /// 2=Edit, 3=Action) after union + cascade + walk-up. Powers the tri-state
+    /// matrix + the Contact modal's resolved-permissions view.
+    /// </summary>
+    Task<Dictionary<string, byte>> ResolveAccessLevelsForCurrentUserAsync();
+
+    /// <summary>
+    /// Resolves the graded AccessLevel map for a SPECIFIC contact (by
+    /// tucClientContact PK), independent of the current request's user. Loads
+    /// the contact's stacked roles (tblContactContactRole, falling back to the
+    /// single ContactRoleId) + their client scope, then runs the same
+    /// union + cascade + walk-up engine. Powers the Contact modal's read-only
+    /// "what can this user actually do" Permissions tab (§8.1 Tab 2).
+    /// </summary>
+    Task<Dictionary<string, byte>> ResolveAccessLevelsForContactAsync(int clientContactId);
 }

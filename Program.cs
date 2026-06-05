@@ -286,6 +286,7 @@ builder.Services.AddScoped<LookupService>();
 
 // Phase 4 — Network Partner services
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpUserService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Contacts.AdminContactService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpDashboardService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpComplianceService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpReportService>();
@@ -301,9 +302,8 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.C
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpScopeResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpScopeResolver>();
-builder.Services.AddScoped<
-    DfrntDriveConfigurator.Core.Application.Services.Np.INpRoleResolver,
-    DfrntDriveConfigurator.Core.Application.Services.Np.NpRoleResolver>();
+// NpRoleResolver removed — the R3 RolePermission resolver superseded it, and
+// its enum hardcoded NpAdmin=1/2/3 which is wrong on collided tenants.
 
 // Phase 5+31 R2 §2 — ClientType × Feature matrix resolver. Cross-cutting:
 // every lane (DF admin / tenant / NP / customer) consumes via /api/me/visible-features.

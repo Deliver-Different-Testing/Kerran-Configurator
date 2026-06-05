@@ -19,12 +19,25 @@ public record RolePermissionMatrixDto(
 
 public record RoleRefDto(int ContactRoleId, string Name, string Description);
 
-public record PermissionRefDto(string PermissionKey, string DisplayName, string Description, string Category);
+// Unified Permissions §4.2 — tree fields (ParentKey/Tier/AccessType/SortOrder)
+// let the grid render tier-1 grouping headers + tri-state cells.
+public record PermissionRefDto(
+    string PermissionKey,
+    string DisplayName,
+    string Description,
+    string Category,
+    string ParentKey,
+    byte Tier,
+    byte AccessType,
+    int SortOrder);
 
+// AccessLevel (0=None,1=View,2=Edit,3=Action) supersedes Allowed; both are
+// returned during the transition.
 public record RolePermissionCellDto(
     int ContactRoleId,
     string PermissionKey,
     bool Allowed,
+    byte? AccessLevel,
     int? ClientId);
 
 /// <summary>
@@ -39,5 +52,12 @@ public record RolePermissionCellDto(
 public class SetRolePermissionDto
 {
     public bool Allowed { get; set; }
+
+    // Unified Permissions §8.3.4 — optional graded level (0=None,1=View,
+    // 2=Edit,3=Action). When supplied, the server writes AccessLevel and
+    // derives Allowed = AccessLevel >= 1. When omitted, legacy Allowed-only
+    // behaviour is preserved (AccessLevel left untouched).
+    public byte? AccessLevel { get; set; }
+
     public int? ClientId { get; set; }
 }

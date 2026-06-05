@@ -87,6 +87,14 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<TblContactRole> TblContactRoles { get; set; }
 
+    public virtual DbSet<TblContactAudit> TblContactAudits { get; set; }
+
+    public virtual DbSet<TblContactContactRole> TblContactContactRoles { get; set; }
+
+    public virtual DbSet<TblRoleClientType> TblRoleClientTypes { get; set; }
+
+    public virtual DbSet<TblRelationshipType> TblRelationshipTypes { get; set; }
+
     public virtual DbSet<TblSite> TblSites { get; set; }
 
     public virtual DbSet<TblUser> TblUsers { get; set; }
@@ -904,6 +912,19 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.DisplayName)
                 .IsRequired()
                 .HasMaxLength(120);
+            // Unified Permissions §4.2 — tree metadata. ParentKey is a plain
+            // self-FK column (no nav configured); Tier/AccessType default 2,
+            // SortOrder defaults 0 (DB constraints from migration C).
+            entity.Property(e => e.ParentKey).HasMaxLength(80);
+            entity.Property(e => e.Tier)
+                .HasDefaultValue((byte)2)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_Permission_Tier");
+            entity.Property(e => e.AccessType)
+                .HasDefaultValue((byte)2)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_Permission_AccessType");
+            entity.Property(e => e.SortOrder)
+                .HasDefaultValue(0)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_Permission_Sort");
         });
 
         modelBuilder.Entity<ProspectAgent>(entity =>
@@ -1332,6 +1353,82 @@ public partial class DespatchContext : DbContext
                 .IsRequired()
                 .HasMaxLength(200);
             entity.Property(e => e.Notes).HasColumnType("ntext");
+            // Unified Permissions §4.1 — tenant-owned role columns.
+            entity.Property(e => e.Description).HasMaxLength(400);
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_ContactRole_Active");
+            // TenantClientId: plain nullable FK column (no inverse nav on TucClient).
+            entity.HasOne<TucClient>().WithMany()
+                .HasForeignKey(e => e.TenantClientId)
+                .HasConstraintName("FK_ContactRole_TenantClient");
+        });
+
+        // Unified Permissions §4.1 — role -> ClientType tagging junction.
+        modelBuilder.Entity<TblRoleClientType>(entity =>
+        {
+            entity.HasKey(e => new { e.ContactRoleId, e.ClientTypeId })
+                .HasName("PK_tblRoleClientType");
+
+            entity.ToTable("tblRoleClientType");
+
+            entity.HasOne(d => d.ContactRole).WithMany(p => p.TblRoleClientTypes)
+                .HasForeignKey(d => d.ContactRoleId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RoleClientType_ContactRole");
+
+            entity.HasOne(d => d.ClientType).WithMany()
+                .HasForeignKey(d => d.ClientTypeId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RoleClientType_ClientType");
+        });
+
+        // Unified Permissions §8.1 Tab 3 — contact change audit (append-only).
+        modelBuilder.Entity<TblContactAudit>(entity =>
+        {
+            entity.HasKey(e => e.AuditId).HasName("PK_tblContactAudit");
+            entity.ToTable("tblContactAudit");
+            entity.HasIndex(e => new { e.ClientContactId, e.ChangedAt }, "IX_tblContactAudit_Contact");
+            entity.Property(e => e.FieldName).IsRequired().HasMaxLength(80);
+            entity.Property(e => e.OldValue).HasMaxLength(400);
+            entity.Property(e => e.NewValue).HasMaxLength(400);
+            entity.Property(e => e.ChangedBy).IsRequired().HasMaxLength(120);
+            // Plain FK to the contact, no inverse nav.
+            entity.HasOne<TucClientContact>().WithMany()
+                .HasForeignKey(e => e.ClientContactId)
+                .HasConstraintName("FK_ContactAudit_Contact");
+        });
+
+        // Unified Permissions §4.1a — contact <-> role stacking junction.
+        modelBuilder.Entity<TblContactContactRole>(entity =>
+        {
+            entity.HasKey(e => new { e.ClientContactId, e.ContactRoleId })
+                .HasName("PK_tblContactContactRole");
+
+            entity.ToTable("tblContactContactRole");
+
+            entity.HasOne(d => d.ContactRole).WithMany(p => p.TblContactContactRoles)
+                .HasForeignKey(d => d.ContactRoleId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ContactContactRole_Role");
+
+            entity.HasOne(d => d.ClientContact).WithMany()
+                .HasForeignKey(d => d.ClientContactId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ContactContactRole_Contact");
+        });
+
+        // Unified Permissions §4.4 — CRM relationship-label lookup.
+        modelBuilder.Entity<TblRelationshipType>(entity =>
+        {
+            entity.HasKey(e => e.RelationshipTypeId)
+                .HasName("PK_tblRelationshipType");
+
+            entity.ToTable("tblRelationshipType");
+
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(80);
         });
 
         modelBuilder.Entity<TblSite>(entity =>
@@ -2153,6 +2250,12 @@ public partial class DespatchContext : DbContext
             entity.HasOne(d => d.UcctClient).WithMany(p => p.TucClientContacts)
                 .HasForeignKey(d => d.UcctClientId)
                 .HasConstraintName("FK_tucClientContact_tucClient");
+
+            // Unified Permissions §4.4 — RelationshipTypeId CRM-label FK
+            // (plain nullable FK column, no inverse nav on TblRelationshipType).
+            entity.HasOne<TblRelationshipType>().WithMany()
+                .HasForeignKey(d => d.RelationshipTypeId)
+                .HasConstraintName("FK_tucClientContact_RelationshipType");
         });
 
         modelBuilder.Entity<TucCourier>(entity =>

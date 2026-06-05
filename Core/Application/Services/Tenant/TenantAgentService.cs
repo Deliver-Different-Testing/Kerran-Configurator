@@ -94,7 +94,7 @@ public class TenantAgentService(
             {
                 var clientCode = await GenerateClientCodeAsync(dto.Name);
                 var clientTypeId = dto.ClientTypeId ?? 3;
-                AddNpClientCascadeRows(agent, dto, template, clientCode, clientTypeId, actor, now, warnings);
+                await AddNpClientCascadeRows(agent, dto, template, clientCode, clientTypeId, actor, now, warnings);
             }
         }
 
@@ -135,7 +135,7 @@ public class TenantAgentService(
                 }
                 else
                 {
-                    client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now));
+                    client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now, await ResolveNpAdminRoleIdAsync()));
                     contactAddedToExistingClient = true;
                 }
             }
@@ -243,7 +243,7 @@ public class TenantAgentService(
             // pre-dating the §A.1 picker. Operator can override to any other
             // seeded ClientType via the picker (rare but allowed).
             var clientTypeId = dto.ClientTypeId ?? 3;
-            AddNpClientCascadeRows(agent, dto, template, clientCode, clientTypeId, actor, now, warnings);
+            await AddNpClientCascadeRows(agent, dto, template, clientCode, clientTypeId, actor, now, warnings);
         }
 
         Context.TucAgents.Add(agent);
@@ -286,7 +286,7 @@ public class TenantAgentService(
     // generated UcagId / UcclId into the FKs during the caller's
     // SaveChangesAsync. Warns when ContactEmail is empty so the operator
     // knows no portal-login contact was created.
-    private void AddNpClientCascadeRows(
+    private async Task AddNpClientCascadeRows(
         TucAgent agent,
         TenantAgentUpsertDto dto,
         TucClient template,
@@ -301,7 +301,7 @@ public class TenantAgentService(
 
         if (!string.IsNullOrWhiteSpace(dto.ContactEmail))
         {
-            client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now));
+            client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now, await ResolveNpAdminRoleIdAsync()));
         }
         else
         {
@@ -409,7 +409,7 @@ public class TenantAgentService(
     // IsRequired metadata doesn't mark it, so our local validation never
     // catches a missing UserName but Hub login fails. Set both fields to
     // the same value so the column-of-truth question stays moot.
-    private static TucClientContact BuildPrimaryContact(TenantAgentUpsertDto dto, string actor, DateTime now)
+    private static TucClientContact BuildPrimaryContact(TenantAgentUpsertDto dto, string actor, DateTime now, int? primaryRoleId)
     {
         var (firstname, surname) = SplitContactName(dto.ContactName, dto.Name);
         var email = (dto.ContactEmail ?? string.Empty).Trim();
@@ -426,23 +426,30 @@ public class TenantAgentService(
             AllowCookieLogin = true,           // required for Hub shared-cookie auth
             StaffId = null,                     // NP user — no DF staff linkage
             // Phase 5+27.2 — Steve's §B.1: "Default role: NpAdmin — the first
-            // user for an NP gets the admin role automatically." The cascade-
-            // created primary contact IS that first user. ContactRoleId = 1
-            // = NpAdmin per the seeded tblContactRole rows (see migration
-            // 20260513123935_NPMarketplaceAndQuotes.sql + the NpRole enum
-            // in Core/Application/Services/Np/NpRole.cs). Subsequent users
-            // added via the /users page get explicit role picks per §B.2.
-            // Without this, ContactRoleId is NULL, NpRoleId claim is empty,
-            // NpRoleResolver returns Unknown, every NP authorization policy
-            // denies them, and the UI mis-badges them as "Dispatcher" via
-            // the MapRoleIdToName fallback.
-            ContactRoleId = 1,
+            // user for an NP gets the admin role automatically." primaryRoleId
+            // is the REAL NpAdmin ContactRoleId resolved BY NAME by the caller
+            // (ResolveNpAdminRoleIdAsync) — NOT a hardcoded 1. On tenants where
+            // legacy AdminManager seeded CRM labels first, NpAdmin is at 6/7/8,
+            // and the old hardcoded 1 assigned "Decision Maker" instead (the
+            // §3.6 collision). The resolver reads ContactRoleId via the Hub
+            // NpRoleId/RoleId claim, so the single primary role is sufficient
+            // (no junction row needed at cascade time).
+            ContactRoleId = primaryRoleId,
             Created = now,
             CreatedBy = actor,
             LastModified = now,
             LastModifiedBy = actor,
         };
     }
+
+    // Resolves the real NpAdmin ContactRoleId by NAME (it is at 6/7/8 on
+    // collided tenants, not 1). Null if absent — contact is then role-less
+    // (deny-by-default) rather than mis-assigned.
+    private async Task<int?> ResolveNpAdminRoleIdAsync() =>
+        await Context.TblContactRoles.AsNoTracking()
+            .Where(r => r.Name == "NpAdmin" && r.IsActive)
+            .Select(r => (int?)r.ContactRoleId)
+            .FirstOrDefaultAsync();
 
     // Splits a "Firstname Surname" string into the two components for
     // tucClientContact.UcctFirstname / UcctSurname.

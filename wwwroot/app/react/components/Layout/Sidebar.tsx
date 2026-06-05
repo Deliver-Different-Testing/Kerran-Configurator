@@ -752,6 +752,40 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
             </button>
           )}
 
+          {/* DF Admin: multi-lane Team & Users (Unified Permissions §8.1) */}
+          {isDfAdmin && !collapsed && (
+            <button
+              onClick={() => navigate('/settings/team')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/5 ml-2 ${
+                location.pathname.startsWith('/settings/team') ? 'bg-brand-cyan/20 text-brand-cyan' : ''
+              }`}
+            >
+              <svg className={`w-4 h-4 flex-shrink-0 ${location.pathname.startsWith('/settings/team') ? 'text-brand-cyan' : 'text-white/50'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              <span className={`text-xs font-medium ${location.pathname.startsWith('/settings/team') ? 'text-brand-cyan' : 'text-white/60'}`}>Team &amp; Users</span>
+            </button>
+          )}
+
+          {/* DF Admin: Role Management — create roles + tag ClientTypes (Unified Permissions §8.2) */}
+          {isDfAdmin && !collapsed && (
+            <button
+              onClick={() => navigate('/settings/roles')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/5 ml-2 ${
+                location.pathname.startsWith('/settings/roles') ? 'bg-brand-cyan/20 text-brand-cyan' : ''
+              }`}
+            >
+              <svg className={`w-4 h-4 flex-shrink-0 ${location.pathname.startsWith('/settings/roles') ? 'text-brand-cyan' : 'text-white/50'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              <span className={`text-xs font-medium ${location.pathname.startsWith('/settings/roles') ? 'text-brand-cyan' : 'text-white/60'}`}>Roles</span>
+            </button>
+          )}
+
           {/* DF Admin: Role × Permission matrix (Phase 5+31 R3) */}
           {isDfAdmin && !collapsed && (
             <button

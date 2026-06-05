@@ -15,5 +15,17 @@ public partial class Permission
 
     public string Category { get; set; }
 
+    // Unified Permissions §4.2 — 3-tier tree. ParentKey self-references
+    // PermissionKey (NULL = tier-1 hub tile). Tier: 1=tile, 2=leaf.
+    // AccessType (unified ladder): 1=View, 2=Edit, 3=Action — the max
+    // level this node supports. SortOrder drives matrix row ordering.
+    public string ParentKey { get; set; }
+
+    public byte Tier { get; set; }
+
+    public byte AccessType { get; set; }
+
+    public int SortOrder { get; set; }
+
     public virtual ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
 }

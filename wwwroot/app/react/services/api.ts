@@ -167,11 +167,17 @@ export interface PermissionRefDto {
   displayName: string;
   description: string | null;
   category: string | null;
+  // Unified Permissions §4.2 — tree metadata.
+  parentKey: string | null;
+  tier: number;        // 1 = hub tile, 2 = leaf
+  accessType: number;  // max level this node supports (1=View,2=Edit,3=Action)
+  sortOrder: number;
 }
 export interface RolePermissionCellDto {
   contactRoleId: number;
   permissionKey: string;
   allowed: boolean;
+  accessLevel: number | null;  // 0=None,1=View,2=Edit,3=Action (null = legacy Allowed)
   clientId: number | null;
 }
 export interface RolePermissionMatrix {
@@ -186,10 +192,121 @@ export const rolePermissionsApi = {
   /** Full Role × Permission matrix for the DF-admin matrix UI. AdminOnly. */
   getMatrix: () => request<RolePermissionMatrix>('/admin/role-permissions'),
   /** Upsert a (ContactRoleId, PermissionKey, ClientId) cell. AdminOnly.
-   *  clientId = null edits the global default; non-null edits a per-client override. */
-  setPermission: (contactRoleId: number, permissionKey: string, allowed: boolean, clientId: number | null = null) =>
+   *  When accessLevel is supplied it is authoritative (server derives Allowed);
+   *  clientId = null edits the global default, non-null a per-client override. */
+  setPermission: (
+    contactRoleId: number,
+    permissionKey: string,
+    accessLevel: number,
+    clientId: number | null = null,
+  ) =>
     request<unknown>(
       `/admin/role-permissions/${contactRoleId}/${encodeURIComponent(permissionKey)}`,
-      { method: 'PUT', body: JSON.stringify({ allowed, clientId }) }
+      { method: 'PUT', body: JSON.stringify({ allowed: accessLevel >= 1, accessLevel, clientId }) }
     ),
+};
+
+// --- Role Management + lookups (Unified Permissions §8.2) ---
+export interface RoleListItem {
+  contactRoleId: number;
+  name: string;
+  description: string | null;
+  tenantClientId: number | null;
+  scopeLabel: string;
+  clientTypeIds: number[];
+  contactCount: number;
+  isActive: boolean;
+}
+export interface RoleDetail {
+  contactRoleId: number;
+  name: string;
+  description: string | null;
+  tenantClientId: number | null;
+  clientTypeIds: number[];
+  isActive: boolean;
+  affectedContactsCount: number;
+}
+export interface ClientTypeRef { id: number; name: string; }
+export interface RelationshipTypeRef { relationshipTypeId: number; name: string; }
+export interface ClientRef { id: number; name: string; clientTypeId: number; }
+export interface RoleCell {
+  permissionKey: string;
+  allowed: boolean;
+  accessLevel: number | null;
+  clientId: number | null;
+}
+export interface RolePermissionsForRole {
+  contactRoleId: number;
+  permissions: PermissionRefDto[];
+  cells: RoleCell[];
+}
+export interface CreateRoleBody {
+  name: string;
+  description?: string | null;
+  tenantClientId?: number | null;
+  clientTypeIds: number[];
+}
+export interface UpdateRoleBody {
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+  clientTypeIds: number[];
+}
+
+export const rolesApi = {
+  list: (params?: { scope?: string; clientType?: number; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.scope) q.set('scope', params.scope);
+    if (params?.clientType != null) q.set('clientType', String(params.clientType));
+    if (params?.status) q.set('status', params.status);
+    const qs = q.toString();
+    return request<RoleListItem[]>(`/admin/roles${qs ? `?${qs}` : ''}`);
+  },
+  get: (id: number) => request<RoleDetail>(`/admin/roles/${id}`),
+  create: (body: CreateRoleBody) =>
+    request<RoleDetail>('/admin/roles', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: number, body: UpdateRoleBody) =>
+    request<unknown>(`/admin/roles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deactivate: (id: number) =>
+    request<unknown>(`/admin/roles/${id}/deactivate`, { method: 'POST', body: '{}' }),
+  getPermissions: (id: number) =>
+    request<RolePermissionsForRole>(`/admin/roles/${id}/permissions`),
+  clientTypes: () => request<ClientTypeRef[]>('/admin/client-types'),
+  relationshipTypes: () => request<RelationshipTypeRef[]>('/admin/relationship-types'),
+  /** Active NP/Tenant clients for the matrix per-client override overlay (§8.3.1). */
+  clients: () => request<ClientRef[]>('/admin/clients'),
+};
+
+// --- DF-Admin multi-lane Team & Users (Unified Permissions §8.1) ---
+export interface AdminContactRow {
+  id: string; name: string; email: string; clientName: string;
+  roles: { id: number; name: string }[]; status: 'active' | 'inactive'; lastLogin: string;
+}
+export interface AdminContactDetail {
+  id: number; firstName: string; lastName: string; email: string; jobTitle: string;
+  mobile: string; directDial: string; notes: string; relationshipTypeId: number | null;
+  roleIds: number[]; status: 'active' | 'inactive'; clientId: number | null; clientName: string; clientTypeId: number;
+}
+export interface AdminResolvedPerm { key: string; displayName: string; level: number; }
+export interface AdminResolvedTile { key: string; displayName: string; level: number; items: AdminResolvedPerm[]; }
+export interface AdminContactAudit { changedAt: string; field: string; oldValue: string; newValue: string; changedBy: string; }
+export interface AdminRoleOption { id: number; name: string; description: string; }
+export interface AdminRelType { id: number; name: string; }
+export interface AdminClientOption { id: number; name: string; clientTypeId: number; }
+export interface AdminContactSave {
+  clientId?: number | null; firstName: string; lastName: string; email: string;
+  jobTitle: string; mobile: string; directDial: string; notes: string;
+  relationshipTypeId: number | null; roleIds: number[]; status: 'active' | 'inactive';
+}
+
+export const contactsApi = {
+  list: (lane: string) => request<AdminContactRow[]>(`/admin/contacts?lane=${encodeURIComponent(lane)}`),
+  get: (id: number | string) => request<AdminContactDetail>(`/admin/contacts/${id}`),
+  permissions: (id: number | string) => request<AdminResolvedTile[]>(`/admin/contacts/${id}/permissions`),
+  history: (id: number | string) => request<AdminContactAudit[]>(`/admin/contacts/${id}/history`),
+  roles: (clientType: number) => request<AdminRoleOption[]>(`/admin/contacts/lookups/roles?clientType=${clientType}`),
+  relationshipTypes: () => request<AdminRelType[]>('/admin/contacts/lookups/relationship-types'),
+  clients: (lane: string) => request<AdminClientOption[]>(`/admin/contacts/lookups/clients?lane=${encodeURIComponent(lane)}`),
+  create: (body: AdminContactSave) => request<AdminContactDetail>('/admin/contacts', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: number | string, body: AdminContactSave) => request<AdminContactDetail>(`/admin/contacts/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
 };

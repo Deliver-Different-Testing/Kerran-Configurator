@@ -21,5 +21,18 @@ public partial class TblContactRole
 
     public string Notes { get; set; }
 
+    // Unified Permissions §4.1 — tenant-owned roles. TenantClientId NULL =
+    // DFRNT global default; non-NULL = role owned by that tucClient.
+    // IsActive: soft-deactivate. Description: internal helper text.
+    public int? TenantClientId { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public string Description { get; set; }
+
     public virtual ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
+
+    public virtual ICollection<TblRoleClientType> TblRoleClientTypes { get; set; } = new List<TblRoleClientType>();
+
+    public virtual ICollection<TblContactContactRole> TblContactContactRoles { get; set; } = new List<TblContactContactRole>();
 }

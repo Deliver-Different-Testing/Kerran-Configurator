@@ -24,10 +24,10 @@ export const couriers: Courier[] = [
 ];
 
 export const users: User[] = [
-  { id: '1', name: 'John Harper', email: 'j.harper@pacificexpress.com', role: 'Admin', status: 'active', lastLogin: '2 hours ago' },
-  { id: '2', name: 'Lisa Tran', email: 'l.tran@pacificexpress.com', role: 'Dispatcher', status: 'active', lastLogin: '25 min ago' },
-  { id: '3', name: 'Sam Peters', email: 's.peters@pacificexpress.com', role: 'Read-Only', status: 'active', lastLogin: '3 days ago' },
-  { id: '4', name: 'Amy Chen', email: 'a.chen@pacificexpress.com', role: 'Dispatcher', status: 'inactive', lastLogin: '2 months ago' },
+  { id: '1', name: 'John Harper', email: 'j.harper@pacificexpress.com', clientName: 'Pacific Express', roles: [{ id: 1, name: 'NpAdmin' }], status: 'active', lastLogin: '2 hours ago' },
+  { id: '2', name: 'Lisa Tran', email: 'l.tran@pacificexpress.com', clientName: 'Pacific Express', roles: [{ id: 2, name: 'NpDispatcher' }], status: 'active', lastLogin: '25 min ago' },
+  { id: '3', name: 'Sam Peters', email: 's.peters@pacificexpress.com', clientName: 'Pacific Express', roles: [{ id: 3, name: 'NpReadOnly' }], status: 'active', lastLogin: '3 days ago' },
+  { id: '4', name: 'Amy Chen', email: 'a.chen@pacificexpress.com', clientName: 'Pacific Express', roles: [{ id: 2, name: 'NpDispatcher' }], status: 'inactive', lastLogin: '2 months ago' },
 ];
 
 export const activityFeed = [

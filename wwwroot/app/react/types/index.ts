@@ -109,11 +109,18 @@ export interface CourierDocumentLegacy {
   status: 'current' | 'expiring' | 'expired';
 }
 
+export interface UserRoleRef {
+  id: number;
+  name: string;
+}
+
+// Unified Permissions §8.1 — Users list row: Client/NP name + stacked role badges.
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'Admin' | 'Dispatcher' | 'Read-Only';
+  clientName: string;
+  roles: UserRoleRef[];
   status: 'active' | 'inactive';
   lastLogin: string;
 }

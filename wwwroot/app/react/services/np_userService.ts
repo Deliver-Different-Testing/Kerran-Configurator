@@ -1,50 +1,84 @@
 import api from './np_api';
 import type { User } from '@/types';
 
+// Unified Permissions §8.1 — Contact modal types.
+export interface NpUserDetail {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  jobTitle: string;
+  mobile: string;
+  directDial: string;
+  notes: string;
+  relationshipTypeId: number | null;
+  roleIds: number[];
+  status: 'active' | 'inactive';
+  clientId: number | null;
+  clientName: string;
+}
+
+export interface NpRoleOption { id: number; name: string; description: string; }
+export interface NpContactAudit { changedAt: string; field: string; oldValue: string; newValue: string; changedBy: string; }
+export interface NpRelationshipType { id: number; name: string; }
+export interface NpResolvedPerm { key: string; displayName: string; level: number; }
+export interface NpResolvedTile { key: string; displayName: string; level: number; items: NpResolvedPerm[]; }
+
+export interface NpUserSavePayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  jobTitle: string;
+  mobile: string;
+  directDial: string;
+  notes: string;
+  relationshipTypeId: number | null;
+  roleIds: number[];
+  status: 'active' | 'inactive';
+}
+
 export const userService = {
   async getAll(): Promise<User[]> {
     const { data } = await api.get<User[]>('/users');
     return data ?? [];
   },
 
-  async getById(id: string): Promise<User | undefined> {
-    const all = await this.getAll();
-    return all.find(u => u.id === id);
-  },
-
-  async getRoles(): Promise<string[]> {
-    return ['Admin', 'Dispatcher', 'Read-Only'];
-  },
-
-  // Phase 5+28b §B.2 — Add User from the NP team page. POST creates the
-  // tucClientContact server-side + dispatches the Hub invite cascade
-  // (see NpUserService.CreateAsync). Backend returns a wrapped response
-  // so we can surface the partial-failure warning message in the UI.
-  async create(payload: { name: string; email: string; role: string }): Promise<{ user: User; message: string | null }> {
-    const { data } = await api.post<{ user: User; messages?: { message: string }[] }>('/users', {
-      name: payload.name,
-      email: payload.email,
-      role: payload.role,
-    });
-    return {
-      user: data?.user as User,
-      message: data?.messages?.[0]?.message ?? null,
-    };
-  },
-
-  async update(id: string, updates: Partial<User>): Promise<User> {
-    const payload = {
-      name: updates.name ?? '',
-      email: updates.email ?? '',
-      role: updates.role ?? 'Dispatcher',
-      status: updates.status ?? 'active',
-    };
-    const { data } = await api.put<User>(`/users/${id}`, payload);
-    if (!data) throw new Error('Server returned no user');
+  async getDetail(id: number | string): Promise<NpUserDetail> {
+    const { data } = await api.get<NpUserDetail>(`/users/${id}`);
     return data;
   },
 
-  async remove(_id: string): Promise<boolean> {
-    return false;
+  async getResolvedPermissions(id: number | string): Promise<NpResolvedTile[]> {
+    const { data } = await api.get<NpResolvedTile[]>(`/users/${id}/permissions`);
+    return data ?? [];
+  },
+
+  async getHistory(id: number | string): Promise<NpContactAudit[]> {
+    const { data } = await api.get<NpContactAudit[]>(`/users/${id}/history`);
+    return data ?? [];
+  },
+
+  async getAssignableRoles(): Promise<NpRoleOption[]> {
+    const { data } = await api.get<NpRoleOption[]>('/users/lookups/roles');
+    return data ?? [];
+  },
+
+  async getRelationshipTypes(): Promise<NpRelationshipType[]> {
+    const { data } = await api.get<NpRelationshipType[]>('/users/lookups/relationship-types');
+    return data ?? [];
+  },
+
+  // Add User — POST creates the tucClientContact + Hub invite cascade.
+  async create(payload: {
+    firstName: string; lastName: string; email: string;
+    roleIds: number[]; relationshipTypeId: number | null; jobTitle: string; mobile: string;
+  }): Promise<{ user: NpUserDetail | null; message: string | null }> {
+    const { data } = await api.post<{ user: NpUserDetail; messages?: { message: string }[] }>('/users', payload);
+    return { user: data?.user ?? null, message: data?.messages?.[0]?.message ?? null };
+  },
+
+  async update(id: number | string, payload: NpUserSavePayload): Promise<NpUserDetail | null> {
+    const { data } = await api.put<NpUserDetail>(`/users/${id}`, payload);
+    return data ?? null;
   },
 };

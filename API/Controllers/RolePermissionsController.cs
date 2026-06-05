@@ -68,21 +68,28 @@ public class RolePermissionsController(
         {
             await using var ctx = await contextFactory.CreateDbContextAsync();
 
+            // Only ASSIGNABLE roles (tagged for >= 1 ClientType) become matrix
+            // columns — hides the vestigial CRM-label rows (Decision Maker etc.)
+            // that sit in tblContactRole from the legacy §3.6 collision. Every
+            // real role requires an Applies-To on create, so none are hidden.
             var roles = await ctx.TblContactRoles
                 .AsNoTracking()
+                .Where(r => r.TblRoleClientTypes.Any())
                 .OrderBy(r => r.ContactRoleId)
                 .Select(r => new RoleRefDto(r.ContactRoleId, r.Name, r.Notes))
                 .ToListAsync();
 
             var permissions = await ctx.Permissions
                 .AsNoTracking()
-                .OrderBy(p => p.Category).ThenBy(p => p.PermissionKey)
-                .Select(p => new PermissionRefDto(p.PermissionKey, p.DisplayName, p.Description, p.Category))
+                .OrderBy(p => p.SortOrder).ThenBy(p => p.PermissionKey)
+                .Select(p => new PermissionRefDto(
+                    p.PermissionKey, p.DisplayName, p.Description, p.Category,
+                    p.ParentKey, p.Tier, p.AccessType, p.SortOrder))
                 .ToListAsync();
 
             var matrix = await ctx.RolePermissions
                 .AsNoTracking()
-                .Select(rp => new RolePermissionCellDto(rp.ContactRoleId, rp.PermissionKey, rp.Allowed, rp.ClientId))
+                .Select(rp => new RolePermissionCellDto(rp.ContactRoleId, rp.PermissionKey, rp.Allowed, rp.AccessLevel, rp.ClientId))
                 .ToListAsync();
 
             return Ok(new RolePermissionMatrixDto(roles, permissions, matrix));
@@ -136,25 +143,37 @@ public class RolePermissionsController(
                     && rp.PermissionKey == permissionKey
                     && rp.ClientId == body.ClientId);
 
+            // Unified Permissions §8.3.4 — when AccessLevel is supplied it is
+            // authoritative and Allowed is derived from it (>= View). When
+            // omitted, fall back to the legacy Allowed-only write.
+            var newLevel = body.AccessLevel;
+            var allowed = newLevel.HasValue ? newLevel.Value >= 1 : body.Allowed;
+
             if (existing is null)
             {
                 ctx.RolePermissions.Add(new RolePermission
                 {
                     ContactRoleId = contactRoleId,
                     PermissionKey = permissionKey,
-                    Allowed       = body.Allowed,
+                    Allowed       = allowed,
+                    AccessLevel   = newLevel,
                     ClientId      = body.ClientId
                 });
-                Log.Information("RolePermission inserted: ContactRoleId={ContactRoleId}, PermissionKey={PermissionKey}, ClientId={ClientId}, Allowed={Allowed}",
-                    contactRoleId, permissionKey, body.ClientId, body.Allowed);
+                Log.Information("RolePermission inserted: ContactRoleId={ContactRoleId}, PermissionKey={PermissionKey}, ClientId={ClientId}, Allowed={Allowed}, AccessLevel={AccessLevel}",
+                    contactRoleId, permissionKey, body.ClientId, allowed, newLevel);
             }
-            else if (existing.Allowed != body.Allowed)
+            else
             {
-                existing.Allowed = body.Allowed;
-                Log.Information("RolePermission updated: ContactRoleId={ContactRoleId}, PermissionKey={PermissionKey}, ClientId={ClientId}, Allowed={Allowed}",
-                    contactRoleId, permissionKey, body.ClientId, body.Allowed);
+                var changed = false;
+                if (existing.Allowed != allowed) { existing.Allowed = allowed; changed = true; }
+                if (newLevel.HasValue && existing.AccessLevel != newLevel) { existing.AccessLevel = newLevel; changed = true; }
+                if (changed)
+                {
+                    Log.Information("RolePermission updated: ContactRoleId={ContactRoleId}, PermissionKey={PermissionKey}, ClientId={ClientId}, Allowed={Allowed}, AccessLevel={AccessLevel}",
+                        contactRoleId, permissionKey, body.ClientId, allowed, newLevel);
+                }
+                // else: no change — silent no-op, still returns 204
             }
-            // else: no change — silent no-op, still returns 204
 
             await ctx.SaveChangesAsync();
             return NoContent();

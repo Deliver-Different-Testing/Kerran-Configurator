@@ -19,7 +19,15 @@ public record ClientTypeFeatureMatrixDto(
 
 public record ClientTypeRefDto(int Id, string Name);
 
-public record FeatureRefDto(string FeatureKey, string DisplayName, string Description, string Category);
+// FEATURE_MATRIX_CASCADE_2026-06-07 — ParentKey/Tier/SortOrder surface the
+// dbo.Feature tree so the matrix renders as a hub-tile cascade. Nullable on
+// the wire: when no feature carries a ParentKey the UI falls back to the
+// legacy flat-by-Category layout, so the backend can roll cascade data out
+// one tile at a time. (camelCases to parentKey/tier/sortOrder for the React
+// FeatureMatrixFeature interface.)
+public record FeatureRefDto(
+    string FeatureKey, string DisplayName, string Description, string Category,
+    string ParentKey, int? Tier, int? SortOrder);
 
 public record ClientTypeFeatureCellDto(int ClientTypeId, string FeatureKey, bool Visible);
 

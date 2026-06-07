@@ -71,10 +71,17 @@ public class FeaturesController(
                 .Select(ct => new ClientTypeRefDto(ct.Id, ct.Name))
                 .ToListAsync();
 
+            // Order by SortOrder (cascade tree ordering) then Category/key as a
+            // stable fallback for rows that haven't been given a SortOrder yet.
+            // The React side rebuilds the forest from ParentKey + re-sorts, so
+            // this ordering only affects the legacy flat-by-category fallback.
             var features = await ctx.Features
                 .AsNoTracking()
-                .OrderBy(f => f.Category).ThenBy(f => f.FeatureKey)
-                .Select(f => new FeatureRefDto(f.FeatureKey, f.DisplayName, f.Description, f.Category))
+                .OrderBy(f => f.SortOrder == null).ThenBy(f => f.SortOrder)
+                .ThenBy(f => f.Category).ThenBy(f => f.FeatureKey)
+                .Select(f => new FeatureRefDto(
+                    f.FeatureKey, f.DisplayName, f.Description, f.Category,
+                    f.ParentKey, f.Tier, f.SortOrder))
                 .ToListAsync();
 
             var cells = await ctx.ClientTypeFeatures

@@ -820,6 +820,10 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.DisplayName)
                 .IsRequired()
                 .HasMaxLength(120);
+            // Feature Matrix cascade — tree metadata (mirrors Permission §4.2).
+            // ParentKey is a plain self-FK column (no nav configured); Tier and
+            // SortOrder are nullable INT (DB columns from migration 20260608100000).
+            entity.Property(e => e.ParentKey).HasMaxLength(80);
         });
 
         modelBuilder.Entity<JobBarcode>(entity =>

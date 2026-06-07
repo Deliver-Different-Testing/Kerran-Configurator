@@ -15,5 +15,16 @@ public partial class Feature
 
     public string Category { get; set; }
 
+    // Feature Matrix cascade (FEATURE_MATRIX_CASCADE_2026-06-07) — mirrors the
+    // dbo.Permission tree. ParentKey is a plain self-FK column to FeatureKey
+    // (NULL = root tier); Tier/SortOrder are advisory (the UI infers depth from
+    // the parent walk and falls back to displayName sort). Added by migration
+    // 20260608100000_FeatureCascadeColumns.sql.
+    public string ParentKey { get; set; }
+
+    public int? Tier { get; set; }
+
+    public int? SortOrder { get; set; }
+
     public virtual ICollection<ClientTypeFeature> ClientTypeFeatures { get; set; } = new List<ClientTypeFeature>();
 }

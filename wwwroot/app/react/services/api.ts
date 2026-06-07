@@ -131,6 +131,13 @@ export interface FeatureMatrixFeature {
   displayName: string;
   description: string | null;
   category: string | null;
+  // Cascade hierarchy. Backend surfaces these from dbo.Feature once the
+  // ParentKey / Tier / SortOrder columns are populated. Optional on the wire so
+  // the UI can fall back to flat-by-category rendering when parentKey is absent
+  // across the response.
+  parentKey?: string | null;
+  tier?: number;
+  sortOrder?: number;
 }
 export interface FeatureMatrixCell {
   clientTypeId: number;

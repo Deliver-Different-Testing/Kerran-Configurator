@@ -448,14 +448,14 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
         schedulingEnabled: true,
         quotesEnabled: true,
       });
-      // DF Admin can manage tenant users (same /users route as NP lane). The
-      // tenant section builder doesn't surface this by default since it's
-      // an admin-side concern.
+      // DF Admin: the multi-lane Team & Users surface (§8.1) is the admin's
+      // primary contact-management view (replaces the NP-scoped /users page in
+      // this lane). Routed top-level at /team.
       dfSections.push({
         id: 'users-section',
-        label: 'Users',
+        label: 'Team & Users',
         icon: icons.users,
-        items: [{ id: '/users', label: 'Users', implemented: true }],
+        items: [{ id: '/team', label: 'Team & Users', implemented: true }],
       });
       // Surface the legacy DF Drive mobile-app config (Workflows / Supports /
       // Feature Flags / Automations) — DF Admin only. Routed at /df-drive-config.
@@ -752,22 +752,7 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
             </button>
           )}
 
-          {/* DF Admin: multi-lane Team & Users (Unified Permissions §8.1) */}
-          {isDfAdmin && !collapsed && (
-            <button
-              onClick={() => navigate('/settings/team')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/5 ml-2 ${
-                location.pathname.startsWith('/settings/team') ? 'bg-brand-cyan/20 text-brand-cyan' : ''
-              }`}
-            >
-              <svg className={`w-4 h-4 flex-shrink-0 ${location.pathname.startsWith('/settings/team') ? 'text-brand-cyan' : 'text-white/50'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              <span className={`text-xs font-medium ${location.pathname.startsWith('/settings/team') ? 'text-brand-cyan' : 'text-white/60'}`}>Team &amp; Users</span>
-            </button>
-          )}
+          {/* Team & Users moved to the top-level nav (replaces the DF-admin Users item). */}
 
           {/* DF Admin: Role Management — create roles + tag ClientTypes (Unified Permissions §8.2) */}
           {isDfAdmin && !collapsed && (

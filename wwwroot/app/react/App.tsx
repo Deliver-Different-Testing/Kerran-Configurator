@@ -120,7 +120,7 @@ export default function App() {
             <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} isDfAdmin />} />
             <Route path="settings/tenant-config" element={<TenantConfigPage />} />
             <Route path="settings/feature-matrix" element={<FeatureMatrixPage />} />
-            <Route path="settings/team" element={<TeamUsersPage />} />
+            <Route path="team" element={<TeamUsersPage />} />
             <Route path="settings/roles" element={<RolesPage />} />
             <Route path="settings/role-permissions" element={<RolePermissionsPage />} />
             <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />

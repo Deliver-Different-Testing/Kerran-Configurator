@@ -13,7 +13,7 @@ import {
   type RolePermissionsForRole, rolePermissionsApi,
 } from '@/services/api';
 import { clampAccess, type AccessLevel } from '@/data/accessLevels';
-import TriStateCell from '@/components/permissions/TriStateCell';
+import AccessLevelChooser from '@/components/permissions/AccessLevelChooser';
 
 type ScopeFilter = 'all' | 'global' | 'tenant';
 
@@ -449,7 +449,7 @@ function RolePermissionsTab({ roleId }: { roleId: number | 'new' }) {
           <div key={tile.permissionKey} className="border border-border rounded-lg overflow-hidden">
             <div className="flex items-center justify-between bg-gray-100 px-3 py-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-text-primary">{tile.displayName}</span>
-              <TriStateCell
+              <AccessLevelChooser
                 level={resolve(tile.permissionKey)} accessType={tile.accessType}
                 explicit={explicit.has(tile.permissionKey)} busy={busy.has(tile.permissionKey)}
                 label={tile.displayName}
@@ -462,7 +462,7 @@ function RolePermissionsTab({ roleId }: { roleId: number | 'new' }) {
                   <div className="text-sm text-text-primary">{p.displayName}</div>
                   <div className="text-[11px] text-text-muted font-mono">{p.permissionKey}</div>
                 </div>
-                <TriStateCell
+                <AccessLevelChooser
                   level={resolve(p.permissionKey)} accessType={p.accessType}
                   explicit={explicit.has(p.permissionKey)} busy={busy.has(p.permissionKey)}
                   label={p.displayName}

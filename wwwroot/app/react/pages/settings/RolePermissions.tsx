@@ -18,7 +18,7 @@ import {
   type RolePermissionMatrix, type ClientTypeRef, type RoleListItem, type ClientRef,
 } from '@/services/api';
 import { clampAccess, type AccessLevel } from '@/data/accessLevels';
-import TriStateCell from '@/components/permissions/TriStateCell';
+import AccessLevelChooser from '@/components/permissions/AccessLevelChooser';
 
 type CellKey = `${number}|${string}`;
 const cellKey = (roleId: number, permKey: string): CellKey => `${roleId}|${permKey}`;
@@ -270,7 +270,7 @@ export default function RolePermissionsPage() {
                       </td>
                       {roles.map(r => (
                         <td key={r.contactRoleId} className="text-center px-3 py-2">
-                          <TriStateCell
+                          <AccessLevelChooser
                             level={resolve(r.contactRoleId, tile.permissionKey)}
                             accessType={tile.accessType}
                             explicit={isExplicit(cellKey(r.contactRoleId, tile.permissionKey))}
@@ -290,7 +290,7 @@ export default function RolePermissionsPage() {
                       </td>
                       {roles.map(r => (
                         <td key={r.contactRoleId} className="text-center px-3 py-3">
-                          <TriStateCell
+                          <AccessLevelChooser
                             level={resolve(r.contactRoleId, p.permissionKey)}
                             accessType={p.accessType}
                             explicit={isExplicit(cellKey(r.contactRoleId, p.permissionKey))}
@@ -309,8 +309,10 @@ export default function RolePermissionsPage() {
         </div>
       )}
       <p className="text-xs text-text-muted mt-3">
-        Pill: None (grey) · View (blue) · Edit (green) · Action (purple). Click a cell to cycle.
-        The amber dot marks a cell set explicitly — {scopeClientId == null ? 'not inherited from its hub tile' : 'a per-client override of the global default'}.
+        None (grey) · View (cyan) · Edit (green) · Action (purple). Click a segment to set the level —
+        levels above what the item supports are greyed out. A SOLID segment is set explicitly{' '}
+        {scopeClientId == null ? 'on the role' : 'as a per-client override'}; a FAINT segment is inherited
+        from its hub tile via cascade.
       </p>
     </div>
   );

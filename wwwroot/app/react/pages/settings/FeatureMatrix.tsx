@@ -1,30 +1,110 @@
 // ClientType × Feature visibility matrix — DF-Admin-only.
 // Backed by GET / PUT /api/admin/client-type-features (Phase 5+31 R2 §2).
 //
-// Rows = features (grouped by Category: MenuItem / HubTile / …)
-// Columns = ClientTypes (Internal / Customer / NetworkPartner / Tenant / DFRNTAdmin)
-// Each cell is a toggle. Clicking does an optimistic UI flip + PUT; on
-// error the cell reverts and the banner shows the message.
+// Layout: cascade tree (Steve 2026-06-07).
+//   Root tier (HubTile)
+//     └── MenuItem
+//          └── Tab
+//               └── Item / Feature / Leaf row
 //
-// "Visible" semantics: a row in dbo.ClientTypeFeature with Visible=1 means
-// the feature is shown to users whose tucClient.ClientTypeId matches.
-// Missing rows are treated as Visible=false by the resolver. Toggling an
-// absent cell to true UPSERTS a row; toggling true→false either updates
-// the row or, for absent cells, inserts Visible=false (the resolver
-// excludes both equally).
+// The tree is built from the flat feature list using `parentKey`. The schema
+// supports arbitrary depth via Permission.ParentKey + Permission.Tier — see
+// PERMISSIONS-UNIFIED-ARCHITECTURE-SPEC §4.2. That means AdminManager's
+// 4-tier shape (Business → System → Location Management → Zipcodes) lands
+// naturally without any UI special-casing.
 //
-// Important UX note: the resolver's DF-Admin bypass returns the UNION of
-// every visible feature key across all ClientTypes. That means toggling a
-// feature off for ClientTypeId=5 (DFRNTAdmin) won't change what YOU see
-// in the sidebar / tiles — admins always see anything visible anywhere.
-// To actually hide a feature from your own view, you'd need to toggle it
-// off across every ClientType (or log in as a non-admin user to test).
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { featuresApi, type FeatureMatrix, type FeatureMatrixCell } from '@/services/api';
+// Backward compatibility: when no feature in the response has parentKey set
+// the UI falls back to the legacy flat-by-Category rendering. That lets the
+// backend roll cascade data out one tile at a time without breaking the page.
+//
+// "Visible" semantics (unchanged): a row in dbo.ClientTypeFeature with
+// Visible=1 means the feature is shown to users whose tucClient.ClientTypeId
+// matches. Missing rows are treated as Visible=false by the resolver.
+//
+// DF-Admin UX note: the resolver's admin bypass returns the UNION of every
+// visible feature key across all ClientTypes, so toggling a feature off for
+// ClientTypeId=5 (DFRNTAdmin) won't change what YOU see in the sidebar —
+// admins always see anything visible anywhere. To verify a hide, log in as
+// a non-admin user.
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
+import { featuresApi, type FeatureMatrix, type FeatureMatrixFeature } from '@/services/api';
 
 type CellKey = `${number}|${string}`;
 const cellKey = (clientTypeId: number, featureKey: string): CellKey =>
   `${clientTypeId}|${featureKey}`;
+
+interface TreeNode {
+  feature: FeatureMatrixFeature;
+  depth: number;
+  children: TreeNode[];
+}
+
+// Build a forest from the flat feature list using parentKey. Orphans whose
+// parentKey doesn't resolve to a known feature surface at the root tier so
+// nothing is hidden by a data inconsistency.
+function buildTree(features: FeatureMatrixFeature[]): TreeNode[] {
+  const byKey = new Map<string, FeatureMatrixFeature>();
+  for (const f of features) byKey.set(f.featureKey, f);
+
+  const nodes = new Map<string, TreeNode>();
+  for (const f of features) {
+    nodes.set(f.featureKey, { feature: f, depth: 0, children: [] });
+  }
+
+  const roots: TreeNode[] = [];
+  for (const f of features) {
+    const node = nodes.get(f.featureKey)!;
+    const parentKey = f.parentKey ?? null;
+    if (parentKey && byKey.has(parentKey)) {
+      nodes.get(parentKey)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const setDepth = (n: TreeNode, depth: number) => {
+    n.depth = depth;
+    n.children.sort(sortNodes);
+    for (const c of n.children) setDepth(c, depth + 1);
+  };
+  roots.sort(sortNodes);
+  for (const r of roots) setDepth(r, 0);
+  return roots;
+}
+
+function sortNodes(a: TreeNode, b: TreeNode): number {
+  const so = (a.feature.sortOrder ?? 0) - (b.feature.sortOrder ?? 0);
+  if (so !== 0) return so;
+  return a.feature.displayName.localeCompare(b.feature.displayName);
+}
+
+// Pre-order flatten honouring expanded state. A node appears in the output
+// iff every ancestor is expanded (root nodes always appear).
+function flattenVisible(roots: TreeNode[], expanded: Set<string>): TreeNode[] {
+  const out: TreeNode[] = [];
+  const walk = (nodes: TreeNode[]) => {
+    for (const n of nodes) {
+      out.push(n);
+      if (n.children.length > 0 && expanded.has(n.feature.featureKey)) {
+        walk(n.children);
+      }
+    }
+  };
+  walk(roots);
+  return out;
+}
+
+function collectKeys(roots: TreeNode[]): string[] {
+  const out: string[] = [];
+  const walk = (nodes: TreeNode[]) => {
+    for (const n of nodes) {
+      if (n.children.length > 0) out.push(n.feature.featureKey);
+      walk(n.children);
+    }
+  };
+  walk(roots);
+  return out;
+}
 
 export default function FeatureMatrixPage() {
   const [data, setData] = useState<FeatureMatrix | null>(null);
@@ -32,6 +112,7 @@ export default function FeatureMatrixPage() {
   const [error, setError] = useState<string | null>(null);
   // Per-cell save-in-flight set so toggling cell A doesn't block cell B.
   const [busy, setBusy] = useState<Set<CellKey>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,26 +141,73 @@ export default function FeatureMatrixPage() {
     return m;
   }, [data]);
 
-  // Group features by Category so the table renders MenuItem rows together,
-  // then HubTile rows together, etc. Categories without rows are skipped.
-  const featuresByCategory = useMemo(() => {
-    const groups = new Map<string, FeatureMatrix['features']>();
-    if (data) {
-      for (const f of data.features) {
-        const cat = f.category ?? '(Uncategorised)';
-        const existing = groups.get(cat) ?? [];
-        existing.push(f);
-        groups.set(cat, existing);
+  // Cascade mode is engaged when at least one feature reports a parentKey —
+  // we treat that as the backend opting in. Otherwise fall back to the
+  // legacy flat-by-Category layout so a partial backend rollout still works.
+  const hasCascade = useMemo(
+    () => !!data && data.features.some(f => f.parentKey),
+    [data]
+  );
+
+  const tree = useMemo<TreeNode[]>(() => {
+    if (!data || !hasCascade) return [];
+    return buildTree(data.features);
+  }, [data, hasCascade]);
+
+  // Default: top tier expanded so the page doesn't open as a wall of
+  // collapsed roots. Re-runs whenever a fresh response arrives.
+  useEffect(() => {
+    if (!hasCascade) return;
+    setExpanded(prev => {
+      if (prev.size > 0) return prev;
+      const next = new Set<string>();
+      for (const root of tree) {
+        if (root.children.length > 0) next.add(root.feature.featureKey);
       }
+      return next;
+    });
+  }, [hasCascade, tree]);
+
+  const flatRows = useMemo(
+    () => (hasCascade ? flattenVisible(tree, expanded) : []),
+    [hasCascade, tree, expanded]
+  );
+
+  // Legacy fallback: group features by Category for tenants/environments
+  // whose backend hasn't surfaced ParentKey yet.
+  const featuresByCategory = useMemo(() => {
+    if (!data || hasCascade) return [];
+    const groups = new Map<string, FeatureMatrix['features']>();
+    for (const f of data.features) {
+      const cat = f.category ?? '(Uncategorised)';
+      const existing = groups.get(cat) ?? [];
+      existing.push(f);
+      groups.set(cat, existing);
     }
-    // Sort categories alphabetically; within each, sort features by DisplayName.
     return Array.from(groups.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([cat, feats]) => ({
         category: cat,
         features: [...feats].sort((a, b) => a.displayName.localeCompare(b.displayName)),
       }));
-  }, [data]);
+  }, [data, hasCascade]);
+
+  const toggleExpanded = useCallback((featureKey: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(featureKey)) next.delete(featureKey);
+      else next.add(featureKey);
+      return next;
+    });
+  }, []);
+
+  const expandAll = useCallback(() => {
+    setExpanded(new Set(collectKeys(tree)));
+  }, [tree]);
+
+  const collapseAll = useCallback(() => {
+    setExpanded(new Set());
+  }, []);
 
   const toggleCell = useCallback(async (clientTypeId: number, featureKey: string) => {
     if (!data) return;
@@ -87,8 +215,6 @@ export default function FeatureMatrixPage() {
     const wasVisible = cellLookup.get(key) ?? false;
     const nextVisible = !wasVisible;
 
-    // Optimistic local flip — splice the cell into data.matrix (or update
-    // the existing row in place).
     setData(prev => {
       if (!prev) return prev;
       const existingIdx = prev.matrix.findIndex(
@@ -107,7 +233,6 @@ export default function FeatureMatrixPage() {
     try {
       await featuresApi.setVisibility(clientTypeId, featureKey, nextVisible);
     } catch (e: any) {
-      // Revert
       setData(prev => {
         if (!prev) return prev;
         const existingIdx = prev.matrix.findIndex(
@@ -141,6 +266,37 @@ export default function FeatureMatrixPage() {
     );
   }
 
+  const renderCells = (f: FeatureMatrixFeature) => (
+    <>
+      {data.clientTypes.map(ct => {
+        const k = cellKey(ct.id, f.featureKey);
+        const visible = cellLookup.get(k) ?? false;
+        const isBusy = busy.has(k);
+        return (
+          <td key={ct.id} className="text-center px-4 py-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={visible}
+              aria-label={`${f.displayName} for ${ct.name}`}
+              disabled={isBusy}
+              onClick={() => toggleCell(ct.id, f.featureKey)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#3bc7f4]/40 ${
+                visible ? 'bg-[#3bc7f4]' : 'bg-gray-300'
+              } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  visible ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </td>
+        );
+      })}
+    </>
+  );
+
   return (
     <div>
       <div className="mb-6">
@@ -162,11 +318,30 @@ export default function FeatureMatrixPage() {
         </div>
       )}
 
+      {hasCascade && (
+        <div className="mb-3 flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-gray-50"
+          >
+            Expand all
+          </button>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-gray-50"
+          >
+            Collapse all
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto bg-white rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-border">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-text-primary sticky left-0 bg-gray-50 z-10 min-w-[280px]">
+              <th className="text-left px-4 py-3 font-medium text-text-primary sticky left-0 bg-gray-50 z-10 min-w-[320px]">
                 Feature
               </th>
               {data.clientTypes.map(ct => (
@@ -178,50 +353,68 @@ export default function FeatureMatrixPage() {
             </tr>
           </thead>
           <tbody>
-            {featuresByCategory.map(({ category, features }) => (
-              <>
-                <tr key={`cat-${category}`} className="bg-gray-100">
-                  <td colSpan={1 + data.clientTypes.length}
-                      className="px-4 py-2 text-xs uppercase tracking-wide text-text-muted font-semibold sticky left-0">
-                    {category}
-                  </td>
-                </tr>
-                {features.map(f => (
-                  <tr key={f.featureKey} className="border-b border-border hover:bg-gray-50">
-                    <td className="px-4 py-3 sticky left-0 bg-white">
-                      <div className="text-sm font-medium text-text-primary">{f.displayName}</div>
-                      <div className="text-[11px] text-text-muted font-mono">{f.featureKey}</div>
-                    </td>
-                    {data.clientTypes.map(ct => {
-                      const k = cellKey(ct.id, f.featureKey);
-                      const visible = cellLookup.get(k) ?? false;
-                      const isBusy = busy.has(k);
-                      return (
-                        <td key={ct.id} className="text-center px-4 py-3">
+            {hasCascade
+              ? flatRows.map(node => {
+                  const f = node.feature;
+                  const hasChildren = node.children.length > 0;
+                  const isOpen = expanded.has(f.featureKey);
+                  // Indent per tier; first level (depth=0) sits flush. Chevron
+                  // column always reserves its 18px so leaf rows line up under
+                  // the parent's caret rather than shifting left.
+                  const indentPx = node.depth * 18;
+                  return (
+                    <tr key={f.featureKey} className="border-b border-border hover:bg-gray-50">
+                      <td className="px-4 py-3 sticky left-0 bg-white">
+                        <div className="flex items-start gap-1" style={{ paddingLeft: indentPx }}>
                           <button
                             type="button"
-                            role="switch"
-                            aria-checked={visible}
-                            aria-label={`${f.displayName} for ${ct.name}`}
-                            disabled={isBusy}
-                            onClick={() => toggleCell(ct.id, f.featureKey)}
-                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#3bc7f4]/40 ${
-                              visible ? 'bg-[#3bc7f4]' : 'bg-gray-300'
-                            } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={() => hasChildren && toggleExpanded(f.featureKey)}
+                            className={`mt-[2px] w-[18px] text-[11px] text-text-muted ${hasChildren ? 'cursor-pointer hover:text-text-primary' : 'cursor-default opacity-0'}`}
+                            aria-expanded={hasChildren ? isOpen : undefined}
+                            aria-label={hasChildren ? (isOpen ? 'Collapse' : 'Expand') : undefined}
+                            tabIndex={hasChildren ? 0 : -1}
                           >
-                            <span
-                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                visible ? 'translate-x-4' : 'translate-x-0'
-                              }`}
-                            />
+                            {hasChildren ? (isOpen ? '▾' : '▸') : '·'}
                           </button>
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-sm ${node.depth === 0 ? 'font-semibold text-text-primary' : 'font-medium text-text-primary'}`}>
+                              {f.displayName}
+                              {hasChildren && (
+                                <span className="ml-2 text-[10px] uppercase tracking-wide text-text-muted font-normal">
+                                  {node.children.length} child{node.children.length === 1 ? '' : 'ren'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-text-muted font-mono truncate">{f.featureKey}</div>
+                            {f.description && (
+                              <div className="text-[11px] text-text-secondary mt-0.5">{f.description}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      {renderCells(f)}
+                    </tr>
+                  );
+                })
+              : featuresByCategory.map(({ category, features }) => (
+                  <Fragment key={`cat-${category}`}>
+                    <tr className="bg-gray-100">
+                      <td colSpan={1 + data.clientTypes.length}
+                          className="px-4 py-2 text-xs uppercase tracking-wide text-text-muted font-semibold sticky left-0">
+                        {category}
+                      </td>
+                    </tr>
+                    {features.map(f => (
+                      <tr key={f.featureKey} className="border-b border-border hover:bg-gray-50">
+                        <td className="px-4 py-3 sticky left-0 bg-white">
+                          <div className="text-sm font-medium text-text-primary">{f.displayName}</div>
+                          <div className="text-[11px] text-text-muted font-mono">{f.featureKey}</div>
                         </td>
-                      );
-                    })}
-                  </tr>
+                        {renderCells(f)}
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
-              </>
-            ))}
           </tbody>
         </table>
       </div>

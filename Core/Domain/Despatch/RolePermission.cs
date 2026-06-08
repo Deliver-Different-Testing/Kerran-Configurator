@@ -15,12 +15,9 @@ public partial class RolePermission
 
     public bool Allowed { get; set; }
 
-    // Unified Permissions §4.3 — graded access (unified ladder):
-    // 0=None, 1=View, 2=Edit, 3=Action. NULL = fall back to Allowed
-    // (backwards compat during transition). Resolver prefers AccessLevel.
-    public byte? AccessLevel { get; set; }
-
     public int? ClientId { get; set; }
+
+    public byte? AccessLevel { get; set; }
 
     public virtual TucClient Client { get; set; }
 

@@ -29,9 +29,6 @@ public partial class Route
 
     public int? DefaultAgentId { get; set; }
 
-    // Logical reference (NOT a hard FK) to the representative
-    // tblBulkRunSchedule.BulkRunScheduleId of the bound logical schedule.
-    // See database/038-route-scheduleid-and-schedule-grant.sql.
     public int? ScheduleId { get; set; }
 
     public virtual TucAgent DefaultAgent { get; set; }

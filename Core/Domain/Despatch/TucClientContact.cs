@@ -85,9 +85,11 @@ public partial class TucClientContact
 
     public string AccessCode { get; set; }
 
-    // Unified Permissions §4.4 — CRM label (no permission logic), separate
-    // from ContactRoleId (the permission role FK). FK -> tblRelationshipType.
     public int? RelationshipTypeId { get; set; }
+
+    public virtual TblRelationshipType RelationshipType { get; set; }
+
+    public virtual ICollection<TblContactAudit> TblContactAudits { get; set; } = new List<TblContactAudit>();
 
     public virtual ICollection<TucJobBooking> TucJobBookings { get; set; } = new List<TucJobBooking>();
 

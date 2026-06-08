@@ -167,7 +167,15 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tblContactAudit]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tblContactRole]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblRelationshipType]",
          "ObjectType": 0
       },
       {

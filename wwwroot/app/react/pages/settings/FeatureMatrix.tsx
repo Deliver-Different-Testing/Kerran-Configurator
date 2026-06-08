@@ -33,6 +33,13 @@ type CellKey = `${number}|${string}`;
 const cellKey = (clientTypeId: number, featureKey: string): CellKey =>
   `${clientTypeId}|${featureKey}`;
 
+// DFRNTAdmin (ClientTypeId=5) bypasses Feature resolution entirely at runtime
+// (ClientTypeFeatureResolver — admins see the union of every visible feature),
+// so its matrix column has no enforcement effect. We hide it to remove the
+// footgun of toggling a column that does nothing. ClientType=5 rows still exist
+// in the DB; they're just not editable here.
+const DFRNT_ADMIN_CLIENT_TYPE = 5;
+
 interface TreeNode {
   feature: FeatureMatrixFeature;
   depth: number;
@@ -266,9 +273,13 @@ export default function FeatureMatrixPage() {
     );
   }
 
+  // Columns shown in the grid — the DFRNTAdmin column is omitted (see note by
+  // DFRNT_ADMIN_CLIENT_TYPE: admins bypass at runtime, so the column is inert).
+  const clientTypes = data.clientTypes.filter(ct => ct.id !== DFRNT_ADMIN_CLIENT_TYPE);
+
   const renderCells = (f: FeatureMatrixFeature) => (
     <>
-      {data.clientTypes.map(ct => {
+      {clientTypes.map(ct => {
         const k = cellKey(ct.id, f.featureKey);
         const visible = cellLookup.get(k) ?? false;
         const isBusy = busy.has(k);
@@ -304,11 +315,16 @@ export default function FeatureMatrixPage() {
         <p className="text-sm text-text-secondary mt-1">
           Toggle which features each ClientType can see. Changes save immediately.
         </p>
-        <p className="text-xs text-text-muted mt-2">
-          Note: as DF Admin you see the union of every visible feature across all ClientTypes,
-          so toggles here may not affect your own sidebar/tiles directly — they affect what
-          Tenant / NP / Customer users see.
-        </p>
+      </div>
+
+      <div className="mb-4 p-3 rounded-lg border border-sky-200 bg-sky-50 text-sm text-sky-900 flex items-start gap-2">
+        <span aria-hidden className="mt-0.5">ℹ️</span>
+        <span>
+          <strong>DFRNT Admins see every feature</strong> regardless of these toggles — admin
+          access is granted at runtime (bypass), not by this matrix. The <em>DFRNTAdmin</em> column
+          is hidden here because toggling it has no effect. These switches control what
+          <strong> Tenant, Network Partner and Customer</strong> users see.
+        </span>
       </div>
 
       {error && (
@@ -344,7 +360,7 @@ export default function FeatureMatrixPage() {
               <th className="text-left px-4 py-3 font-medium text-text-primary sticky left-0 bg-gray-50 z-10 min-w-[320px]">
                 Feature
               </th>
-              {data.clientTypes.map(ct => (
+              {clientTypes.map(ct => (
                 <th key={ct.id} className="text-center px-4 py-3 font-medium text-text-primary whitespace-nowrap">
                   {ct.name}
                   <div className="text-[10px] text-text-muted font-normal">id={ct.id}</div>
@@ -399,7 +415,7 @@ export default function FeatureMatrixPage() {
               : featuresByCategory.map(({ category, features }) => (
                   <Fragment key={`cat-${category}`}>
                     <tr className="bg-gray-100">
-                      <td colSpan={1 + data.clientTypes.length}
+                      <td colSpan={1 + clientTypes.length}
                           className="px-4 py-2 text-xs uppercase tracking-wide text-text-muted font-semibold sticky left-0">
                         {category}
                       </td>

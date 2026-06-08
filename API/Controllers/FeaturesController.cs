@@ -81,7 +81,7 @@ public class FeaturesController(
                 .ThenBy(f => f.Category).ThenBy(f => f.FeatureKey)
                 .Select(f => new FeatureRefDto(
                     f.FeatureKey, f.DisplayName, f.Description, f.Category,
-                    f.ParentKey, f.Tier, f.SortOrder))
+                    f.ParentKey, f.Tier, f.SortOrder, f.AvailableCountries))
                 .ToListAsync();
 
             var cells = await ctx.ClientTypeFeatures
@@ -155,6 +155,54 @@ public class FeaturesController(
         {
             Log.Error(ex, "Failed to set ClientTypeFeature visibility (ClientTypeId={ClientTypeId}, FeatureKey={FeatureKey})",
                 clientTypeId, featureKey);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Set a feature's country scope (SEED-SCOPE-ALL-HUBS §2). Body
+    /// { availableCountries: string? } — a comma list of ISO codes, or
+    /// null/empty for "available everywhere". Per-feature (not per-ClientType),
+    /// so it's keyed on featureKey alone. Returns 204.
+    /// </summary>
+    [HttpPut("admin/features/{featureKey}/available-countries")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> SetAvailableCountries(
+        string featureKey, [FromBody] SetAvailableCountriesDto body)
+    {
+        if (body is null)
+            return BadRequest(new { error = "Request body required." });
+        if (string.IsNullOrWhiteSpace(featureKey))
+            return BadRequest(new { error = "featureKey is required." });
+
+        try
+        {
+            await using var ctx = await contextFactory.CreateDbContextAsync();
+
+            var feature = await ctx.Features.FirstOrDefaultAsync(f => f.FeatureKey == featureKey);
+            if (feature is null)
+                return NotFound(new { error = $"Unknown FeatureKey '{featureKey}'." });
+
+            // Normalise: trim, collapse blanks to NULL (= available everywhere).
+            var normalised = string.IsNullOrWhiteSpace(body.AvailableCountries)
+                ? null
+                : string.Join(",", body.AvailableCountries
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(c => c.ToUpperInvariant()));
+
+            if (feature.AvailableCountries != normalised)
+            {
+                feature.AvailableCountries = normalised;
+                await ctx.SaveChangesAsync();
+                Log.Information("Feature.AvailableCountries updated: FeatureKey={FeatureKey}, AvailableCountries={AvailableCountries}",
+                    featureKey, normalised ?? "(null)");
+            }
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to set Feature.AvailableCountries (FeatureKey={FeatureKey})", featureKey);
             throw;
         }
     }

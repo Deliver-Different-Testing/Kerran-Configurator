@@ -40,6 +40,35 @@ const cellKey = (clientTypeId: number, featureKey: string): CellKey =>
 // in the DB; they're just not editable here.
 const DFRNT_ADMIN_CLIENT_TYPE = 5;
 
+// Editable country-scope cell (SEED-SCOPE-ALL-HUBS §2). Free-text comma list of
+// ISO codes (e.g. "NZ" or "NZ,AU"); blank = available everywhere. Saves on blur
+// / Enter, only when changed. Local state so typing doesn't thrash the matrix.
+function CountriesCell({ value, featureKey, onSave }: {
+  value: string | null;
+  featureKey: string;
+  onSave: (featureKey: string, value: string | null) => void;
+}) {
+  const [text, setText] = useState(value ?? '');
+  useEffect(() => { setText(value ?? ''); }, [value]);
+  const commit = () => {
+    const next = text.trim() === '' ? null : text.trim();
+    if (next !== (value ?? null)) onSave(featureKey, next);
+  };
+  return (
+    <td className="px-3 py-2 border-b border-border">
+      <input
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        placeholder="All"
+        title="Comma list of ISO country codes (e.g. NZ or NZ,AU). Blank = available everywhere."
+        className="w-20 px-2 py-1 text-xs rounded border border-border focus:outline-none focus:ring-2 focus:ring-[#3bc7f4]/40"
+      />
+    </td>
+  );
+}
+
 interface TreeNode {
   feature: FeatureMatrixFeature;
   depth: number;
@@ -256,6 +285,19 @@ export default function FeatureMatrixPage() {
     }
   }, [data, cellLookup]);
 
+  // Save a feature's country scope (SEED-SCOPE-ALL-HUBS §2). Optimistic update
+  // of the feature row; revert on error. Per-feature, not per-ClientType.
+  const saveCountries = useCallback(async (featureKey: string, value: string | null) => {
+    const prev = data?.features.find(f => f.featureKey === featureKey)?.availableCountries ?? null;
+    setData(d => d ? { ...d, features: d.features.map(f => f.featureKey === featureKey ? { ...f, availableCountries: value } : f) } : d);
+    try {
+      await featuresApi.setAvailableCountries(featureKey, value);
+    } catch (e: any) {
+      setData(d => d ? { ...d, features: d.features.map(f => f.featureKey === featureKey ? { ...f, availableCountries: prev } : f) } : d);
+      setError(e?.message ?? 'Failed to save country scope');
+    }
+  }, [data]);
+
   if (loading) {
     return (
       <div>
@@ -366,6 +408,10 @@ export default function FeatureMatrixPage() {
                   <div className="text-[10px] text-text-muted font-normal">id={ct.id}</div>
                 </th>
               ))}
+              <th className="text-left px-4 py-3 font-medium text-text-primary whitespace-nowrap">
+                Countries
+                <div className="text-[10px] text-text-muted font-normal">blank = all</div>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -409,13 +455,14 @@ export default function FeatureMatrixPage() {
                         </div>
                       </td>
                       {renderCells(f)}
+                      <CountriesCell value={f.availableCountries ?? null} featureKey={f.featureKey} onSave={saveCountries} />
                     </tr>
                   );
                 })
               : featuresByCategory.map(({ category, features }) => (
                   <Fragment key={`cat-${category}`}>
                     <tr className="bg-gray-100">
-                      <td colSpan={1 + clientTypes.length}
+                      <td colSpan={2 + clientTypes.length}
                           className="px-4 py-2 text-xs uppercase tracking-wide text-text-muted font-semibold sticky left-0">
                         {category}
                       </td>
@@ -427,6 +474,7 @@ export default function FeatureMatrixPage() {
                           <div className="text-[11px] text-text-muted font-mono">{f.featureKey}</div>
                         </td>
                         {renderCells(f)}
+                        <CountriesCell value={f.availableCountries ?? null} featureKey={f.featureKey} onSave={saveCountries} />
                       </tr>
                     ))}
                   </Fragment>

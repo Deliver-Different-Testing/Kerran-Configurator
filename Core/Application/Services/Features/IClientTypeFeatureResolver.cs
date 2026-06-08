@@ -31,9 +31,11 @@ public interface IClientTypeFeatureResolver
 {
     /// <summary>
     /// Returns the visible feature keys for the given ClientType. NULL →
-    /// 2 (Customer) per §1.4 of the Permissions plan.
+    /// 2 (Customer) per §1.4 of the Permissions plan. When countryCode is
+    /// supplied, features whose AvailableCountries scope excludes that market
+    /// are filtered out (SEED-SCOPE-ALL-HUBS §2); null = no country filter.
     /// </summary>
-    Task<HashSet<string>> ResolveVisibleFeaturesAsync(int? clientTypeId);
+    Task<HashSet<string>> ResolveVisibleFeaturesAsync(int? clientTypeId, string? countryCode = null);
 
     /// <summary>
     /// Returns the visible feature keys for the current request's user.

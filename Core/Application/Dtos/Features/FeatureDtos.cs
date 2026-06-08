@@ -27,7 +27,11 @@ public record ClientTypeRefDto(int Id, string Name);
 // FeatureMatrixFeature interface.)
 public record FeatureRefDto(
     string FeatureKey, string DisplayName, string Description, string Category,
-    string ParentKey, int? Tier, int? SortOrder);
+    string ParentKey, int? Tier, int? SortOrder,
+    // SEED-SCOPE-ALL-HUBS §2 — comma list of ISO country codes the feature is
+    // limited to (NULL = available everywhere). Editable in the matrix; the
+    // resolver intersects it with the tenant CountryCode at runtime.
+    string AvailableCountries);
 
 public record ClientTypeFeatureCellDto(int ClientTypeId, string FeatureKey, bool Visible);
 
@@ -41,4 +45,12 @@ public record ClientTypeFeatureCellDto(int ClientTypeId, string FeatureKey, bool
 public class SetVisibilityDto
 {
     public bool Visible { get; set; }
+}
+
+/// <summary>Body for PUT /api/admin/features/{featureKey}/available-countries.
+/// Comma list of ISO country codes the feature is limited to; null/empty stores
+/// NULL = available everywhere (SEED-SCOPE-ALL-HUBS §2).</summary>
+public class SetAvailableCountriesDto
+{
+    public string? AvailableCountries { get; set; }
 }

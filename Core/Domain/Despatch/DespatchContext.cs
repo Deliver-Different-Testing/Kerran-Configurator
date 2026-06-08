@@ -824,6 +824,8 @@ public partial class DespatchContext : DbContext
             // ParentKey is a plain self-FK column (no nav configured); Tier and
             // SortOrder are nullable INT (DB columns from migration 20260608100000).
             entity.Property(e => e.ParentKey).HasMaxLength(80);
+            // Country/region scope (migration 20260608130000).
+            entity.Property(e => e.AvailableCountries).HasMaxLength(50);
         });
 
         modelBuilder.Entity<JobBarcode>(entity =>

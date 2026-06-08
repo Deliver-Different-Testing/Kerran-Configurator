@@ -22,11 +22,14 @@ public class ClientTypeFeatureResolver(
     // NULL ClientTypeId → 2 (Customer) per §1.4 of the Permissions plan.
     private const int NullClientTypeFallback = 2;
 
-    public async Task<HashSet<string>> ResolveVisibleFeaturesAsync(int? clientTypeId)
+    public async Task<HashSet<string>> ResolveVisibleFeaturesAsync(int? clientTypeId, string? countryCode = null)
     {
         var effectiveId = clientTypeId ?? NullClientTypeFallback;
         var httpCtx = httpContextAccessor.HttpContext;
-        var cacheKey = ByTypePrefix + effectiveId;
+        // Country participates in the cache key — the visible set differs per
+        // market, so NZ and AU tenants of the same ClientType mustn't share a
+        // cached result. "*" = no country filter applied.
+        var cacheKey = ByTypePrefix + effectiveId + ":" + (string.IsNullOrEmpty(countryCode) ? "*" : countryCode);
 
         if (httpCtx is not null
             && httpCtx.Items.TryGetValue(cacheKey, out var cached)
@@ -36,11 +39,32 @@ public class ClientTypeFeatureResolver(
         }
 
         await using var ctx = await contextFactory.CreateDbContextAsync();
-        var keys = await ctx.ClientTypeFeatures
+        // Join to dbo.Feature so the per-feature country scope is available.
+        var rows = await ctx.ClientTypeFeatures
             .AsNoTracking()
             .Where(ctf => ctf.ClientTypeId == effectiveId && ctf.Visible)
-            .Select(ctf => ctf.FeatureKey)
+            .Join(ctx.Features.AsNoTracking(),
+                  ctf => ctf.FeatureKey, f => f.FeatureKey,
+                  (ctf, f) => new { f.FeatureKey, f.AvailableCountries })
             .ToListAsync();
+
+        // Country scope (SEED-SCOPE-ALL-HUBS §2): a feature with AvailableCountries
+        // set is visible only in those markets; NULL/empty = global. Split +
+        // Contains runs in memory (untranslatable), hence materialising first.
+        //
+        // DELIBERATE DEVIATION from the doc's fail-CLOSED pseudo-code: when the
+        // tenant country is UNKNOWN (CountryCode claim absent — e.g. a stale
+        // pre-claim cookie) we DON'T filter (fail-open). Hiding the whole
+        // NZ-scoped AdminManager catalogue from a legit NZ user on an old cookie
+        // is worse than briefly over-showing; the claim is normally present
+        // (Hub stamps it into the shared cookie).
+        var keys = string.IsNullOrEmpty(countryCode)
+            ? rows.Select(r => r.FeatureKey)
+            : rows.Where(r => string.IsNullOrEmpty(r.AvailableCountries)
+                              || r.AvailableCountries
+                                  .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                  .Contains(countryCode, StringComparer.OrdinalIgnoreCase))
+                   .Select(r => r.FeatureKey);
 
         // Case-insensitive set so callers comparing with hard-coded strings
         // don't trip on accidental casing drift.
@@ -107,7 +131,18 @@ public class ClientTypeFeatureResolver(
                 clientIdClaim ?? "(null)");
         }
 
-        var resolved = await ResolveVisibleFeaturesAsync(clientTypeId);
+        // Tenant market for the country-scope filter. Hub stamps CountryCode
+        // into the shared cookie (AccountController.GenerateClaims, from
+        // Master.Tenant.CountryCode); absent only on stale pre-claim cookies,
+        // in which case the resolver fails open (no country filter).
+        var countryCode = user.FindFirst("CountryCode")?.Value;
+        if (string.IsNullOrWhiteSpace(countryCode))
+        {
+            countryCode = null;
+            Log.Debug("ClientTypeFeatureResolver: CountryCode claim missing; country scope not applied (fail-open).");
+        }
+
+        var resolved = await ResolveVisibleFeaturesAsync(clientTypeId, countryCode);
         httpCtx.Items[CurrentUserKey] = resolved;
         return resolved;
     }

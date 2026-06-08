@@ -138,6 +138,9 @@ export interface FeatureMatrixFeature {
   parentKey?: string | null;
   tier?: number;
   sortOrder?: number;
+  // SEED-SCOPE-ALL-HUBS §2 — comma list of ISO country codes the feature is
+  // limited to (null/empty = available everywhere). Editable in the matrix.
+  availableCountries?: string | null;
 }
 export interface FeatureMatrixCell {
   clientTypeId: number;
@@ -160,6 +163,12 @@ export const featuresApi = {
     request<unknown>(
       `/admin/client-type-features/${clientTypeId}/${encodeURIComponent(featureKey)}`,
       { method: 'PUT', body: JSON.stringify({ visible }) }
+    ),
+  /** Set a feature's country scope (comma list of ISO codes, or null = global). AdminOnly. */
+  setAvailableCountries: (featureKey: string, availableCountries: string | null) =>
+    request<unknown>(
+      `/admin/features/${encodeURIComponent(featureKey)}/available-countries`,
+      { method: 'PUT', body: JSON.stringify({ availableCountries }) }
     ),
 };
 

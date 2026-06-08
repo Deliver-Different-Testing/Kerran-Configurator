@@ -26,5 +26,11 @@ public partial class Feature
 
     public int? SortOrder { get; set; }
 
+    // Country/region scope (SEED-SCOPE-ALL-HUBS §2). NULL = available
+    // everywhere; otherwise a comma list of ISO country codes the feature is
+    // limited to (e.g. 'NZ', 'NZ,AU'). The resolver intersects this with the
+    // tenant's CountryCode claim. Added by migration 20260608130000.
+    public string AvailableCountries { get; set; }
+
     public virtual ICollection<ClientTypeFeature> ClientTypeFeatures { get; set; } = new List<ClientTypeFeature>();
 }

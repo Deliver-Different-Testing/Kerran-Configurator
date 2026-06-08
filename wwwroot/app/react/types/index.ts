@@ -7,7 +7,10 @@ export interface Courier {
   code: string;
   firstName: string;
   surName: string;
-  type: 'Master' | 'Sub';
+  // Commercial relationship (tucCourier.CourierTypeId 1/2/3/4). Independent =
+  // no master, no subs; Master has subs; Sub works under a master; Gig is
+  // Openforce-aggregation paid. `master` is set only for Sub.
+  type: 'Independent' | 'Master' | 'Sub' | 'Gig';
   master: number | null;
   gender: string;
   dob: string;

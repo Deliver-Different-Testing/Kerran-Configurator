@@ -12,6 +12,22 @@ interface Props {
   onSelectCourier: (id: number) => void;
 }
 
+// Role pill for the Fleet Overview "Role" column. Colour per commercial
+// relationship: Master cyan, Sub purple, Independent grey, Gig amber.
+const ROLE_BADGE_CLASS: Record<Courier['type'], string> = {
+  Master: 'bg-brand-cyan/10 text-brand-cyan',
+  Sub: 'bg-purple-50 text-purple-700',
+  Independent: 'bg-gray-100 text-gray-600',
+  Gig: 'bg-amber-50 text-amber-700',
+};
+function RoleBadge({ type }: { type: Courier['type'] }) {
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${ROLE_BADGE_CLASS[type] ?? ROLE_BADGE_CLASS.Independent}`}>
+      {type}
+    </span>
+  );
+}
+
 // Amber pill flagging a courier with no mobile-app login. Only shows on an
 // explicit false — null/undefined (status unknown) shows nothing so we never
 // imply "no login" when the check couldn't run. Fix is Courier Setup →
@@ -117,7 +133,11 @@ export default function FleetOverview({ onSelectCourier }: Props) {
     });
   }, [couriers, qualificationFilter, driverStatuses]);
 
-  const masters = filteredCouriers.filter(c => c.type === 'Master');
+  // Top-level rows = everyone who isn't a Sub (Independent / Master / Gig).
+  // Subs render nested under their master below. (Was c.type === 'Master',
+  // which under the old binary taxonomy meant "non-sub"; with the 4-role
+  // taxonomy that would drop Independent/Gig couriers from the list.)
+  const masters = filteredCouriers.filter(c => c.type !== 'Sub');
 
   const handleSelect = (id: number) => {
     onSelectCourier(id);
@@ -227,6 +247,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
             <tr>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Code</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Name</th>
+              <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Role</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Phone</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Vehicle</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Depot</th>
@@ -244,8 +265,13 @@ export default function FleetOverview({ onSelectCourier }: Props) {
                 <tr key={m.id} onClick={() => handleSelect(m.id)} className="hover:bg-surface-cream cursor-pointer">
                   <td className="px-3 py-2.5 text-sm border-b border-border font-bold whitespace-nowrap">{m.code}</td>
                   <td className="px-3 py-2.5 text-sm border-b border-border">
-                    {m.firstName} {m.surName}{' '}
-                    <span className="text-brand-cyan text-[11px] ml-1">MASTER</span>
+                    {m.firstName} {m.surName}
+                    {subs.length > 0 && (
+                      <span className="text-text-secondary text-[11px] ml-2">· {subs.length} sub{subs.length === 1 ? '' : 's'}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-sm border-b border-border">
+                    <RoleBadge type={m.type} />
                   </td>
                   <td className="px-3 py-2.5 text-sm border-b border-border whitespace-nowrap">{m.phone}</td>
                   <td className="px-3 py-2.5 text-sm border-b border-border">{m.vehicle}</td>
@@ -263,6 +289,9 @@ export default function FleetOverview({ onSelectCourier }: Props) {
                     <tr key={s.id} onClick={() => handleSelect(s.id)} className="hover:bg-surface-cream cursor-pointer">
                       <td className="px-3 py-2.5 text-sm border-b border-border pl-9 whitespace-nowrap">↳ {s.code}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border">{s.firstName} {s.surName}</td>
+                      <td className="px-3 py-2.5 text-sm border-b border-border">
+                        <RoleBadge type={s.type} />
+                      </td>
                       <td className="px-3 py-2.5 text-sm border-b border-border whitespace-nowrap">{s.phone}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border">{s.vehicle}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border">{sDepot}</td>
@@ -279,7 +308,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
             })}
             {masters.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-text-secondary">
+                <td colSpan={10} className="px-4 py-12 text-center text-text-secondary">
                   No drivers match the current filters
                 </td>
               </tr>

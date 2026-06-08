@@ -38,6 +38,9 @@ export default function CourierSetup({ onSelectCourier }: Props) {
   const [draft, setDraft] = useState<Courier | undefined>();       // local edits
   const [masters, setMasters] = useState<Courier[]>([]);
   const [masterName, setMasterName] = useState<Courier | null>(null);
+  // Attached subs for the currently-loaded master (Steve 2026-06-06):
+  // surfaces who this master is paid commission on. Empty when courier is a sub.
+  const [attachedSubs, setAttachedSubs] = useState<Courier[]>([]);
   const [vehicleMakes, setVehicleMakes] = useState<LookupItem[]>([]);
   const [insuranceCompanies, setInsuranceCompanies] = useState<LookupItem[]>([]);
   const [saving, setSaving] = useState(false);
@@ -79,6 +82,18 @@ export default function CourierSetup({ onSelectCourier }: Props) {
     }
     return () => { alive = false; };
   }, [courier?.master]);
+
+  // Load attached subs when the courier is a master (Steve 2026-06-06).
+  // Re-fetches when the courier id changes (i.e. when navigating between profiles).
+  useEffect(() => {
+    let alive = true;
+    if (courier?.id && courier.type === 'Master') {
+      courierService.getSubsForMaster(courier.id).then(s => { if (alive) setAttachedSubs(s ?? []); });
+    } else {
+      setAttachedSubs([]);
+    }
+    return () => { alive = false; };
+  }, [courier?.id, courier?.type]);
 
   if (!courier || !draft) {
     return (
@@ -234,9 +249,48 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <FormField label="First Name" {...bind('firstName')} />
               <FormField label="Surname" {...bind('surName')} />
               <FormField label="Code" value={c.code} readonly />
-              <FormField label="Courier Type" type="select" value={c.type} options={['Master', 'Sub']} />
+              {/* Courier Type — wired (Steve 2026-06-06; taxonomy extended to
+                  the full role set). Only Sub keeps a master FK; switching to
+                  any other role clears it. A Sub starts with no master until the
+                  user picks one below. */}
+              <FormField
+                label="Courier Type"
+                type="select"
+                value={c.type}
+                options={['Independent', 'Master', 'Sub', 'Gig']}
+                onChange={(val) => setDraft(d => {
+                  if (!d) return d;
+                  const next = val as Courier['type'];
+                  return {
+                    ...d,
+                    type: next,
+                    master: next === 'Sub' ? d.master : null,
+                  };
+                })}
+              />
               {c.type === 'Sub' && (
-                <FormField label="Master Courier" type="select" value={masterName ? `${masterName.firstName} ${masterName.surName}` : ''} options={masters.map(m => `${m.firstName} ${m.surName}`)} />
+                /* Master Courier picker — wired by id, looks up name from the
+                   pre-fetched masters list (Steve 2026-06-06). */
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-text-secondary uppercase tracking-wide">Master Courier</label>
+                  <select
+                    value={c.master ?? ''}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const next = raw === '' ? null : Number(raw);
+                      setDraft(d => d ? { ...d, master: next } : d);
+                    }}
+                  >
+                    <option value="">— Select a master —</option>
+                    {masters
+                      .filter(m => m.id !== c.id)   // can't be your own master
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.firstName} {m.surName} ({m.code})
+                        </option>
+                      ))}
+                  </select>
+                </div>
               )}
               <FormField label="Gender" type="select" {...bind('gender')} options={['', 'Male', 'Female']} />
               <FormField label="Date of Birth" type="date" {...bind('dob')} />
@@ -260,6 +314,84 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <FormField label="Next of Kin Address" {...bind('nokAddress')} full />
               <FormField label="Next of Kin Phone" {...bind('nokPhone')} />
             </div>
+
+            {/* Attached Subs — only shown when this courier is a Master.
+                Lists each sub with code/name/active state and click-through to
+                their detail. Steve 2026-06-06: gives the operator visibility
+                of who the master gets paid commission on. */}
+            {c.type === 'Master' && (
+              <>
+                <Section title="Attached Subcontractors" />
+                {attachedSubs.length === 0 ? (
+                  <div className="bg-surface-cream border border-border rounded-lg px-4 py-6 text-sm text-text-secondary text-center">
+                    No subcontractors attached to this master.
+                  </div>
+                ) : (
+                  <div className="bg-white border border-border rounded-lg overflow-hidden">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Code</th>
+                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Name</th>
+                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Phone</th>
+                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Vehicle</th>
+                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attachedSubs.map(s => (
+                          <tr
+                            key={s.id}
+                            onClick={() => navigate(`/courier/${s.id}`)}
+                            className="hover:bg-surface-cream cursor-pointer"
+                          >
+                            <td className="px-3 py-2.5 text-sm border-b border-border font-mono whitespace-nowrap">{s.code}</td>
+                            <td className="px-3 py-2.5 text-sm border-b border-border">{s.firstName} {s.surName}</td>
+                            <td className="px-3 py-2.5 text-sm border-b border-border whitespace-nowrap">{s.phone || '—'}</td>
+                            <td className="px-3 py-2.5 text-sm border-b border-border">{s.vehicle || '—'}</td>
+                            <td className="px-3 py-2.5 text-sm border-b border-border">
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                s.status === 'active'
+                                  ? 'bg-green-50 text-success border border-green-200'
+                                  : 'bg-red-50 text-error border border-red-200'
+                              }`}>
+                                {s.status === 'active' ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="px-3 py-2 text-[11px] text-text-secondary bg-surface-cream border-t border-border">
+                      {attachedSubs.length} sub{attachedSubs.length === 1 ? '' : 's'} attached · click any row to open
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Master Reference — shown when courier is a Sub.
+                Click-through to the master's detail. Steve 2026-06-06. */}
+            {c.type === 'Sub' && masterName && (
+              <>
+                <Section title="Master Courier" />
+                <div
+                  onClick={() => navigate(`/courier/${masterName.id}`)}
+                  className="bg-white border border-border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-brand-cyan transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-full bg-brand-cyan flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
+                    {masterName.firstName[0]}{masterName.surName[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold">{masterName.firstName} {masterName.surName}</div>
+                    <div className="text-[12px] text-text-secondary">
+                      {masterName.code} · Master Courier
+                    </div>
+                  </div>
+                  <span className="text-brand-cyan text-sm">Open →</span>
+                </div>
+              </>
+            )}
           </>
         )}
 

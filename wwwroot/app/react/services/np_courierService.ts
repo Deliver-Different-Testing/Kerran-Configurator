@@ -8,6 +8,7 @@ interface NpFleetCourierApi {
   id: number;
   code: string;
   masterCourierId: number | null;
+  courierTypeId: number;          // 1 Independent, 2 Master, 3 Sub, 4 Gig
 
   firstName: string;
   surName: string;
@@ -119,11 +120,20 @@ function genderLabel(g: boolean | null): string {
 // fields (insuranceCo, carrierLiab, publicLiab, channel, deviceType, make)
 // get safe defaults until later passes add the corresponding joins.
 function toCourier(dto: NpFleetCourierApi): Courier {
-  const isMaster = dto.masterCourierId == null;
+  // Role is driven by CourierTypeId, not the master FK — so an Independent
+  // (no master, no subs) no longer renders as a Master with zero subs.
+  const typeLabel: Courier['type'] = (() => {
+    switch (dto.courierTypeId) {
+      case 2: return 'Master';
+      case 3: return 'Sub';
+      case 4: return 'Gig';
+      default: return 'Independent';   // 1 (or unset legacy rows)
+    }
+  })();
   const c: Partial<Courier> = {
     id: dto.id,
     code: dto.code,
-    type: isMaster ? 'Master' : 'Sub',
+    type: typeLabel,
     master: dto.masterCourierId,
 
     firstName: dto.firstName,
@@ -249,7 +259,13 @@ function toUpdatePayload(c: Partial<Courier>): Record<string, unknown> {
     return n == null || Number.isNaN(n) ? null : n;
   };
 
+  // Role label → CourierTypeId. masterCourierId is sent only for Sub; the
+  // backend clears it for any other role and validates integrity (§4.3).
+  const typeToId: Record<string, number> = { Independent: 1, Master: 2, Sub: 3, Gig: 4 };
+
   return {
+    courierTypeId: c.type ? (typeToId[c.type] ?? null) : null,
+    masterCourierId: c.type === 'Sub' ? (c.master ?? null) : null,
     firstName: c.firstName ?? '',
     surName: c.surName ?? '',
     email: c.email ?? '',

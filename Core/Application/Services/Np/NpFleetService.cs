@@ -155,6 +155,23 @@ public class NpFleetService(
             }
         }
 
+        // NP assignment — write-guarded. scope.IsAdmin covers DF Admin AND
+        // tenant staff in the resolver's 2-way model; NP users are NpAgentId-
+        // scoped (not IsAdmin) so their dto.NpAgentId is ignored. NULL = Direct.
+        if (scope.IsAdmin)
+            courier.NpAgentId = dto.NpAgentId;
+
+        // Payment channel (Kerran): enum-validate only. The cross-field rules
+        // (Invoice needs an Openforce/Xero downstream target) are enforced by
+        // the settlement pre-flight (ValidateBatchAsync), not the editor.
+        if (dto.PaymentMethod is { Length: > 0 } pm)
+        {
+            var method = pm.Trim();
+            if (method is not ("Direct" or "Invoice" or "None"))
+                return Fail(messageId, "Invalid Payment Method — must be Direct, Invoice or None.");
+            courier.PaymentMethod = method;
+        }
+
         ApplyUpdate(courier, dto);
 
         // Audit fields. Email claim is set by Hub at login (ClaimTypes.Name).
@@ -308,6 +325,11 @@ public class NpFleetService(
             // (CourierType 1) — no master, no subs. The operator can promote
             // them to Master or Sub later from the CourierSetup Role dropdown.
             CourierTypeId = 1,
+            // NP assignment: Admin/Tenant (IsAdmin) may set any NP or Direct
+            // (null) via the DTO; NP users are forced to their own scope.
+            NpAgentId = scope.IsAdmin ? dto.NpAgentId : scope.NpAgentId,
+            // New couriers default to Direct payment (matches the DB default).
+            PaymentMethod = "Direct",
             Active = true,
 
             // Plaintext on tucCourier for AdminManager parity (its Update path
@@ -316,11 +338,6 @@ public class NpFleetService(
             // (called by marsapi after the password check) also passes.
             UccrPassword = password,
             UccrWebEnabled = true,
-
-            // NP users' new couriers belong to their own NP scope; couriers
-            // created by an admin stay unassigned (NpAgentId null) until an
-            // NP picks them up.
-            NpAgentId = scope.IsAdmin ? null : scope.NpAgentId,
 
             Created = now,
             CreatedBy = userEmail,
@@ -604,6 +621,9 @@ public class NpFleetService(
         Code = c.Code ?? string.Empty,
         MasterCourierId = c.MasterCourierId,
         CourierTypeId = c.CourierTypeId,
+        NpAgentId = c.NpAgentId,
+        NpAgentName = c.NpAgent != null ? (c.NpAgent.UcagName ?? string.Empty) : string.Empty,
+        PaymentMethod = c.PaymentMethod ?? "Direct",
 
         // Profile
         FirstName = c.UccrName ?? string.Empty,

@@ -17,6 +17,13 @@ public class NpFleetCourierDto
     // tucCourier.CourierTypeId: 1 Independent, 2 Master, 3 Sub, 4 Gig. Drives
     // the Role column / Courier Type dropdown (master/sub visibility work).
     public int CourierTypeId { get; set; }
+    // NP assignment surfaced read-only for everyone (drives the NP column +
+    // CourierSetup field); writable only by Admin/Tenant (write-guarded). Name
+    // is the joined display label; NULL NpAgentId renders as "Direct" in the UI.
+    public int? NpAgentId { get; set; }
+    public string NpAgentName { get; set; } = string.Empty;
+    // Payment / invoice channel (Kerran): 'Direct' | 'Invoice' | 'None'.
+    public string PaymentMethod { get; set; } = string.Empty;
 
     // Profile
     public string FirstName { get; set; } = string.Empty;
@@ -139,6 +146,13 @@ public class NpFleetCourierUpdateDto
     public int? CourierTypeId { get; set; }
     public int? MasterCourierId { get; set; }
 
+    // NP assignment — accepted only when scope.IsAdmin (covers DF Admin + Tenant
+    // staff); ignored for NP users (write-guarded in UpdateAsync). NULL = Direct.
+    public int? NpAgentId { get; set; }
+    // Payment channel — validated against the enum {Direct,Invoice,None} in
+    // UpdateAsync. null = leave unchanged.
+    public string? PaymentMethod { get; set; }
+
     // Profile
     public string FirstName { get; set; } = string.Empty;
     public string SurName { get; set; } = string.Empty;
@@ -234,6 +248,10 @@ public class NpFleetCourierCreateDto
     public string Mobile { get; set; } = string.Empty;       // personal mobile
     public string VehicleType { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+
+    // Optional NP assignment at create time — honoured only for Admin/Tenant
+    // (NP users are forced to their own scope). NULL = Direct.
+    public int? NpAgentId { get; set; }
 
     // Required: the courier signs in to the mobile app with Email + Password.
     // The service hashes this into the master-controller User row (IsCourier=1)

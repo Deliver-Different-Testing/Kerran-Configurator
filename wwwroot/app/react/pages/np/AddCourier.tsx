@@ -83,14 +83,23 @@ function QuickAddForm({ onCancel }: { onCancel: () => void }) {
   const [form, setForm] = useState({
     code: '', firstName: '', surname: '', email: '', mobile: '',
     vehicleType: '', notes: '', password: '',
+    role: 'Independent' as Courier['type'], masterCourierId: '',
   });
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
+  // Master couriers feed the Sub → Master picker; a Sub inherits its master's
+  // Network Partner server-side (GARRY-NP-SUB-INHERIT-NP).
+  const [masters, setMasters] = useState<Courier[]>([]);
+  useEffect(() => { courierService.getMasters().then(setMasters); }, []);
+  const selectedMaster = masters.find(m => String(m.id) === form.masterCourierId);
+
   // Email + password are required: the courier signs in to the mobile app with
   // them, and the backend provisions the master-controller login from them.
+  // A Sub must also have a master selected before it can save.
   const canSave = !!form.code.trim() && !!form.firstName.trim()
     && !!form.surname.trim() && !!form.mobile.trim()
-    && !!form.email.trim() && !!form.password.trim();
+    && !!form.email.trim() && !!form.password.trim()
+    && (form.role !== 'Sub' || !!form.masterCourierId);
 
   const handleSave = async () => {
     setError(null);
@@ -105,6 +114,10 @@ function QuickAddForm({ onCancel }: { onCancel: () => void }) {
         vehicle: form.vehicleType,
         notes: form.notes,
         password: form.password,
+        // Role drives CourierTypeId; master is sent only for Sub. The backend
+        // inherits the master's NpAgentId, so a Sub never lands as Direct.
+        type: form.role,
+        master: form.role === 'Sub' ? Number(form.masterCourierId) : null,
       });
       navigate('/fleet');
     } catch (e) {
@@ -160,6 +173,40 @@ function QuickAddForm({ onCancel }: { onCancel: () => void }) {
             </div>
           </div>
           <p className="text-xs text-text-secondary mt-2">The courier signs in to the mobile app with their <span className="font-medium">email</span> and this password.</p>
+        </div>
+
+        <div>
+          <div className="text-sm font-bold text-brand-cyan mb-3 pb-1.5 border-b border-border">Courier Role</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Role</label>
+              <select value={form.role} onChange={e => {
+                const role = e.target.value as Courier['type'];
+                // Clearing the master when leaving Sub keeps canSave honest.
+                setForm(prev => ({ ...prev, role, masterCourierId: role === 'Sub' ? prev.masterCourierId : '' }));
+              }}>
+                <option value="Independent">Independent</option>
+                <option value="Master">Master</option>
+                <option value="Sub">Sub</option>
+              </select>
+            </div>
+            {form.role === 'Sub' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary uppercase tracking-wide">Master Courier <span className="text-red-500">*</span></label>
+                <select value={form.masterCourierId} onChange={e => set('masterCourierId', e.target.value)}>
+                  <option value="">— Select master —</option>
+                  {masters.map(m => (
+                    <option key={m.id} value={m.id}>{m.firstName} {m.surName} ({m.code})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          {form.role === 'Sub' && selectedMaster && (
+            <p className="text-xs text-text-secondary mt-2">
+              Will inherit Network Partner: <span className="font-medium text-brand-dark">{selectedMaster.npAgentName || 'Direct'}</span>
+            </p>
+          )}
         </div>
 
         <div>

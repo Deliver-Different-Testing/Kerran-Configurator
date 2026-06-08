@@ -371,6 +371,7 @@ function RolePermissionsTab({ roleId }: { roleId: number | 'new' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (roleId === 'new') { setLoading(false); return; }
@@ -413,27 +414,52 @@ function RolePermissionsTab({ roleId }: { roleId: number | 'new' }) {
     return 0;
   }, [explicit, parentOf]);
 
-  // Recursive pre-order flatten ({perm, depth}) — the tree is hub-tile → menu
-  // item → leaf (Step 2), so render every node indented by depth rather than
-  // the old tile + direct-children grouping (which would hide the tier-3 leaves).
-  const rows = useMemo(() => {
-    if (!data) return [] as { perm: RolePermissionsForRole['permissions'][number]; depth: number }[];
-    const byParent = new Map<string | null, RolePermissionsForRole['permissions']>();
-    for (const p of data.permissions) {
-      const k = p.parentKey ?? null;
-      const a = byParent.get(k) ?? []; a.push(p); byParent.set(k, a);
+  // Permission tree (children keyed by effective parent; orphans → roots).
+  const tree = useMemo(() => {
+    const perms = data?.permissions ?? [];
+    const keySet = new Set(perms.map(p => p.permissionKey));
+    const childrenOf = new Map<string | null, RolePermissionsForRole['permissions']>();
+    for (const p of perms) {
+      const ep = p.parentKey && keySet.has(p.parentKey) ? p.parentKey : null;
+      const a = childrenOf.get(ep) ?? []; a.push(p); childrenOf.set(ep, a);
     }
-    for (const a of byParent.values())
+    for (const a of childrenOf.values())
       a.sort((x, y) => x.sortOrder - y.sortOrder || x.displayName.localeCompare(y.displayName));
-    const out: { perm: RolePermissionsForRole['permissions'][number]; depth: number }[] = [];
+    const withChildren = new Set<string>();
+    for (const [k] of childrenOf) if (k) withChildren.add(k);
+    return { childrenOf, withChildren };
+  }, [data]);
+
+  // Default: top tier open. Runs once per fresh load.
+  useEffect(() => {
+    if (!data) return;
+    setExpanded(prev => {
+      if (prev.size > 0) return prev;
+      const next = new Set<string>();
+      for (const p of tree.childrenOf.get(null) ?? [])
+        if (tree.withChildren.has(p.permissionKey)) next.add(p.permissionKey);
+      return next;
+    });
+  }, [data, tree]);
+
+  // Pre-order flatten honouring expanded state.
+  const visibleRows = useMemo(() => {
+    const out: { perm: RolePermissionsForRole['permissions'][number]; depth: number; hasKids: boolean }[] = [];
     const walk = (pk: string | null, depth: number) => {
-      for (const p of byParent.get(pk) ?? []) { out.push({ perm: p, depth }); walk(p.permissionKey, depth + 1); }
+      for (const p of tree.childrenOf.get(pk) ?? []) {
+        const hasKids = tree.withChildren.has(p.permissionKey);
+        out.push({ perm: p, depth, hasKids });
+        if (hasKids && expanded.has(p.permissionKey)) walk(p.permissionKey, depth + 1);
+      }
     };
     walk(null, 0);
-    const seen = new Set(out.map(o => o.perm.permissionKey));
-    for (const p of data.permissions) if (!seen.has(p.permissionKey)) out.push({ perm: p, depth: 0 });
     return out;
-  }, [data]);
+  }, [tree, expanded]);
+
+  const toggleExpanded = (key: string) =>
+    setExpanded(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const expandAll = () => setExpanded(new Set(tree.withChildren));
+  const collapseAll = () => setExpanded(new Set());
 
   const setCell = async (key: string, next: AccessLevel, accessType: number) => {
     if (roleId === 'new' || !data) return;
@@ -458,17 +484,33 @@ function RolePermissionsTab({ roleId }: { roleId: number | 'new' }) {
   return (
     <div>
       {error && <div className="mb-3 p-2 rounded border border-red-300 bg-red-50 text-sm text-red-800">{error}</div>}
+      <div className="mb-2 flex items-center gap-2 text-xs">
+        <button type="button" onClick={expandAll} className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-gray-50">Expand all</button>
+        <button type="button" onClick={collapseAll} className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-gray-50">Collapse all</button>
+      </div>
       <div className="border border-border rounded-lg overflow-hidden">
-        {rows.map(({ perm: p, depth }) => (
+        {visibleRows.map(({ perm: p, depth, hasKids }) => (
           <div
             key={p.permissionKey}
             className={`flex items-center justify-between gap-3 px-3 py-2 ${depth === 0 ? 'bg-gray-100' : 'border-t border-border'}`}
           >
-            <div className="min-w-0" style={{ paddingLeft: depth * 16 }}>
-              <div className={depth === 0 ? 'text-xs font-semibold uppercase tracking-wide text-text-primary' : 'text-sm text-text-primary'}>
-                {p.displayName}
+            <div className="flex items-start gap-1 min-w-0" style={{ paddingLeft: depth * 16 }}>
+              <button
+                type="button"
+                onClick={() => hasKids && toggleExpanded(p.permissionKey)}
+                className={`mt-[1px] w-[16px] text-[11px] text-text-muted shrink-0 ${hasKids ? 'cursor-pointer hover:text-text-primary' : 'cursor-default opacity-0'}`}
+                aria-expanded={hasKids ? expanded.has(p.permissionKey) : undefined}
+                aria-label={hasKids ? (expanded.has(p.permissionKey) ? 'Collapse' : 'Expand') : undefined}
+                tabIndex={hasKids ? 0 : -1}
+              >
+                {hasKids ? (expanded.has(p.permissionKey) ? '▾' : '▸') : '·'}
+              </button>
+              <div className="min-w-0">
+                <div className={depth === 0 ? 'text-xs font-semibold uppercase tracking-wide text-text-primary' : 'text-sm text-text-primary'}>
+                  {p.displayName}
+                </div>
+                {depth !== 0 && <div className="text-[11px] text-text-muted font-mono truncate">{p.permissionKey}</div>}
               </div>
-              {depth !== 0 && <div className="text-[11px] text-text-muted font-mono truncate">{p.permissionKey}</div>}
             </div>
             <AccessLevelChooser
               level={resolve(p.permissionKey)} accessType={p.accessType}

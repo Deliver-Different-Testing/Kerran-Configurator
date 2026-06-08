@@ -34,6 +34,8 @@ export default function RolePermissionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Set<CellKey>>(new Set());
+  // Keys of expanded (open) nodes in the permission tree.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,35 +110,57 @@ export default function RolePermissionsPage() {
     return 0;
   }, [explicit, parentOf]);
 
-  // Flatten the permission tree to a pre-order [{perm, depth}] list. Recursive
-  // (N-level) now that the tree is hub-tile → menu item → leaf (Step 2). Each
-  // node renders one row indented by depth; the cascade resolve below already
-  // walks the parent chain to any depth.
-  const rows = useMemo(() => {
-    if (!data) return [] as { perm: RolePermissionMatrix['permissions'][number]; depth: number }[];
-    const byParent = new Map<string | null, RolePermissionMatrix['permissions']>();
-    for (const p of data.permissions) {
-      const k = p.parentKey ?? null;
-      const arr = byParent.get(k) ?? [];
-      arr.push(p);
-      byParent.set(k, arr);
+  // Build the permission tree. children keyed by EFFECTIVE parent (an
+  // unresolved parentKey collapses to null, so orphans surface as roots and
+  // never hide a permission). withChildren = keys that are a parent.
+  const tree = useMemo(() => {
+    const perms = data?.permissions ?? [];
+    const keySet = new Set(perms.map(p => p.permissionKey));
+    const childrenOf = new Map<string | null, RolePermissionMatrix['permissions']>();
+    for (const p of perms) {
+      const ep = p.parentKey && keySet.has(p.parentKey) ? p.parentKey : null;
+      const a = childrenOf.get(ep) ?? []; a.push(p); childrenOf.set(ep, a);
     }
-    for (const arr of byParent.values())
-      arr.sort((a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName));
-    const out: { perm: RolePermissionMatrix['permissions'][number]; depth: number }[] = [];
+    for (const a of childrenOf.values())
+      a.sort((x, y) => x.sortOrder - y.sortOrder || x.displayName.localeCompare(y.displayName));
+    const withChildren = new Set<string>();
+    for (const [k] of childrenOf) if (k) withChildren.add(k);
+    return { childrenOf, withChildren };
+  }, [data]);
+
+  // Default: top tier (hub tiles with children) open so the page doesn't load
+  // as a wall of fully-expanded rows. Runs once per fresh load.
+  useEffect(() => {
+    if (!data) return;
+    setExpanded(prev => {
+      if (prev.size > 0) return prev;
+      const next = new Set<string>();
+      for (const p of tree.childrenOf.get(null) ?? [])
+        if (tree.withChildren.has(p.permissionKey)) next.add(p.permissionKey);
+      return next;
+    });
+  }, [data, tree]);
+
+  // Pre-order flatten honouring expanded state — a node's children appear only
+  // when it (and every ancestor) is expanded.
+  const visibleRows = useMemo(() => {
+    const out: { perm: RolePermissionMatrix['permissions'][number]; depth: number; hasKids: boolean }[] = [];
     const walk = (parentKey: string | null, depth: number) => {
-      for (const p of byParent.get(parentKey) ?? []) {
-        out.push({ perm: p, depth });
-        walk(p.permissionKey, depth + 1);
+      for (const p of tree.childrenOf.get(parentKey) ?? []) {
+        const hasKids = tree.withChildren.has(p.permissionKey);
+        out.push({ perm: p, depth, hasKids });
+        if (hasKids && expanded.has(p.permissionKey)) walk(p.permissionKey, depth + 1);
       }
     };
     walk(null, 0);
-    // Orphans whose parentKey doesn't resolve to a known node — surface as roots
-    // so a data inconsistency never hides a permission.
-    const seen = new Set(out.map(o => o.perm.permissionKey));
-    for (const p of data.permissions) if (!seen.has(p.permissionKey)) out.push({ perm: p, depth: 0 });
     return out;
-  }, [data]);
+  }, [tree, expanded]);
+
+  const toggleExpanded = useCallback((key: string) => {
+    setExpanded(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  }, []);
+  const expandAll = useCallback(() => setExpanded(new Set(tree.withChildren)), [tree]);
+  const collapseAll = useCallback(() => setExpanded(new Set()), []);
 
   // Role columns, filtered by the active ClientType tab.
   const roleClientTypes = useMemo(
@@ -251,6 +275,11 @@ export default function RolePermissionsPage() {
       {roles.length === 0 ? (
         <p className="text-sm text-text-muted">No roles apply to this ClientType.</p>
       ) : (
+        <>
+        <div className="mb-3 flex items-center gap-2 text-xs">
+          <button type="button" onClick={expandAll} className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-gray-50">Expand all</button>
+          <button type="button" onClick={collapseAll} className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-gray-50">Collapse all</button>
+        </div>
         <div className="overflow-x-auto bg-white rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-border">
@@ -265,18 +294,29 @@ export default function RolePermissionsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ perm: p, depth }) => (
+              {visibleRows.map(({ perm: p, depth, hasKids }) => (
                 <tr key={p.permissionKey} className={`border-b border-border ${depth === 0 ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>
                   <td className={`px-4 py-2 sticky left-0 ${depth === 0 ? 'bg-gray-100' : 'bg-white'}`}>
-                    <div
-                      className={depth === 0 ? 'text-xs font-semibold uppercase tracking-wide text-text-primary' : 'text-sm font-medium text-text-primary'}
-                      style={{ paddingLeft: depth * 16 }}
-                    >
-                      {p.displayName}
+                    <div className="flex items-start gap-1" style={{ paddingLeft: depth * 16 }}>
+                      <button
+                        type="button"
+                        onClick={() => hasKids && toggleExpanded(p.permissionKey)}
+                        className={`mt-[2px] w-[16px] text-[11px] text-text-muted ${hasKids ? 'cursor-pointer hover:text-text-primary' : 'cursor-default opacity-0'}`}
+                        aria-expanded={hasKids ? expanded.has(p.permissionKey) : undefined}
+                        aria-label={hasKids ? (expanded.has(p.permissionKey) ? 'Collapse' : 'Expand') : undefined}
+                        tabIndex={hasKids ? 0 : -1}
+                      >
+                        {hasKids ? (expanded.has(p.permissionKey) ? '▾' : '▸') : '·'}
+                      </button>
+                      <div className="min-w-0">
+                        <div className={depth === 0 ? 'text-xs font-semibold uppercase tracking-wide text-text-primary' : 'text-sm font-medium text-text-primary'}>
+                          {p.displayName}
+                        </div>
+                        {depth !== 0 && (
+                          <div className="text-[11px] text-text-muted font-mono truncate">{p.permissionKey}</div>
+                        )}
+                      </div>
                     </div>
-                    {depth !== 0 && (
-                      <div className="text-[11px] text-text-muted font-mono" style={{ paddingLeft: depth * 16 }}>{p.permissionKey}</div>
-                    )}
                   </td>
                   {roles.map(r => (
                     <td key={r.contactRoleId} className="text-center px-3 py-2">
@@ -295,6 +335,7 @@ export default function RolePermissionsPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
       <p className="text-xs text-text-muted mt-3">
         None (grey) · View (cyan) · Edit (green) · Action (purple). Click a segment to set the level —

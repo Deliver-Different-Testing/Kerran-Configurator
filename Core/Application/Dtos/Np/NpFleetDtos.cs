@@ -249,8 +249,13 @@ public class NpFleetCourierCreateDto
     public string VehicleType { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
 
-    // Optional NP assignment at create time — honoured only for Admin/Tenant
-    // (NP users are forced to their own scope). NULL = Direct.
+    // Role / master at create time (GARRY-NP-SUB-INHERIT-NP) so Quick Add can
+    // create a Sub against a master and inherit its NP immediately. null/0 type
+    // defaults to Independent; a Sub (3) requires MasterCourierId.
+    public int? CourierTypeId { get; set; }
+    public int? MasterCourierId { get; set; }
+    // Optional explicit NP assignment — honoured only for Admin/Tenant and only
+    // for non-Sub roles (a Sub inherits the master's NP). NULL = Direct.
     public int? NpAgentId { get; set; }
 
     // Required: the courier signs in to the mobile app with Email + Password.

@@ -396,6 +396,7 @@ export const courierService = {
   // are filled afterwards via CourierSetup (Edit). Courier.phone holds the
   // personal mobile (see toCourier), so it maps to the DTO's `mobile`.
   async create(courier: Partial<Courier>): Promise<Courier> {
+    const typeToId: Record<string, number> = { Independent: 1, Master: 2, Sub: 3, Gig: 4 };
     const payload = {
       code: (courier.code ?? '').trim(),
       firstName: (courier.firstName ?? '').trim(),
@@ -404,6 +405,11 @@ export const courierService = {
       mobile: courier.phone ?? '',
       vehicleType: courier.vehicle ?? '',
       notes: courier.notes ?? '',
+      // Role / master so Quick Add can create a Sub and inherit the master's NP
+      // (GARRY-NP-SUB-INHERIT-NP). null type → backend defaults to Independent.
+      courierTypeId: courier.type ? (typeToId[courier.type] ?? null) : null,
+      masterCourierId: courier.type === 'Sub' ? (courier.master ?? null) : null,
+      npAgentId: courier.npAgentId ?? null,
       // Mobile-app login password — provisions the master-controller User row.
       password: courier.password ?? '',
     };

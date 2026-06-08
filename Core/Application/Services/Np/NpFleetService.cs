@@ -120,46 +120,23 @@ public class NpFleetService(
         // (the login username IS the email; an un-migrated change breaks login).
         var originalEmail = courier.UccrEmail;
 
-        // §4.3 master/sub integrity — only validated when the client is actually
-        // setting a role (CourierTypeId provided). 1 Independent, 2 Master,
-        // 3 Sub, 4 Gig. `query` is already NP-scoped, so master lookups also
-        // enforce that the master is within the caller's scope.
-        if (dto.CourierTypeId is int newType)
-        {
-            if (newType is < 1 or > 4)
-                return Fail(messageId, "Invalid courier type.");
-
-            var newMaster = newType == 3 ? dto.MasterCourierId : null;
-
-            if (newType == 3 && newMaster is null)
-                return Fail(messageId, "A Sub courier must have a Master courier assigned.");
-
-            if (newMaster is int masterId)
-            {
-                if (masterId == id)
-                    return Fail(messageId, "A courier cannot be their own master.");
-
-                var master = await query.AsNoTracking().FirstOrDefaultAsync(c => c.UccrId == masterId);
-                if (master is null)
-                    return Fail(messageId, "Selected master courier not found or outside your scope.");
-                if (master.CourierTypeId == 3)
-                    return Fail(messageId, "Selected master is itself a Sub; master/sub chaining isn't allowed.");
-            }
-
-            // Block demoting a Master that still has subs — they'd be orphaned.
-            if (courier.CourierTypeId == 2 && newType != 2)
-            {
-                var hasSubs = await Context.TucCouriers.AnyAsync(c => c.MasterCourierId == id);
-                if (hasSubs)
-                    return Fail(messageId, "This master still has subcontractors attached. Reassign them before changing its type.");
-            }
-        }
-
-        // NP assignment — write-guarded. scope.IsAdmin covers DF Admin AND
-        // tenant staff in the resolver's 2-way model; NP users are NpAgentId-
-        // scoped (not IsAdmin) so their dto.NpAgentId is ignored. NULL = Direct.
-        if (scope.IsAdmin)
-            courier.NpAgentId = dto.NpAgentId;
+        // Master/Sub + NP relationship — resolved + validated server-side
+        // (GARRY-NP-SUB-INHERIT-NP). Authoritative rule: a Sub INHERITS its
+        // master's NpAgentId, so an admin-created/edited sub under an NP master
+        // lands under that NP instead of Direct. CourierTypeId null = "unchanged"
+        // (keep current); master falls back to the courier's existing master so
+        // re-saving a sub's other fields doesn't require re-sending it.
+        var rel = await ResolveRelationshipAsync(
+            courierTypeId: dto.CourierTypeId ?? courier.CourierTypeId,
+            masterCourierId: dto.MasterCourierId ?? courier.MasterCourierId,
+            requestedNpAgentId: dto.NpAgentId,
+            scope: scope,
+            currentCourierId: courier.UccrId);
+        if (!rel.Success)
+            return Fail(messageId, rel.Error!);
+        courier.CourierTypeId = rel.CourierTypeId;
+        courier.MasterCourierId = rel.MasterCourierId;
+        courier.NpAgentId = rel.NpAgentId;
 
         // Payment channel (Kerran): enum-validate only. The cross-field rules
         // (Invoice needs an Openforce/Xero downstream target) are enforced by
@@ -311,6 +288,18 @@ public class NpFleetService(
                         ?? "system";
         var now = DateTime.UtcNow;
 
+        // Master/Sub + NP relationship (GARRY-NP-SUB-INHERIT-NP). A Sub inherits
+        // its master's NpAgentId so it doesn't land as Direct; type null/0
+        // defaults to Independent (1).
+        var rel = await ResolveRelationshipAsync(
+            courierTypeId: dto.CourierTypeId is int t && t > 0 ? t : 1,
+            masterCourierId: dto.MasterCourierId,
+            requestedNpAgentId: dto.NpAgentId,
+            scope: scope,
+            currentCourierId: null);
+        if (!rel.Success)
+            return Fail(messageId, rel.Error!);
+
         var courier = new TucCourier
         {
             Code = code,
@@ -321,13 +310,10 @@ public class NpFleetService(
             UccrVehicle = (dto.VehicleType ?? string.Empty).Trim(),
             UccrNotes = dto.Notes ?? string.Empty,
 
-            // Quick-add couriers are standalone Independent contractors
-            // (CourierType 1) — no master, no subs. The operator can promote
-            // them to Master or Sub later from the CourierSetup Role dropdown.
-            CourierTypeId = 1,
-            // NP assignment: Admin/Tenant (IsAdmin) may set any NP or Direct
-            // (null) via the DTO; NP users are forced to their own scope.
-            NpAgentId = scope.IsAdmin ? dto.NpAgentId : scope.NpAgentId,
+            // Role / master / inherited-or-explicit NP from the resolver.
+            CourierTypeId = rel.CourierTypeId,
+            MasterCourierId = rel.MasterCourierId,
+            NpAgentId = rel.NpAgentId,
             // New couriers default to Direct payment (matches the DB default).
             PaymentMethod = "Direct",
             Active = true,
@@ -520,16 +506,60 @@ public class NpFleetService(
         Messages = { new() { Message = message } },
     };
 
+    // Resolves + validates the Master/Sub + Network-Partner relationship for a
+    // create/update (GARRY-NP-SUB-INHERIT-NP). Returns the values to persist.
+    //   • Sub (3): requires a master that exists, isn't itself, isn't a Sub —
+    //     and INHERITS the master's NpAgentId (the headline fix).
+    //   • Non-Master with attached subs: blocked (would orphan them).
+    //   • Non-sub NP: admin/tenant may set NpAgentId explicitly; NP users are
+    //     forced to their own scope.
+    private async Task<(bool Success, string? Error, int CourierTypeId, int? MasterCourierId, int? NpAgentId)> ResolveRelationshipAsync(
+        int courierTypeId, int? masterCourierId, int? requestedNpAgentId, NpScope scope, int? currentCourierId)
+    {
+        if (courierTypeId is < 1 or > 4)
+            return (false, "Courier type is invalid.", 0, null, null);
+
+        if (courierTypeId == 3)
+        {
+            if (masterCourierId is null)
+                return (false, "A Sub courier must have a master courier assigned.", 0, null, null);
+            if (currentCourierId.HasValue && masterCourierId.Value == currentCourierId.Value)
+                return (false, "A courier cannot be their own master.", 0, null, null);
+
+            var master = await Context.TucCouriers.AsNoTracking()
+                .Where(c => c.UccrId == masterCourierId.Value)
+                .Select(c => new { c.UccrId, c.CourierTypeId, c.NpAgentId })
+                .FirstOrDefaultAsync();
+            if (master is null)
+                return (false, "Selected master courier was not found.", 0, null, null);
+            if (master.CourierTypeId == 3)
+                return (false, "A subcontractor cannot be used as a master courier.", 0, null, null);
+
+            // INHERIT the master's NP — this is the rule the bug was missing.
+            return (true, null, 3, master.UccrId, master.NpAgentId);
+        }
+
+        // Changing a courier that still has attached subs to anything other than
+        // Master would orphan them.
+        if (currentCourierId.HasValue && courierTypeId != 2)
+        {
+            var hasAttachedSubs = await Context.TucCouriers.AsNoTracking()
+                .AnyAsync(c => c.MasterCourierId == currentCourierId.Value);
+            if (hasAttachedSubs)
+                return (false, "This courier still has attached subs. Reassign them before changing its type.", 0, null, null);
+        }
+
+        // Non-sub: NP users are forced to their own scope; admin/tenant set it
+        // explicitly (null = Direct).
+        var npAgentId = scope.IsAdmin ? requestedNpAgentId : scope.NpAgentId;
+        return (true, null, courierTypeId, null, npAgentId);
+    }
+
     private static void ApplyUpdate(TucCourier c, NpFleetCourierUpdateDto dto)
     {
-        // Role / master — only when provided (null = leave unchanged, so older
-        // clients can't reset the type). Master is cleared for any non-Sub role.
-        // Integrity is validated in UpdateAsync before we get here.
-        if (dto.CourierTypeId is int courierType)
-        {
-            c.CourierTypeId = courierType;
-            c.MasterCourierId = courierType == 3 ? dto.MasterCourierId : null;
-        }
+        // Role / master / NP are resolved + assigned in UpdateAsync via
+        // ResolveRelationshipAsync (Sub inherits the master's NP), so they're
+        // intentionally not set here.
 
         // Profile
         c.UccrName = dto.FirstName;

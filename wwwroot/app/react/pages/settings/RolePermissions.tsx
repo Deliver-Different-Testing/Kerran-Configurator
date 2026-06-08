@@ -108,30 +108,34 @@ export default function RolePermissionsPage() {
     return 0;
   }, [explicit, parentOf]);
 
-  // Build the tier-1 grouped tree for display.
-  const groups = useMemo(() => {
-    if (!data) return [];
-    const tiles = data.permissions
-      .filter(p => p.tier === 1 || p.parentKey === null && p.tier === 1)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-    const leavesByParent = new Map<string, typeof data.permissions>();
+  // Flatten the permission tree to a pre-order [{perm, depth}] list. Recursive
+  // (N-level) now that the tree is hub-tile → menu item → leaf (Step 2). Each
+  // node renders one row indented by depth; the cascade resolve below already
+  // walks the parent chain to any depth.
+  const rows = useMemo(() => {
+    if (!data) return [] as { perm: RolePermissionMatrix['permissions'][number]; depth: number }[];
+    const byParent = new Map<string | null, RolePermissionMatrix['permissions']>();
     for (const p of data.permissions) {
-      if (p.parentKey) {
-        const arr = leavesByParent.get(p.parentKey) ?? [];
-        arr.push(p);
-        leavesByParent.set(p.parentKey, arr);
+      const k = p.parentKey ?? null;
+      const arr = byParent.get(k) ?? [];
+      arr.push(p);
+      byParent.set(k, arr);
+    }
+    for (const arr of byParent.values())
+      arr.sort((a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName));
+    const out: { perm: RolePermissionMatrix['permissions'][number]; depth: number }[] = [];
+    const walk = (parentKey: string | null, depth: number) => {
+      for (const p of byParent.get(parentKey) ?? []) {
+        out.push({ perm: p, depth });
+        walk(p.permissionKey, depth + 1);
       }
-    }
-    const tileKeys = new Set(tiles.map(t => t.permissionKey));
-    const orphans = data.permissions.filter(p => p.tier !== 1 && (!p.parentKey || !tileKeys.has(p.parentKey)));
-    const result = tiles.map(t => ({
-      tile: t,
-      children: (leavesByParent.get(t.permissionKey) ?? []).sort((a, b) => a.sortOrder - b.sortOrder),
-    }));
-    if (orphans.length) {
-      result.push({ tile: null as any, children: orphans.sort((a, b) => a.sortOrder - b.sortOrder) });
-    }
-    return result;
+    };
+    walk(null, 0);
+    // Orphans whose parentKey doesn't resolve to a known node — surface as roots
+    // so a data inconsistency never hides a permission.
+    const seen = new Set(out.map(o => o.perm.permissionKey));
+    for (const p of data.permissions) if (!seen.has(p.permissionKey)) out.push({ perm: p, depth: 0 });
+    return out;
   }, [data]);
 
   // Role columns, filtered by the active ClientType tab.
@@ -261,48 +265,32 @@ export default function RolePermissionsPage() {
               </tr>
             </thead>
             <tbody>
-              {groups.map(({ tile, children }) => (
-                <>
-                  {tile && (
-                    <tr key={`tile-${tile.permissionKey}`} className="bg-gray-100 border-b border-border">
-                      <td className="px-4 py-2 font-semibold text-text-primary uppercase tracking-wide text-xs sticky left-0 bg-gray-100">
-                        {tile.displayName}
-                      </td>
-                      {roles.map(r => (
-                        <td key={r.contactRoleId} className="text-center px-3 py-2">
-                          <AccessLevelChooser
-                            level={resolve(r.contactRoleId, tile.permissionKey)}
-                            accessType={tile.accessType}
-                            explicit={isExplicit(cellKey(r.contactRoleId, tile.permissionKey))}
-                            busy={busy.has(cellKey(r.contactRoleId, tile.permissionKey))}
-                            label={`${tile.displayName} for ${r.name}`}
-                            onChange={(next) => setCell(r.contactRoleId, tile.permissionKey, next)}
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  )}
-                  {children.map(p => (
-                    <tr key={p.permissionKey} className="border-b border-border hover:bg-gray-50">
-                      <td className="px-4 py-3 sticky left-0 bg-white">
-                        <div className="text-sm font-medium text-text-primary pl-4">{p.displayName}</div>
-                        <div className="text-[11px] text-text-muted font-mono pl-4">{p.permissionKey}</div>
-                      </td>
-                      {roles.map(r => (
-                        <td key={r.contactRoleId} className="text-center px-3 py-3">
-                          <AccessLevelChooser
-                            level={resolve(r.contactRoleId, p.permissionKey)}
-                            accessType={p.accessType}
-                            explicit={isExplicit(cellKey(r.contactRoleId, p.permissionKey))}
-                            busy={busy.has(cellKey(r.contactRoleId, p.permissionKey))}
-                            label={`${p.displayName} for ${r.name}`}
-                            onChange={(next) => setCell(r.contactRoleId, p.permissionKey, next)}
-                          />
-                        </td>
-                      ))}
-                    </tr>
+              {rows.map(({ perm: p, depth }) => (
+                <tr key={p.permissionKey} className={`border-b border-border ${depth === 0 ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>
+                  <td className={`px-4 py-2 sticky left-0 ${depth === 0 ? 'bg-gray-100' : 'bg-white'}`}>
+                    <div
+                      className={depth === 0 ? 'text-xs font-semibold uppercase tracking-wide text-text-primary' : 'text-sm font-medium text-text-primary'}
+                      style={{ paddingLeft: depth * 16 }}
+                    >
+                      {p.displayName}
+                    </div>
+                    {depth !== 0 && (
+                      <div className="text-[11px] text-text-muted font-mono" style={{ paddingLeft: depth * 16 }}>{p.permissionKey}</div>
+                    )}
+                  </td>
+                  {roles.map(r => (
+                    <td key={r.contactRoleId} className="text-center px-3 py-2">
+                      <AccessLevelChooser
+                        level={resolve(r.contactRoleId, p.permissionKey)}
+                        accessType={p.accessType}
+                        explicit={isExplicit(cellKey(r.contactRoleId, p.permissionKey))}
+                        busy={busy.has(cellKey(r.contactRoleId, p.permissionKey))}
+                        label={`${p.displayName} for ${r.name}`}
+                        onChange={(next) => setCell(r.contactRoleId, p.permissionKey, next)}
+                      />
+                    </td>
                   ))}
-                </>
+                </tr>
               ))}
             </tbody>
           </table>

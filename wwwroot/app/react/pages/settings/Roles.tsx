@@ -413,12 +413,26 @@ function RolePermissionsTab({ roleId }: { roleId: number | 'new' }) {
     return 0;
   }, [explicit, parentOf]);
 
-  const groups = useMemo(() => {
-    if (!data) return [];
-    const tiles = data.permissions.filter(p => p.tier === 1).sort((a, b) => a.sortOrder - b.sortOrder);
-    const byParent = new Map<string, typeof data.permissions>();
-    data.permissions.forEach(p => { if (p.parentKey) { const a = byParent.get(p.parentKey) ?? []; a.push(p); byParent.set(p.parentKey, a); } });
-    return tiles.map(t => ({ tile: t, children: (byParent.get(t.permissionKey) ?? []).sort((a, b) => a.sortOrder - b.sortOrder) }));
+  // Recursive pre-order flatten ({perm, depth}) — the tree is hub-tile → menu
+  // item → leaf (Step 2), so render every node indented by depth rather than
+  // the old tile + direct-children grouping (which would hide the tier-3 leaves).
+  const rows = useMemo(() => {
+    if (!data) return [] as { perm: RolePermissionsForRole['permissions'][number]; depth: number }[];
+    const byParent = new Map<string | null, RolePermissionsForRole['permissions']>();
+    for (const p of data.permissions) {
+      const k = p.parentKey ?? null;
+      const a = byParent.get(k) ?? []; a.push(p); byParent.set(k, a);
+    }
+    for (const a of byParent.values())
+      a.sort((x, y) => x.sortOrder - y.sortOrder || x.displayName.localeCompare(y.displayName));
+    const out: { perm: RolePermissionsForRole['permissions'][number]; depth: number }[] = [];
+    const walk = (pk: string | null, depth: number) => {
+      for (const p of byParent.get(pk) ?? []) { out.push({ perm: p, depth }); walk(p.permissionKey, depth + 1); }
+    };
+    walk(null, 0);
+    const seen = new Set(out.map(o => o.perm.permissionKey));
+    for (const p of data.permissions) if (!seen.has(p.permissionKey)) out.push({ perm: p, depth: 0 });
+    return out;
   }, [data]);
 
   const setCell = async (key: string, next: AccessLevel, accessType: number) => {
@@ -444,32 +458,24 @@ function RolePermissionsTab({ roleId }: { roleId: number | 'new' }) {
   return (
     <div>
       {error && <div className="mb-3 p-2 rounded border border-red-300 bg-red-50 text-sm text-red-800">{error}</div>}
-      <div className="space-y-3">
-        {groups.map(({ tile, children }) => (
-          <div key={tile.permissionKey} className="border border-border rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between bg-gray-100 px-3 py-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-text-primary">{tile.displayName}</span>
-              <AccessLevelChooser
-                level={resolve(tile.permissionKey)} accessType={tile.accessType}
-                explicit={explicit.has(tile.permissionKey)} busy={busy.has(tile.permissionKey)}
-                label={tile.displayName}
-                onChange={(n) => setCell(tile.permissionKey, n, tile.accessType)}
-              />
-            </div>
-            {children.map(p => (
-              <div key={p.permissionKey} className="flex items-center justify-between px-3 py-2 border-t border-border">
-                <div className="pl-3">
-                  <div className="text-sm text-text-primary">{p.displayName}</div>
-                  <div className="text-[11px] text-text-muted font-mono">{p.permissionKey}</div>
-                </div>
-                <AccessLevelChooser
-                  level={resolve(p.permissionKey)} accessType={p.accessType}
-                  explicit={explicit.has(p.permissionKey)} busy={busy.has(p.permissionKey)}
-                  label={p.displayName}
-                  onChange={(n) => setCell(p.permissionKey, n, p.accessType)}
-                />
+      <div className="border border-border rounded-lg overflow-hidden">
+        {rows.map(({ perm: p, depth }) => (
+          <div
+            key={p.permissionKey}
+            className={`flex items-center justify-between gap-3 px-3 py-2 ${depth === 0 ? 'bg-gray-100' : 'border-t border-border'}`}
+          >
+            <div className="min-w-0" style={{ paddingLeft: depth * 16 }}>
+              <div className={depth === 0 ? 'text-xs font-semibold uppercase tracking-wide text-text-primary' : 'text-sm text-text-primary'}>
+                {p.displayName}
               </div>
-            ))}
+              {depth !== 0 && <div className="text-[11px] text-text-muted font-mono truncate">{p.permissionKey}</div>}
+            </div>
+            <AccessLevelChooser
+              level={resolve(p.permissionKey)} accessType={p.accessType}
+              explicit={explicit.has(p.permissionKey)} busy={busy.has(p.permissionKey)}
+              label={p.displayName}
+              onChange={(n) => setCell(p.permissionKey, n, p.accessType)}
+            />
           </div>
         ))}
       </div>

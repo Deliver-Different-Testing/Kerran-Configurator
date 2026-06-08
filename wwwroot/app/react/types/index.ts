@@ -12,6 +12,12 @@ export interface Courier {
   // Openforce-aggregation paid. `master` is set only for Sub.
   type: 'Independent' | 'Master' | 'Sub' | 'Gig';
   master: number | null;
+  // NP assignment (NP-COLUMN-AND-COURIER-DETAIL). npAgentId null = "Direct"
+  // (belongs to the tenant, not under an NP). npAgentName is the display label.
+  npAgentId?: number | null;
+  npAgentName?: string;
+  // Payment / invoice channel (Kerran): 'Direct' | 'Invoice' | 'None'.
+  paymentMethod?: string;
   gender: string;
   dob: string;
   startDate: string;

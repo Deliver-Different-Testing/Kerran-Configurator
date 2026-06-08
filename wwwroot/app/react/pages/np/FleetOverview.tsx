@@ -250,6 +250,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Role</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Phone</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Vehicle</th>
+              <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Network Partner</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Depot</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Status</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Compliance</th>
@@ -275,6 +276,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
                   </td>
                   <td className="px-3 py-2.5 text-sm border-b border-border whitespace-nowrap">{m.phone}</td>
                   <td className="px-3 py-2.5 text-sm border-b border-border">{m.vehicle}</td>
+                  <td className="px-3 py-2.5 text-sm border-b border-border">{m.npAgentName ? m.npAgentName : <span className="text-text-muted">Direct</span>}</td>
                   <td className="px-3 py-2.5 text-sm border-b border-border">{mDepot}</td>
                   <td className="px-3 py-2.5 text-sm border-b border-border"><StatusBadge status={m.status} /><NoLoginBadge courier={m} /></td>
                   <td className="px-3 py-2.5 text-sm border-b border-border"><ComplianceBadge status={m.compliance} /></td>
@@ -294,6 +296,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
                       </td>
                       <td className="px-3 py-2.5 text-sm border-b border-border whitespace-nowrap">{s.phone}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border">{s.vehicle}</td>
+                      <td className="px-3 py-2.5 text-sm border-b border-border">{s.npAgentName ? s.npAgentName : <span className="text-text-muted">Direct</span>}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border">{sDepot}</td>
                       <td className="px-3 py-2.5 text-sm border-b border-border"><StatusBadge status={s.status} /><NoLoginBadge courier={s} /></td>
                       <td className="px-3 py-2.5 text-sm border-b border-border"><ComplianceBadge status={s.compliance} /></td>
@@ -308,7 +311,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
             })}
             {masters.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-12 text-center text-text-secondary">
+                <td colSpan={11} className="px-4 py-12 text-center text-text-secondary">
                   No drivers match the current filters
                 </td>
               </tr>

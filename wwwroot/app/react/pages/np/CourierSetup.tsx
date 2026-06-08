@@ -1,3 +1,20 @@
+/**
+ * CourierSetup — detail-page rebuild (2026-06-08).
+ *
+ * Replaces the legacy 8-tab popup-style form with the same detail-page
+ * pattern used by AgentSetup / ContactSetup: header + always-visible
+ * Relationship & Commercial card + tabbed operational data + footer
+ * actions.
+ *
+ * Spec drivers:
+ *   • docs/NP-COLUMN-AND-COURIER-DETAIL-2026-06-08.md
+ *   • docs/COURIER_MASTER_SUB_VISIBILITY_2026-06-06.md §6, §7
+ *
+ * Endpoints unchanged — reuses GET/PUT /api/v1/np/fleet/{id} for the
+ * courier record and GET /api/v1/tenant/agents (filtered to NPs) for the
+ * Network Partner picker. NULL npAgentId renders as "Direct".
+ */
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { courierService } from '@/services/np_courierService';
@@ -6,10 +23,22 @@ import FormField from '@/components/common/FormField';
 import PasswordInput from '@/components/common/PasswordInput';
 import DocumentUpload from '@/components/common/DocumentUpload';
 import { useDocumentTypes, useCourierDocuments, useComplianceSummary } from '@/hooks/useDocuments';
+import { useAuth } from '@/context/AuthContext';
 import type { Courier, DocumentStatus } from '@/types';
 
-const tabKeys = ['profile', 'vehicle', 'licensing', 'insurance', 'financial', 'device', 'documents', 'notes'] as const;
-const tabLabels = ['Profile', 'Vehicle', 'Licensing', 'Insurance', 'Financial', 'Device & Settings', 'Documents', 'Notes & Audit'];
+type CourierTab = 'profile' | 'contact' | 'vehicle' | 'compliance' | 'financial' | 'device' | 'documents' | 'notes';
+
+const TAB_KEYS: CourierTab[] = ['profile', 'contact', 'vehicle', 'compliance', 'financial', 'device', 'documents', 'notes'];
+const TAB_LABELS: Record<CourierTab, string> = {
+  profile: 'Profile',
+  contact: 'Contact',
+  vehicle: 'Vehicle',
+  compliance: 'Compliance & Licensing',
+  financial: 'Financial',
+  device: 'Device & Access',
+  documents: 'Documents',
+  notes: 'Notes & Audit',
+};
 
 interface Props {
   onSelectCourier: (id: number) => void;
@@ -32,21 +61,29 @@ export default function CourierSetup({ onSelectCourier }: Props) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initialTab = (searchParams.get('tab') as typeof tabKeys[number]) || 'profile';
-  const [tab, setTab] = useState<typeof tabKeys[number]>(tabKeys.includes(initialTab as any) ? initialTab : 'profile');
+  const { role } = useAuth();
+  // DF Admin and Tenant Admin can reassign the Network Partner. NP users
+  // see the field read-only (and the picker list is never fetched for
+  // them — avoids a 401 against /api/v1/tenant/agents).
+  const canEditNpPartner = role === 'dfadmin' || role === 'tenant';
+
+  const initialTab = (searchParams.get('tab') as CourierTab) || 'profile';
+  const [tab, setTab] = useState<CourierTab>(TAB_KEYS.includes(initialTab) ? initialTab : 'profile');
+
   const [courier, setCourier] = useState<Courier | undefined>();   // last-saved baseline
   const [draft, setDraft] = useState<Courier | undefined>();       // local edits
   const [masters, setMasters] = useState<Courier[]>([]);
   const [masterName, setMasterName] = useState<Courier | null>(null);
-  // Attached subs for the currently-loaded master (Steve 2026-06-06):
-  // surfaces who this master is paid commission on. Empty when courier is a sub.
+  // Attached subs surfaces who a master courier earns commission on.
   const [attachedSubs, setAttachedSubs] = useState<Courier[]>([]);
   const [vehicleMakes, setVehicleMakes] = useState<LookupItem[]>([]);
   const [insuranceCompanies, setInsuranceCompanies] = useState<LookupItem[]>([]);
+  const [networkPartners, setNetworkPartners] = useState<LookupItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  // Mobile App Login (set/reset password) — independent of the main Save.
+  // Mobile App Login (set/reset password) — preserved from the pre-rewrite page
+  // (commit 1395b77). Independent of the main Save; applies immediately.
   const [loginPassword, setLoginPassword] = useState('');
   const [loginSaving, setLoginSaving] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -70,8 +107,13 @@ export default function CourierSetup({ onSelectCourier }: Props) {
     courierService.getMasters().then(m => { if (alive) setMasters(m); });
     lookupService.getVehicleMakes().then(v => { if (alive) setVehicleMakes(v); });
     lookupService.getInsuranceCompanies().then(i => { if (alive) setInsuranceCompanies(i); });
+    if (canEditNpPartner) {
+      lookupService.getNetworkPartners()
+        .then(n => { if (alive) setNetworkPartners(n); })
+        .catch(() => { /* tenant endpoint unreachable — picker falls back to current value only */ });
+    }
     return () => { alive = false; };
-  }, []);
+  }, [canEditNpPartner]);
 
   useEffect(() => {
     let alive = true;
@@ -83,8 +125,6 @@ export default function CourierSetup({ onSelectCourier }: Props) {
     return () => { alive = false; };
   }, [courier?.master]);
 
-  // Load attached subs when the courier is a master (Steve 2026-06-06).
-  // Re-fetches when the courier id changes (i.e. when navigating between profiles).
   useEffect(() => {
     let alive = true;
     if (courier?.id && courier.type === 'Master') {
@@ -97,15 +137,11 @@ export default function CourierSetup({ onSelectCourier }: Props) {
 
   if (!courier || !draft) {
     return (
-      <div className="bg-blue-50 border border-blue-200 text-blue-600 rounded-lg px-4 py-3.5 text-sm flex items-center gap-2.5">
-        Select a courier from Fleet Overview to view their setup.
-      </div>
+      <div className="text-sm text-text-secondary p-6">Loading courier…</div>
     );
   }
 
-  // Bind helpers — every editable FormField uses one of these to read from
-  // draft and write back via setDraft. String/number/bool variants because
-  // FormField's onChange surfaces different types per input kind.
+  // ── Field-binding helpers ──────────────────────────────────────────
   const bind = <K extends keyof Courier>(field: K) => ({
     value: (draft[field] ?? '') as string,
     onChange: (val: string | boolean) => setDraft(d => d ? { ...d, [field]: val as Courier[K] } : d),
@@ -126,16 +162,13 @@ export default function CourierSetup({ onSelectCourier }: Props) {
   const c = draft;
   const dirty = JSON.stringify(courier) !== JSON.stringify(draft);
 
-  // Render a lookup-backed <select> wired to a Courier id/name pair. Storing
-  // both fields means the displayed name stays correct without a re-fetch on
-  // every dropdown change.
   function lookupSelect(
     label: string,
     idField: keyof Courier,
     nameField: keyof Courier,
     options: LookupItem[],
   ) {
-    const currentId = (draft[idField] as number | null | undefined) ?? '';
+    const currentId = (draft![idField] as number | null | undefined) ?? '';
     return (
       <div className="flex flex-col gap-1">
         <label className="text-xs text-text-secondary uppercase tracking-wide">{label}</label>
@@ -143,9 +176,9 @@ export default function CourierSetup({ onSelectCourier }: Props) {
           value={currentId}
           onChange={(e) => {
             const raw = e.target.value;
-            const id = raw === '' ? null : Number(raw);
-            const name = options.find(o => o.id === id)?.name ?? '';
-            setDraft(d => d ? { ...d, [idField]: id, [nameField]: name } as Courier : d);
+            const newId = raw === '' ? null : Number(raw);
+            const name = options.find(o => o.id === newId)?.name ?? '';
+            setDraft(d => d ? { ...d, [idField]: newId, [nameField]: name } as Courier : d);
           }}
         >
           <option value="">— Select —</option>
@@ -189,8 +222,7 @@ export default function CourierSetup({ onSelectCourier }: Props) {
     setLoginSaving(true);
     try {
       const updated = await courierService.resetLogin(draft.id, loginPassword);
-      // Provisioning web-enables the courier — reflect that in both the saved
-      // baseline and the draft so the Web Enabled checkbox stays accurate
+      // Provisioning web-enables the courier — reflect it in baseline + draft
       // without clobbering the operator's other unsaved edits.
       setCourier(updated);
       setDraft(d => (d ? { ...d, webEnabled: updated.webEnabled } : d));
@@ -205,29 +237,150 @@ export default function CourierSetup({ onSelectCourier }: Props) {
     }
   }
 
+  // ── Display labels ─────────────────────────────────────────────────
+  // npAgentName empty + npAgentId null = "Direct" (belongs to the
+  // tenant, not under any NP). The numeric id is never shown in the UI.
+  const npLabel = c.npAgentId == null ? 'Direct' : (c.npAgentName || 'Network Partner');
+
   return (
-    <>
-      {/* Header */}
+    <div>
+      {/* ── Header ── */}
       <div className="flex items-center gap-4 mb-5">
-        <div className="w-12 h-12 rounded-full bg-brand-cyan flex items-center justify-center text-xl font-bold text-white">
+        <div className="w-12 h-12 rounded-full bg-brand-cyan flex items-center justify-center text-xl font-bold text-white shrink-0">
           {c.firstName[0]}{c.surName[0]}
         </div>
-        <div>
-          <h2 className="text-lg font-bold">{c.firstName} {c.surName}</h2>
-          <div className="text-[13px] text-text-secondary">{c.code} · {c.type} Courier · {c.location}</div>
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold truncate">{c.firstName} {c.surName}</h2>
+          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+            <span className="text-[13px] text-text-secondary font-mono">{c.code}</span>
+            <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-700 border border-sky-200">
+              {c.type} Courier
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
+              c.npAgentId == null
+                ? 'bg-surface-light text-text-secondary border-border'
+                : 'bg-badge-purple-bg text-badge-purple-text border-purple-200'
+            }`}>
+              {npLabel}
+            </span>
+            {c.location && <span className="text-[13px] text-text-secondary">· {c.location}</span>}
+          </div>
         </div>
-        <span className={`ml-auto px-3 py-1 rounded-xl text-xs border ${
+        <span className={`ml-auto shrink-0 px-3 py-1 rounded-xl text-xs border ${
           c.status === 'active'
             ? 'bg-green-50 text-success border-green-200'
-            : 'bg-red-50 text-error border-[#991b1b]'
+            : 'bg-red-50 text-error border-red-200'
         }`}>
           ● {c.status === 'active' ? 'Active' : 'Inactive'}
         </span>
       </div>
 
-      {/* Tabs */}
+      {/* ── Relationship & Commercial (always visible, near top) ── */}
+      <div className="bg-white border border-border rounded-lg p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-text-primary">Relationship &amp; Commercial</h3>
+          <span className="text-xs text-text-muted">Who this courier reports under and how they get paid</span>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          {/* Courier Type — Independent / Master / Sub / Gig (CourierTypeId
+              taxonomy). Only Sub keeps a master FK; switching to any other role
+              clears it. A Sub starts with no master until one is picked below. */}
+          <FormField
+            label="Courier Type"
+            type="select"
+            value={c.type}
+            options={['Independent', 'Master', 'Sub', 'Gig']}
+            onChange={(val) => setDraft(d => {
+              if (!d) return d;
+              const next = val as Courier['type'];
+              return {
+                ...d,
+                type: next,
+                master: next === 'Sub' ? d.master : null,
+              };
+            })}
+          />
+
+          {/* Master Courier picker — only when Sub. */}
+          {c.type === 'Sub' ? (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Master Courier</label>
+              <select
+                value={c.master ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const next = raw === '' ? null : Number(raw);
+                  setDraft(d => d ? { ...d, master: next } : d);
+                }}
+              >
+                <option value="">— Select a master —</option>
+                {masters
+                  .filter(m => m.id !== c.id)
+                  .map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.firstName} {m.surName} ({m.code})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Master Courier</label>
+              <input type="text" value="— N/A (not a sub-contractor) —" readOnly className="bg-surface-light cursor-not-allowed opacity-80" />
+            </div>
+          )}
+
+          {/* Network Partner — editable lookup for DF Admin / Tenant Admin,
+              read-only display for NP users. "Direct" is the first option
+              and represents NULL (courier belongs to the tenant, not an NP). */}
+          {canEditNpPartner ? (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Network Partner</label>
+              <select
+                value={c.npAgentId ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const newId = raw === '' ? null : Number(raw);
+                  const newName = newId == null ? '' : (networkPartners.find(o => o.id === newId)?.name ?? c.npAgentName);
+                  setDraft(d => d ? { ...d, npAgentId: newId, npAgentName: newName } : d);
+                }}
+              >
+                <option value="">Direct (no Network Partner)</option>
+                {networkPartners.map(o => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+                {/* Fallback: render the current selection even if not in the loaded
+                    list (e.g. picker fetch failed, or the NP was archived). Keeps
+                    the dropdown showing the saved value instead of blanking it. */}
+                {c.npAgentId != null && !networkPartners.some(o => o.id === c.npAgentId) && (
+                  <option value={c.npAgentId}>{c.npAgentName || 'Current Partner'}</option>
+                )}
+              </select>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary uppercase tracking-wide">Network Partner</label>
+              <input type="text" value={npLabel} readOnly className="bg-surface-light cursor-not-allowed opacity-80" />
+            </div>
+          )}
+
+          {/* Payment Method — Kerran's tucCourier.PaymentMethod, now live on
+              the courier API. Enum {Direct,Invoice,None}; the server validates.
+              Whether an Invoice routes to Openforce / Xero is decided downstream
+              by OpenForceNumber / XeroId / tenant OpenforceDefault, not here. */}
+          <FormField
+            label="Payment Method"
+            type="select"
+            value={c.paymentMethod || 'Direct'}
+            options={['Direct', 'Invoice', 'None']}
+            onChange={(val) => setDraft(d => d ? { ...d, paymentMethod: val as string } : d)}
+          />
+        </div>
+      </div>
+
+      {/* ── Tabs ── */}
       <div className="flex gap-0 border-b border-border mb-5 overflow-x-auto">
-        {tabKeys.map((t, i) => (
+        {TAB_KEYS.map(t => (
           <div
             key={t}
             onClick={() => setTab(t)}
@@ -235,77 +388,117 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               tab === t ? 'text-brand-cyan border-brand-cyan' : 'text-text-secondary border-transparent hover:text-text-primary'
             }`}
           >
-            {tabLabels[i]}
+            {TAB_LABELS[t]}
           </div>
         ))}
       </div>
 
-      {/* Tab Content */}
-      <div className="bg-white border border-border rounded-lg p-5">
-        {tab === 'profile' && (
-          <>
-            <Section title="Identity" />
+      {/* ── Profile Tab — identity + dates ── */}
+      {tab === 'profile' && (
+        <div className="space-y-5">
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Identity</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="First Name" {...bind('firstName')} />
               <FormField label="Surname" {...bind('surName')} />
               <FormField label="Code" value={c.code} readonly />
-              {/* Courier Type — wired (Steve 2026-06-06; taxonomy extended to
-                  the full role set). Only Sub keeps a master FK; switching to
-                  any other role clears it. A Sub starts with no master until the
-                  user picks one below. */}
-              <FormField
-                label="Courier Type"
-                type="select"
-                value={c.type}
-                options={['Independent', 'Master', 'Sub', 'Gig']}
-                onChange={(val) => setDraft(d => {
-                  if (!d) return d;
-                  const next = val as Courier['type'];
-                  return {
-                    ...d,
-                    type: next,
-                    master: next === 'Sub' ? d.master : null,
-                  };
-                })}
-              />
-              {c.type === 'Sub' && (
-                /* Master Courier picker — wired by id, looks up name from the
-                   pre-fetched masters list (Steve 2026-06-06). */
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-text-secondary uppercase tracking-wide">Master Courier</label>
-                  <select
-                    value={c.master ?? ''}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const next = raw === '' ? null : Number(raw);
-                      setDraft(d => d ? { ...d, master: next } : d);
-                    }}
-                  >
-                    <option value="">— Select a master —</option>
-                    {masters
-                      .filter(m => m.id !== c.id)   // can't be your own master
-                      .map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.firstName} {m.surName} ({m.code})
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
               <FormField label="Gender" type="select" {...bind('gender')} options={['', 'Male', 'Female']} />
               <FormField label="Date of Birth" type="date" {...bind('dob')} />
               <FormField label="Start Date" type="date" {...bind('startDate')} />
               <FormField label="Finish Date" type="date" {...bind('finishDate')} />
             </div>
-            <Section title="Contact" />
+          </div>
+
+          {/* Attached Subs — when this courier is a Master.  */}
+          {c.type === 'Master' && (
+            <div className="bg-white border border-border rounded-lg p-5">
+              <h3 className="text-sm font-semibold text-text-primary mb-3">Attached Subcontractors</h3>
+              {attachedSubs.length === 0 ? (
+                <div className="bg-surface-cream border border-border rounded-lg px-4 py-6 text-sm text-text-secondary text-center">
+                  No subcontractors attached to this master.
+                </div>
+              ) : (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        {['Code', 'Name', 'Phone', 'Vehicle', 'Status'].map(h => (
+                          <th key={h} className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border bg-slate-50">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attachedSubs.map(s => (
+                        <tr
+                          key={s.id}
+                          onClick={() => navigate(`/courier/${s.id}`)}
+                          className="hover:bg-surface-cream cursor-pointer border-t border-border"
+                        >
+                          <td className="px-3 py-2.5 text-sm font-mono whitespace-nowrap">{s.code}</td>
+                          <td className="px-3 py-2.5 text-sm">{s.firstName} {s.surName}</td>
+                          <td className="px-3 py-2.5 text-sm whitespace-nowrap">{s.phone || '—'}</td>
+                          <td className="px-3 py-2.5 text-sm">{s.vehicle || '—'}</td>
+                          <td className="px-3 py-2.5 text-sm">
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                              s.status === 'active'
+                                ? 'bg-green-50 text-success border border-green-200'
+                                : 'bg-red-50 text-error border border-red-200'
+                            }`}>
+                              {s.status === 'active' ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-3 py-2 text-[11px] text-text-secondary bg-surface-cream border-t border-border">
+                    {attachedSubs.length} sub{attachedSubs.length === 1 ? '' : 's'} attached · click any row to open
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Master Reference — when this courier is a Sub. */}
+          {c.type === 'Sub' && masterName && (
+            <div className="bg-white border border-border rounded-lg p-5">
+              <h3 className="text-sm font-semibold text-text-primary mb-3">Master Courier</h3>
+              <div
+                onClick={() => navigate(`/courier/${masterName.id}`)}
+                className="border border-border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-brand-cyan transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-brand-cyan flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
+                  {masterName.firstName[0]}{masterName.surName[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold">{masterName.firstName} {masterName.surName}</div>
+                  <div className="text-[12px] text-text-secondary">
+                    {masterName.code} · Master Courier
+                  </div>
+                </div>
+                <span className="text-brand-cyan text-sm">Open →</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Contact Tab — phones, email, address, NoK ── */}
+      {tab === 'contact' && (
+        <div className="space-y-5">
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Contact Details</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Personal Mobile" {...bind('phone')} />
-              <FormField label="Urgent Mobile (Company)" {...bind('urgentMobile')} />
+              <FormField label="Company Mobile" {...bind('urgentMobile')} />
               <FormField label="Email" {...bind('email')} />
               <FormField label="Home Phone" {...bind('homePhone')} />
               <FormField label="Address" {...bind('address')} full />
             </div>
-            <Section title="Emergency / Next of Kin" />
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Emergency / Next of Kin</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Doctor" {...bind('doctor')} />
               <FormField label="Doctor Phone" {...bind('doctorPhone')} />
@@ -314,90 +507,15 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <FormField label="Next of Kin Address" {...bind('nokAddress')} full />
               <FormField label="Next of Kin Phone" {...bind('nokPhone')} />
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Attached Subs — only shown when this courier is a Master.
-                Lists each sub with code/name/active state and click-through to
-                their detail. Steve 2026-06-06: gives the operator visibility
-                of who the master gets paid commission on. */}
-            {c.type === 'Master' && (
-              <>
-                <Section title="Attached Subcontractors" />
-                {attachedSubs.length === 0 ? (
-                  <div className="bg-surface-cream border border-border rounded-lg px-4 py-6 text-sm text-text-secondary text-center">
-                    No subcontractors attached to this master.
-                  </div>
-                ) : (
-                  <div className="bg-white border border-border rounded-lg overflow-hidden">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Code</th>
-                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Name</th>
-                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Phone</th>
-                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Vehicle</th>
-                          <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {attachedSubs.map(s => (
-                          <tr
-                            key={s.id}
-                            onClick={() => navigate(`/courier/${s.id}`)}
-                            className="hover:bg-surface-cream cursor-pointer"
-                          >
-                            <td className="px-3 py-2.5 text-sm border-b border-border font-mono whitespace-nowrap">{s.code}</td>
-                            <td className="px-3 py-2.5 text-sm border-b border-border">{s.firstName} {s.surName}</td>
-                            <td className="px-3 py-2.5 text-sm border-b border-border whitespace-nowrap">{s.phone || '—'}</td>
-                            <td className="px-3 py-2.5 text-sm border-b border-border">{s.vehicle || '—'}</td>
-                            <td className="px-3 py-2.5 text-sm border-b border-border">
-                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                                s.status === 'active'
-                                  ? 'bg-green-50 text-success border border-green-200'
-                                  : 'bg-red-50 text-error border border-red-200'
-                              }`}>
-                                {s.status === 'active' ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="px-3 py-2 text-[11px] text-text-secondary bg-surface-cream border-t border-border">
-                      {attachedSubs.length} sub{attachedSubs.length === 1 ? '' : 's'} attached · click any row to open
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Master Reference — shown when courier is a Sub.
-                Click-through to the master's detail. Steve 2026-06-06. */}
-            {c.type === 'Sub' && masterName && (
-              <>
-                <Section title="Master Courier" />
-                <div
-                  onClick={() => navigate(`/courier/${masterName.id}`)}
-                  className="bg-white border border-border rounded-lg p-4 flex items-center gap-3 cursor-pointer hover:border-brand-cyan transition-colors"
-                >
-                  <div className="w-10 h-10 rounded-full bg-brand-cyan flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
-                    {masterName.firstName[0]}{masterName.surName[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold">{masterName.firstName} {masterName.surName}</div>
-                    <div className="text-[12px] text-text-secondary">
-                      {masterName.code} · Master Courier
-                    </div>
-                  </div>
-                  <span className="text-brand-cyan text-sm">Open →</span>
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {tab === 'vehicle' && (
-          <>
-            <Section title="Vehicle Details" />
+      {/* ── Vehicle Tab ── */}
+      {tab === 'vehicle' && (
+        <div className="space-y-5">
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Vehicle Details</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Vehicle Type" {...bind('vehicle')} />
               {lookupSelect('Make', 'makeId', 'make', vehicleMakes)}
@@ -405,10 +523,13 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <FormField label="Year" {...bindNum('year')} />
               <FormField label="License Plate" {...bind('rego')} />
             </div>
-            <div className="my-2">
+            <div className="mt-3">
               <FormField label="Low Emission Vehicle" type="checkbox" {...bindBool('lowEmission')} />
             </div>
-            <Section title="Dimensions & Weight" />
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Dimensions &amp; Weight</h3>
             <div className="grid grid-cols-3 gap-4">
               <FormField label="Max Pallets" {...bindNum('maxPallets')} />
               <FormField label="Tare Weight (kg)" {...bindNum('tareWeight')} />
@@ -420,106 +541,146 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <FormField label="Width (m)" {...bindNum('width')} />
               <FormField label="Length (m)" {...bindNum('length')} />
             </div>
-            <Section title="Compliance Dates" />
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Compliance Dates</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Vehicle Inspection Expiry" type="date" {...bind('inspectionExpiry')} warning={isExpiringSoon(c.inspectionExpiry) ? 'Expiring soon!' : undefined} />
               <FormField label="Registration Expiry" type="date" {...bind('regoExpiry')} warning={isExpiringSoon(c.regoExpiry) ? 'Expiring soon!' : undefined} />
             </div>
-          </>
-        )}
+          </div>
+        </div>
+      )}
 
-        {tab === 'licensing' && (
-          <>
-            <Section title="Driver's License" />
+      {/* ── Compliance & Licensing Tab ── */}
+      {tab === 'compliance' && (
+        <div className="space-y-5">
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Driver's License</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Driver's License No" {...bind('dlNo')} />
               <FormField label="Driver's License Expiry" type="date" {...bind('dlExpiry')} warning={isExpiringSoon(c.dlExpiry) ? 'Expiring soon!' : undefined} />
             </div>
             {isExpired(c.dlExpiry) && (
-              <div className="bg-amber-50 border border-[#854d0e] text-[#92400e] rounded-lg px-4 py-3.5 text-sm flex items-center gap-2.5 mt-3">
+              <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg px-4 py-3 text-sm flex items-center gap-2.5 mt-3">
                 ⚠️ Driver's license has EXPIRED. Courier must not operate until renewed.
               </div>
             )}
-            <Section title="Endorsements" />
-            <FormField label="Dangerous Goods" type="checkbox" {...bindBool('dangerousGoods')} />
-            {c.dangerousGoods && (
-              <div className="grid grid-cols-2 gap-4 mt-2">
-                <FormField label="DG Certificate Expiry" type="date" {...bind('dgExpiry')} warning={isExpiringSoon(c.dgExpiry) ? 'Expiring soon!' : undefined} />
-              </div>
-            )}
-            <FormField label="Heavy Transport Endorsement" type="checkbox" {...bindBool('hte')} />
-            <Section title="DOT Number" />
-            <div className="grid grid-cols-2 gap-4">
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Endorsements</h3>
+            <div className="space-y-1">
+              <FormField label="Dangerous Goods" type="checkbox" {...bindBool('dangerousGoods')} />
+              {c.dangerousGoods && (
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  <FormField label="DG Certificate Expiry" type="date" {...bind('dgExpiry')} warning={isExpiringSoon(c.dgExpiry) ? 'Expiring soon!' : undefined} />
+                </div>
+              )}
+              <FormField label="Heavy Transport Endorsement" type="checkbox" {...bindBool('hte')} />
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
               <FormField label="DOT Number" {...bind('tslNo')} />
             </div>
-          </>
-        )}
+          </div>
 
-        {tab === 'insurance' && (
-          <>
-            <Section title="Insurance Details" />
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Insurance</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Policy Number" {...bind('policyNo')} />
               {lookupSelect('Insurance Company', 'insuranceCoId', 'insuranceCo', insuranceCompanies)}
               {lookupSelect('Carrier Liability Insurer', 'carrierLiabId', 'carrierLiabCompany', insuranceCompanies)}
               {lookupSelect('Public Liability Insurer', 'publicLiabId', 'publicLiabCompany', insuranceCompanies)}
             </div>
-            <FormField label="Commercial Insurance" type="checkbox" {...bindBool('commercialIns')} />
-          </>
-        )}
-
-        {tab === 'financial' && (
-          <>
-            <div className="bg-blue-50 border border-blue-200 text-blue-600 rounded-lg px-4 py-3.5 text-sm flex items-center gap-2.5 mb-4">
-              💡 These are YOUR rates to this courier. Your customers cannot see these.
+            <div className="mt-3">
+              <FormField label="Commercial Insurance" type="checkbox" {...bindBool('commercialIns')} />
             </div>
-            <Section title="Tax & Banking" />
+          </div>
+        </div>
+      )}
+
+      {/* ── Financial Tab ── */}
+      {tab === 'financial' && (
+        <div className="space-y-5">
+          <div className="bg-sky-50 border border-sky-200 text-sky-700 rounded-lg px-4 py-3 text-sm">
+            💡 These are your rates to this courier. Your customers cannot see them.
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Tax &amp; Banking</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Tax ID (EIN)" {...bind('taxId')} />
               <FormField label="Federal Withholding %" {...bindNum('wht')} />
-              <FormField label="Bank Account (Routing / Account)" {...bind('bankAcct')} />
+              <FormField label="Bank Account (Routing / Account)" {...bind('bankAcct')} full />
             </div>
-            <Section title="Pay Rates" />
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Pay Rates</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Pay Percentage (%)" {...bindNum('payPct')} />
               <FormField label="Bonus Percentage (%)" {...bindNum('bonusPct')} />
             </div>
-            <FormField label="Payroll Registration" type="checkbox" {...bindBool('paydayReg')} />
-            <Section title="Compliance Dates" />
+            <div className="mt-3">
+              <FormField label="Payroll Registration" type="checkbox" {...bindBool('paydayReg')} />
+            </div>
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Compliance Dates</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Contract Signed Date" type="date" {...bind('contractSigned')} />
               <FormField label="Security Check Date" type="date" {...bind('securityCheck')} />
             </div>
-          </>
-        )}
+          </div>
+        </div>
+      )}
 
-        {tab === 'device' && (
-          <>
-            <Section title="Communication Channel" />
+      {/* ── Device & Access Tab ── */}
+      {tab === 'device' && (
+        <div className="space-y-5">
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Communication Channel</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Channel" type="select" value={c.channel} options={['App', 'SMS', 'Radio']} />
               <FormField label="Device Type" value={c.deviceType} readonly />
             </div>
-            <FormField label="Device Admin" type="checkbox" {...bindBool('deviceAdmin')} />
-            <Section title="SMS & Network" />
-            <FormField label="Carrier Network" type="checkbox" {...bindBool('vodafone')} />
-            <FormField label="Send Job via SMS" type="checkbox" {...bindBool('smsJob')} />
-            <FormField label="Send Alert SMS" type="checkbox" {...bindBool('smsAlert')} />
-            <Section title="Web & Display" />
-            <FormField label="Web Enabled" type="checkbox" {...bindBool('webEnabled')} />
-            <FormField label="Auto Despatch" type="checkbox" {...bindBool('autoDispatch')} />
-            <FormField label="Show Client Phone" type="checkbox" {...bindBool('showClientPhone')} />
-            <FormField label="Mobile Advert Courier" type="checkbox" checked={c.mobileAdvert} />
-            <FormField label="Display on Web" type="checkbox" {...bindBool('displayWeb')} />
-            <Section title="Mobile App Login" />
+            <div className="mt-3">
+              <FormField label="Device Admin" type="checkbox" {...bindBool('deviceAdmin')} />
+            </div>
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">SMS &amp; Network</h3>
+            <div className="space-y-1">
+              <FormField label="Carrier Network" type="checkbox" {...bindBool('vodafone')} />
+              <FormField label="Send Job via SMS" type="checkbox" {...bindBool('smsJob')} />
+              <FormField label="Send Alert SMS" type="checkbox" {...bindBool('smsAlert')} />
+            </div>
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Web &amp; Display</h3>
+            <div className="space-y-1">
+              <FormField label="Web Enabled" type="checkbox" {...bindBool('webEnabled')} />
+              <FormField label="Auto Despatch" type="checkbox" {...bindBool('autoDispatch')} />
+              <FormField label="Show Client Phone" type="checkbox" {...bindBool('showClientPhone')} />
+              <FormField label="Mobile Advert Courier" type="checkbox" checked={c.mobileAdvert} />
+              <FormField label="Display on Web" type="checkbox" {...bindBool('displayWeb')} />
+            </div>
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Mobile App Login</h3>
             {c.hasMobileLogin === false && (
               <div className="inline-block px-2 py-0.5 rounded text-[11px] border border-amber-300 bg-amber-50 text-amber-700 mb-2">● No login yet — this courier can't sign in to the mobile app</div>
             )}
             {c.hasMobileLogin === true && (
               <div className="inline-block px-2 py-0.5 rounded text-[11px] border border-green-200 bg-green-50 text-green-700 mb-2">● Login active — set a new password below to reset it</div>
             )}
-            <p className="text-xs text-text-secondary -mt-1 mb-2">
-              Set or reset the password the courier signs in to the mobile app with — their username is their <span className="font-medium">email</span>. If they don't have a login yet, this creates one. This is separate from the Save button below and applies immediately.
+            <p className="text-xs text-text-secondary mb-2">
+              Set or reset the password the courier signs in to the mobile app with — their username is their <span className="font-medium">email</span>. If they don't have a login yet, this creates one. Separate from Save; applies immediately.
             </p>
             {!c.email?.trim() && (
               <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-xs mb-2">
@@ -546,60 +707,76 @@ export default function CourierSetup({ onSelectCourier }: Props) {
             {loginSuccess && (
               <div className="mt-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-xs max-w-lg">✅ Mobile app password set.</div>
             )}
-            <Section title="Security & POD" />
-            <FormField label="POD Required" type="checkbox" {...bindBool('podRequired')} />
-            <Section title="Working Hours" />
+            <div className="mt-4 pt-3 border-t border-border">
+              <FormField label="POD Required" type="checkbox" {...bindBool('podRequired')} />
+            </div>
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Working Hours</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Expected Start Time" type="time" {...bind('startTime')} />
               <FormField label="Expected End Time" type="time" {...bind('endTime')} />
             </div>
-          </>
-        )}
+          </div>
+        </div>
+      )}
 
-        {tab === 'documents' && (
+      {/* ── Documents Tab ── */}
+      {tab === 'documents' && (
+        <div className="space-y-5">
           <CourierDocumentsTab courierId={c.id} />
-        )}
+        </div>
+      )}
 
-        {tab === 'notes' && (
-          <>
-            <Section title="Notes" />
+      {/* ── Notes & Audit Tab ── */}
+      {tab === 'notes' && (
+        <div className="space-y-5">
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Notes</h3>
             <FormField label="Notes" type="textarea" {...bind('notes')} full rows={5} />
-            <Section title="Training" />
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Training</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Training Hours (Initial)" value={String(c.trainingInit ?? '')} readonly />
               <FormField label="Training Hours (Follow-up)" value={String(c.trainingFollow ?? '')} readonly />
             </div>
-            <Section title="Audit Trail" />
+          </div>
+
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Audit Trail</h3>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Created" value={c.created} readonly />
               <FormField label="Created By" value={c.createdBy} readonly />
               <FormField label="Last Modified" value={c.modified} readonly />
               <FormField label="Last Modified By" value={c.modifiedBy} readonly />
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
-      {/* Save status banners */}
+      {/* ── Feedback banners ── */}
       {saveError && (
         <div className="mt-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
           ⚠️ {saveError}
         </div>
       )}
       {saveSuccess && (
-        <div className="mt-4 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">
+        <div className="mt-4 bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm">
           ✅ Changes saved.
         </div>
       )}
 
-      {/* Action Buttons */}
-      <div className="flex gap-2.5 mt-4">
+      {/* ── Footer buttons ── */}
+      <div className="flex gap-2.5 mt-5">
         <button
           onClick={handleSave}
           disabled={!dirty || saving}
           className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {saving ? 'Saving...' : 'Save Changes'}
+          {saving ? 'Saving…' : 'Save Changes'}
         </button>
         <button
           onClick={handleCancel}
@@ -615,9 +792,11 @@ export default function CourierSetup({ onSelectCourier }: Props) {
           Back to Fleet
         </button>
       </div>
-    </>
+    </div>
   );
 }
+
+// ── Documents sub-tab — unchanged logic from the legacy page ──────────
 
 function StatusBadgeDoc({ status }: { status: DocumentStatus }) {
   const map: Record<DocumentStatus, { icon: string; label: string; bg: string; color: string }> = {
@@ -645,7 +824,7 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
   };
 
   return (
-    <>
+    <div className="bg-white border border-border rounded-lg p-5">
       {/* Compliance summary bar */}
       <div className="bg-surface-light border border-border rounded-lg px-4 py-3 mb-4 flex items-center gap-3 text-sm">
         <span className="font-medium text-brand-dark">Compliance:</span>
@@ -661,7 +840,7 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
       </div>
 
       <div className="flex justify-between items-center mb-4">
-        <h3 className="font-bold">Documents</h3>
+        <h3 className="text-sm font-semibold text-text-primary">Documents</h3>
         <button
           onClick={() => { setUploadTypeId(undefined); setShowUpload(true); }}
           className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow"
@@ -728,14 +907,6 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
           onClose={() => setShowUpload(false)}
         />
       )}
-    </>
-  );
-}
-
-function Section({ title }: { title: string }) {
-  return (
-    <div className="text-sm font-bold text-brand-cyan mt-5 mb-3 pb-1.5 border-b border-border first:mt-0">
-      {title}
     </div>
   );
 }

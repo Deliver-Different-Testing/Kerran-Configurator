@@ -9,6 +9,9 @@ interface NpFleetCourierApi {
   code: string;
   masterCourierId: number | null;
   courierTypeId: number;          // 1 Independent, 2 Master, 3 Sub, 4 Gig
+  npAgentId?: number | null;      // NP assignment (null = Direct)
+  npAgentName?: string;           // joined display label
+  paymentMethod?: string;         // 'Direct' | 'Invoice' | 'None'
 
   firstName: string;
   surName: string;
@@ -135,6 +138,9 @@ function toCourier(dto: NpFleetCourierApi): Courier {
     code: dto.code,
     type: typeLabel,
     master: dto.masterCourierId,
+    npAgentId: dto.npAgentId ?? null,
+    npAgentName: dto.npAgentName ?? '',
+    paymentMethod: dto.paymentMethod ?? 'Direct',
 
     firstName: dto.firstName,
     surName: dto.surName,
@@ -266,6 +272,10 @@ function toUpdatePayload(c: Partial<Courier>): Record<string, unknown> {
   return {
     courierTypeId: c.type ? (typeToId[c.type] ?? null) : null,
     masterCourierId: c.type === 'Sub' ? (c.master ?? null) : null,
+    // NP assignment (null = Direct) — server write-guards to Admin/Tenant.
+    npAgentId: c.npAgentId ?? null,
+    // Payment channel — server enum-validates {Direct,Invoice,None}.
+    paymentMethod: c.paymentMethod ?? null,
     firstName: c.firstName ?? '',
     surName: c.surName ?? '',
     email: c.email ?? '',

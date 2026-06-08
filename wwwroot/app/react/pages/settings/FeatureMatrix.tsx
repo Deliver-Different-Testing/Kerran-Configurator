@@ -247,42 +247,56 @@ export default function FeatureMatrixPage() {
 
   const toggleCell = useCallback(async (clientTypeId: number, featureKey: string) => {
     if (!data) return;
-    const key = cellKey(clientTypeId, featureKey);
-    const wasVisible = cellLookup.get(key) ?? false;
-    const nextVisible = !wasVisible;
+    const nextVisible = !(cellLookup.get(cellKey(clientTypeId, featureKey)) ?? false);
 
+    // Cascade: toggling a parent applies the same visibility to ALL its
+    // descendants in this column, so the admin doesn't have to click each child.
+    // A leaf has no descendants, so targets = [itself] and this behaves as a
+    // plain single-cell toggle. (Feature visibility is stored per cell — there's
+    // no read-time cascade — so we write each descendant's row explicitly.)
+    const childrenByParent = new Map<string, string[]>();
+    for (const f of data.features) if (f.parentKey) {
+      const a = childrenByParent.get(f.parentKey) ?? []; a.push(f.featureKey); childrenByParent.set(f.parentKey, a);
+    }
+    const targets: string[] = [];
+    const walk = (k: string) => { targets.push(k); for (const c of childrenByParent.get(k) ?? []) walk(c); };
+    walk(featureKey);
+
+    // Remember prior visibility per target for revert on failure.
+    const prior = new Map(targets.map(k => [k, cellLookup.get(cellKey(clientTypeId, k)) ?? false]));
+
+    // Optimistic: set every target cell in this column to nextVisible.
     setData(prev => {
       if (!prev) return prev;
-      const existingIdx = prev.matrix.findIndex(
-        c => c.clientTypeId === clientTypeId && c.featureKey === featureKey
-      );
-      const nextMatrix = [...prev.matrix];
-      if (existingIdx >= 0) {
-        nextMatrix[existingIdx] = { ...nextMatrix[existingIdx], visible: nextVisible };
-      } else {
-        nextMatrix.push({ clientTypeId, featureKey, visible: nextVisible });
+      const matrix = [...prev.matrix];
+      for (const k of targets) {
+        const idx = matrix.findIndex(c => c.clientTypeId === clientTypeId && c.featureKey === k);
+        if (idx >= 0) matrix[idx] = { ...matrix[idx], visible: nextVisible };
+        else matrix.push({ clientTypeId, featureKey: k, visible: nextVisible });
       }
-      return { ...prev, matrix: nextMatrix };
+      return { ...prev, matrix };
     });
-    setBusy(s => { const n = new Set(s); n.add(key); return n; });
+    setBusy(s => { const n = new Set(s); for (const k of targets) n.add(cellKey(clientTypeId, k)); return n; });
 
-    try {
-      await featuresApi.setVisibility(clientTypeId, featureKey, nextVisible);
-    } catch (e: any) {
+    const results = await Promise.allSettled(
+      targets.map(k => featuresApi.setVisibility(clientTypeId, k, nextVisible))
+    );
+
+    // Revert only the cells whose PUT failed.
+    const failed = targets.filter((_, i) => results[i].status === 'rejected');
+    if (failed.length) {
       setData(prev => {
         if (!prev) return prev;
-        const existingIdx = prev.matrix.findIndex(
-          c => c.clientTypeId === clientTypeId && c.featureKey === featureKey
-        );
-        if (existingIdx < 0) return prev;
-        const nextMatrix = [...prev.matrix];
-        nextMatrix[existingIdx] = { ...nextMatrix[existingIdx], visible: wasVisible };
-        return { ...prev, matrix: nextMatrix };
+        const matrix = [...prev.matrix];
+        for (const k of failed) {
+          const idx = matrix.findIndex(c => c.clientTypeId === clientTypeId && c.featureKey === k);
+          if (idx >= 0) matrix[idx] = { ...matrix[idx], visible: prior.get(k) ?? false };
+        }
+        return { ...prev, matrix };
       });
-      setError(e?.message ?? 'Failed to save toggle');
-    } finally {
-      setBusy(s => { const n = new Set(s); n.delete(key); return n; });
+      setError(`Failed to save ${failed.length} of ${targets.length} toggle${targets.length === 1 ? '' : 's'}.`);
     }
+    setBusy(s => { const n = new Set(s); for (const k of targets) n.delete(cellKey(clientTypeId, k)); return n; });
   }, [data, cellLookup]);
 
   // Save a feature's country scope (SEED-SCOPE-ALL-HUBS §2). Optimistic update
@@ -356,6 +370,7 @@ export default function FeatureMatrixPage() {
         <h2 className="text-xl font-bold text-text-primary">Feature Visibility Matrix</h2>
         <p className="text-sm text-text-secondary mt-1">
           Toggle which features each ClientType can see. Changes save immediately.
+          Toggling a parent cascades to all its children in that column.
         </p>
       </div>
 

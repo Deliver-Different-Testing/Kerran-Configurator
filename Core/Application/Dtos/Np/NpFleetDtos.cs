@@ -14,6 +14,9 @@ public class NpFleetCourierDto
     public int Id { get; set; }
     public string Code { get; set; } = string.Empty;
     public int? MasterCourierId { get; set; }
+    // tucCourier.CourierTypeId: 1 Independent, 2 Master, 3 Sub, 4 Gig. Drives
+    // the Role column / Courier Type dropdown (master/sub visibility work).
+    public int CourierTypeId { get; set; }
 
     // Profile
     public string FirstName { get; set; } = string.Empty;
@@ -126,6 +129,16 @@ public class NpFleetCouriersResponse : BaseResponse
 // a courier to another NP from the edit form.
 public class NpFleetCourierUpdateDto
 {
+    // Role / commercial relationship (master/sub visibility work). Nullable so
+    // an omitted value (null) leaves the courier's existing type/master
+    // untouched — older clients that don't send these can't accidentally reset
+    // a courier to type 0. When set: 1 Independent, 2 Master, 3 Sub, 4 Gig.
+    // MasterCourierId only applies when CourierTypeId == 3 (Sub); it's cleared
+    // for every other role. Integrity (master exists, no chaining, no orphaned
+    // subs) is validated server-side in NpFleetService.UpdateAsync (§4.3).
+    public int? CourierTypeId { get; set; }
+    public int? MasterCourierId { get; set; }
+
     // Profile
     public string FirstName { get; set; } = string.Empty;
     public string SurName { get; set; } = string.Empty;

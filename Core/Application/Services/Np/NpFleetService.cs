@@ -120,6 +120,41 @@ public class NpFleetService(
         // (the login username IS the email; an un-migrated change breaks login).
         var originalEmail = courier.UccrEmail;
 
+        // §4.3 master/sub integrity — only validated when the client is actually
+        // setting a role (CourierTypeId provided). 1 Independent, 2 Master,
+        // 3 Sub, 4 Gig. `query` is already NP-scoped, so master lookups also
+        // enforce that the master is within the caller's scope.
+        if (dto.CourierTypeId is int newType)
+        {
+            if (newType is < 1 or > 4)
+                return Fail(messageId, "Invalid courier type.");
+
+            var newMaster = newType == 3 ? dto.MasterCourierId : null;
+
+            if (newType == 3 && newMaster is null)
+                return Fail(messageId, "A Sub courier must have a Master courier assigned.");
+
+            if (newMaster is int masterId)
+            {
+                if (masterId == id)
+                    return Fail(messageId, "A courier cannot be their own master.");
+
+                var master = await query.AsNoTracking().FirstOrDefaultAsync(c => c.UccrId == masterId);
+                if (master is null)
+                    return Fail(messageId, "Selected master courier not found or outside your scope.");
+                if (master.CourierTypeId == 3)
+                    return Fail(messageId, "Selected master is itself a Sub; master/sub chaining isn't allowed.");
+            }
+
+            // Block demoting a Master that still has subs — they'd be orphaned.
+            if (courier.CourierTypeId == 2 && newType != 2)
+            {
+                var hasSubs = await Context.TucCouriers.AnyAsync(c => c.MasterCourierId == id);
+                if (hasSubs)
+                    return Fail(messageId, "This master still has subcontractors attached. Reassign them before changing its type.");
+            }
+        }
+
         ApplyUpdate(courier, dto);
 
         // Audit fields. Email claim is set by Hub at login (ClaimTypes.Name).
@@ -269,10 +304,10 @@ public class NpFleetService(
             UccrVehicle = (dto.VehicleType ?? string.Empty).Trim(),
             UccrNotes = dto.Notes ?? string.Empty,
 
-            // Quick-add couriers are standalone Master couriers (CourierType
-            // 2). A Sub courier (type 3) would need a master assigned, which
-            // the lean quick-add form doesn't capture.
-            CourierTypeId = 2,
+            // Quick-add couriers are standalone Independent contractors
+            // (CourierType 1) — no master, no subs. The operator can promote
+            // them to Master or Sub later from the CourierSetup Role dropdown.
+            CourierTypeId = 1,
             Active = true,
 
             // Plaintext on tucCourier for AdminManager parity (its Update path
@@ -470,6 +505,15 @@ public class NpFleetService(
 
     private static void ApplyUpdate(TucCourier c, NpFleetCourierUpdateDto dto)
     {
+        // Role / master — only when provided (null = leave unchanged, so older
+        // clients can't reset the type). Master is cleared for any non-Sub role.
+        // Integrity is validated in UpdateAsync before we get here.
+        if (dto.CourierTypeId is int courierType)
+        {
+            c.CourierTypeId = courierType;
+            c.MasterCourierId = courierType == 3 ? dto.MasterCourierId : null;
+        }
+
         // Profile
         c.UccrName = dto.FirstName;
         c.UccrSurname = dto.SurName;
@@ -559,6 +603,7 @@ public class NpFleetService(
         Id = c.UccrId,
         Code = c.Code ?? string.Empty,
         MasterCourierId = c.MasterCourierId,
+        CourierTypeId = c.CourierTypeId,
 
         // Profile
         FirstName = c.UccrName ?? string.Empty,

@@ -1,22 +1,14 @@
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AssociationBadge } from '@/components/common/AssociationBadge';
 import type { AssociationType } from '@/types';
 import {
   BUSINESS_ONBOARDING_STAGES,
   STAGE_TONE,
-  buildTimeline,
+  onboardingService,
   type BusinessOnboardingRecord,
   type BusinessOnboardingStage,
-} from './agentOnboardingData';
-import {
-  advanceOnboardingStage,
-  approveAndActivateOnboarding,
-  archiveOnboardingRecord,
-  createOnboardingRecord,
-  useOnboardingRecord,
-  useOnboardingRecords,
-} from './agentComplianceService';
+} from '@/services/tenant_agentOnboardingService';
 
 type ViewMode = 'pipeline' | 'list';
 type WorkspaceTab = 'profile' | 'operations' | 'compliance' | 'timeline' | 'activation';
@@ -449,16 +441,30 @@ function ListShell({
 function CreateRecord({
   onCreate,
 }: {
-  onCreate: (form: CreateFormState) => number;
+  onCreate: (form: CreateFormState) => Promise<number>;
 }) {
   const navigate = useNavigate();
   const [form, setForm] = useState<CreateFormState>(INITIAL_FORM);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const update = <K extends keyof CreateFormState>(key: K, value: CreateFormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
-  const canSubmit = form.businessName.trim() && form.primaryContact.trim() && form.phone.trim() && form.city.trim() && form.state.trim();
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const newId = await onCreate(form);
+      navigate(`/agents/onboarding/${newId}`);
+    } catch (e: any) {
+      setError(e?.response?.data?.messages?.[0]?.message ?? e?.message ?? 'Failed to create onboarding record.');
+      setSaving(false);
+    }
+  };
+
+  const canSubmit = form.businessName.trim() && form.primaryContact.trim() && form.phone.trim() && form.city.trim() && form.state.trim() && !saving;
 
   return (
     <div className="space-y-6">
@@ -542,6 +548,7 @@ function CreateRecord({
       </div>
 
       <SectionCard title="Save Outcome" subtitle="Saving creates a new onboarding record at Prospect Identified and opens the detail workspace.">
+        {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="text-sm text-text-secondary">
             On save: create onboarding record, default stage to <span className="font-semibold text-text-primary">Prospect Identified</span>, and route directly into the business onboarding workspace.
@@ -555,10 +562,10 @@ function CreateRecord({
             </button>
             <button
               disabled={!canSubmit}
-              onClick={() => navigate(`/agents/onboarding/${onCreate(form)}`)}
+              onClick={handleSubmit}
               className="rounded-xl bg-brand-cyan px-4 py-2.5 text-sm font-semibold text-slate-900 transition-colors hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
             >
-              Create Onboarding Record
+              {saving ? 'Creating…' : 'Create Onboarding Record'}
             </button>
           </div>
         </div>
@@ -728,7 +735,7 @@ function DetailWorkspace({
 }) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('profile');
   const progress = progressPercent(record);
-  const timeline = buildTimeline(record);
+  const timeline = record.timeline ?? [];
   const nextStage = BUSINESS_ONBOARDING_STAGES[BUSINESS_ONBOARDING_STAGES.indexOf(record.stage) + 1];
   const complianceComplete = record.complianceItems.length > 0 && record.complianceItems.every((item) => item.status === 'complete');
 
@@ -986,20 +993,64 @@ function DetailWorkspace({
   );
 }
 
+function LoadingState() {
+  return <div className="rounded-2xl border border-border bg-white p-10 text-center text-sm text-text-muted shadow-sm">Loading onboarding workspace…</div>;
+}
+
 export function AgentOnboarding() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
-  const records = useOnboardingRecords();
-  const detailRecord = useOnboardingRecord(id ? Number(id) : null);
   const isCreateRoute = location.pathname.endsWith('/new');
+  const numericId = id ? Number(id) : null;
 
-  const handleArchive = (recordId: number) => {
-    archiveOnboardingRecord(recordId);
+  // null = loading; [] or populated once loaded.
+  const [records, setRecords] = useState<BusinessOnboardingRecord[] | null>(null);
+  // undefined = loading; null = not found; record = loaded.
+  const [detailRecord, setDetailRecord] = useState<BusinessOnboardingRecord | null | undefined>(undefined);
+
+  const loadList = useCallback(async () => {
+    try { setRecords(await onboardingService.list()); }
+    catch { setRecords([]); }
+  }, []);
+
+  // List route: load the pipeline.
+  useEffect(() => {
+    if (numericId === null && !isCreateRoute) loadList();
+  }, [numericId, isCreateRoute, loadList]);
+
+  // Detail route: load the single record.
+  useEffect(() => {
+    if (numericId === null) { setDetailRecord(undefined); return; }
+    let cancelled = false;
+    setDetailRecord(undefined);
+    onboardingService.get(numericId)
+      .then((r) => { if (!cancelled) setDetailRecord(r); })
+      .catch(() => { if (!cancelled) setDetailRecord(null); });
+    return () => { cancelled = true; };
+  }, [numericId]);
+
+  const refreshDetail = async (recordId: number) => {
+    try { setDetailRecord(await onboardingService.get(recordId)); }
+    catch { /* keep current view; transition errors surface via the action */ }
+  };
+
+  const handleAdvanceStage = async (recordId: number) => {
+    await onboardingService.advanceStage(recordId);
+    if (numericId !== null) await refreshDetail(recordId); else await loadList();
+  };
+
+  const handleApproveActivate = async (recordId: number) => {
+    await onboardingService.approveActivate(recordId);
+    if (numericId !== null) await refreshDetail(recordId); else await loadList();
+  };
+
+  const handleArchive = async (recordId: number) => {
+    await onboardingService.archive(recordId);
     navigate('/agents/onboarding');
   };
 
-  const handleCreate = (form: CreateFormState) => createOnboardingRecord({
+  const handleCreate = (form: CreateFormState) => onboardingService.create({
     businessName: form.businessName,
     primaryContact: form.primaryContact,
     phone: form.phone,
@@ -1011,18 +1062,17 @@ export function AgentOnboarding() {
     source: form.source,
     notes: form.notes,
     networkPartnerStatus: form.networkPartnerStatus,
-  });
+  }).then((r) => r.id);
 
-  if (id && !detailRecord) {
-    return <Navigate to="/agents/onboarding" replace />;
-  }
-
-  if (detailRecord) {
+  // Detail route.
+  if (numericId !== null) {
+    if (detailRecord === undefined) return <LoadingState />;
+    if (detailRecord === null) return <Navigate to="/agents/onboarding" replace />;
     return (
       <DetailWorkspace
         record={detailRecord}
-        onAdvanceStage={advanceOnboardingStage}
-        onApproveActivate={approveAndActivateOnboarding}
+        onAdvanceStage={handleAdvanceStage}
+        onApproveActivate={handleApproveActivate}
         onArchive={handleArchive}
       />
     );
@@ -1032,11 +1082,13 @@ export function AgentOnboarding() {
     return <CreateRecord onCreate={handleCreate} />;
   }
 
+  if (records === null) return <LoadingState />;
+
   return (
     <ListShell
       records={records}
-      onAdvanceStage={advanceOnboardingStage}
-      onApproveActivate={approveAndActivateOnboarding}
+      onAdvanceStage={handleAdvanceStage}
+      onApproveActivate={handleApproveActivate}
       onArchive={handleArchive}
     />
   );

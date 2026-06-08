@@ -9,8 +9,8 @@ import {
   NP_DOC_REQUIREMENTS,
   getBusinessComplianceSummary,
   useAgents,
-  useOnboardingRecords,
 } from '@/pages/tenant/agentComplianceService';
+import type { BusinessOnboardingRecord } from '@/services/tenant_agentOnboardingService';
 import { driverApprovalService } from '@/services/np_driverApprovalService';
 
 type LegacyDriverTab = 'dashboard' | 'documents' | 'profiles' | 'approval';
@@ -78,7 +78,9 @@ export default function ComplianceHub({
   standalone?: boolean;
 }) {
   const agents = useAgents();
-  const onboardingRecords = useOnboardingRecords();
+  // Onboarding now lives in the real API (tenant_agentOnboardingService); this
+  // still-mock NP compliance view no longer cross-references it.
+  const onboardingRecords: BusinessOnboardingRecord[] = [];
   const { data: driverDashboard } = useComplianceDashboard();
   const { alerts: driverAlerts } = useComplianceAlerts();
   const pendingCount = driverApprovalService.getPendingCount();

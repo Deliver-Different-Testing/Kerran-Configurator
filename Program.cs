@@ -330,6 +330,7 @@ builder.Services.AddScoped<
 
 // Phase 5+1 — Tenant scope services
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantAgentService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantAgentOnboardingService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.QuoteInviteTokenService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.QuoteNotificationService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantQuotesService>();

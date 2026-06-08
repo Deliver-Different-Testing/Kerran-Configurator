@@ -7,8 +7,8 @@ import {
   getDriverComplianceSummary,
   getDriversForAgent,
   useAgents,
-  useOnboardingRecords,
 } from '@/pages/tenant/agentComplianceService';
+import type { BusinessOnboardingRecord } from '@/services/tenant_agentOnboardingService';
 import type { AgentStatus } from '@/types';
 
 type RiskLevel = 'critical' | 'warning' | 'healthy';
@@ -122,7 +122,9 @@ function NotificationChip({
 
 export default function AgentComplianceTab() {
   const agents = useAgents();
-  const onboardingRecords = useOnboardingRecords();
+  // Onboarding now lives in the real API (tenant_agentOnboardingService); this
+  // still-mock NP compliance view no longer cross-references it.
+  const onboardingRecords: BusinessOnboardingRecord[] = [];
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [riskFilter, setRiskFilter] = useState('');

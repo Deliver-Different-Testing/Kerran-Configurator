@@ -6,7 +6,7 @@ import {
   contactsApi,
   type AdminContactRow, type AdminContactDetail, type AdminRoleOption,
   type AdminRelType, type AdminClientOption, type AdminResolvedTile,
-  type AdminContactAudit, type AdminContactSave,
+  type AdminContactAudit, type AdminContactSave, type ResolvedDataScope,
 } from '@/services/api';
 import { ACCESS_LABEL, clampAccess, type AccessLevel } from '@/data/accessLevels';
 
@@ -123,7 +123,7 @@ export default function TeamUsersPage() {
 
 // ---- 3-tab modal ----------------------------------------------------------
 
-type Tab = 'profile' | 'permissions' | 'history';
+type Tab = 'profile' | 'permissions' | 'history' | 'dataScope';
 
 function ContactModal({ contactId, lane, onClose }: { contactId: number | 'new'; lane: Lane; onClose: (toast?: string) => void }) {
   const isNew = contactId === 'new';
@@ -199,7 +199,7 @@ function ContactModal({ contactId, lane, onClose }: { contactId: number | 'new';
           <button onClick={() => onClose()} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
         </div>
         <div className="flex gap-1 px-6 pt-3 border-b border-border">
-          {([['profile', 'Profile'], ['permissions', 'Permissions'], ['history', 'History']] as [Tab, string][]).map(([t, label]) => (
+          {([['profile', 'Profile'], ['permissions', 'Permissions'], ['history', 'History'], ['dataScope', 'Data Scope']] as [Tab, string][]).map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === t ? 'border-[#3bc7f4] text-[#3bc7f4]' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>{label}</button>
           ))}
         </div>
@@ -259,7 +259,8 @@ function ContactModal({ contactId, lane, onClose }: { contactId: number | 'new';
                 </div>
               </div>
             ) : tab === 'permissions' ? <PermissionsTab contactId={contactId} />
-              : <HistoryTab contactId={contactId} />}
+              : tab === 'history' ? <HistoryTab contactId={contactId} />
+              : <DataScopeTab contactId={contactId} />}
         </div>
         <div className="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-border">
           <button onClick={() => onClose()} disabled={saving} className="px-4 py-2 rounded-lg border border-border text-sm text-text-secondary hover:bg-gray-50">Cancel</button>
@@ -290,6 +291,117 @@ function PermissionsTab({ contactId }: { contactId: number | 'new' }) {
             {t.items.map(i => <div key={i.key} className="flex items-center justify-between px-3 py-2 border-t border-border"><span className="text-sm text-text-primary pl-3">{i.displayName}</span>{pill(i.level)}</div>)}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// RESOLVED-DATA-SCOPE §6/§10 — DF-admin-only inspector. A faithful view of the
+// real ScopeDecider: summary, structured fields, decision trace, raw JSON.
+// Fields the resolver doesn't compute render as "not modelled" rather than
+// fabricated values.
+const SCOPE_BADGE: Record<string, string> = {
+  Platform: 'bg-purple-100 text-purple-700',
+  Tenant: 'bg-blue-100 text-blue-700',
+  Np: 'bg-amber-100 text-amber-700',
+  None: 'bg-gray-200 text-gray-600',
+  Customer: 'bg-gray-100 text-gray-500',
+  Courier: 'bg-gray-100 text-gray-500',
+};
+
+function DataScopeTab({ contactId }: { contactId: number | 'new' }) {
+  const [scope, setScope] = useState<ResolvedDataScope | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showJson, setShowJson] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    if (contactId === 'new') { setLoading(false); return; }
+    setLoading(true); setError(null);
+    contactsApi.dataScope(contactId)
+      .then(s => setScope(s))
+      .catch((e: any) => setError(e?.message ?? 'Failed to resolve scope'))
+      .finally(() => setLoading(false));
+  }, [contactId]);
+  useEffect(() => { load(); }, [load]);
+
+  if (contactId === 'new') return <p className="text-sm text-text-muted">Save the contact first to inspect its resolved data scope.</p>;
+  if (loading) return <p className="text-sm text-text-muted">Resolving…</p>;
+  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (!scope) return <p className="text-sm text-text-muted py-6 text-center">No resolved scope — deny by default.</p>;
+
+  const copy = (label: string, text: string) => { navigator.clipboard?.writeText(text); setCopied(label); setTimeout(() => setCopied(null), 1500); };
+  const idLabel = (name: string | null, id: number | null) => name ? `${name} (${id})` : (id != null ? String(id) : null);
+
+  const fields: [string, string | number | boolean | null][] = [
+    ['Resolved ClientType', `${scope.resolvedClientTypeName} (${scope.resolvedClientTypeId})`],
+    ['Scope Kind', scope.scopeKind],
+    ['Home Client', idLabel(scope.homeClientName, scope.homeClientId)],
+    ['Tenant Client', idLabel(scope.tenantClientName, scope.tenantClientId)],
+    ['NP Agent', idLabel(scope.npAgentName, scope.npAgentId)],
+    ['Customer Client', scope.customerClientId],
+    ['Courier', scope.courierId],
+    ['Can see DF Admin', scope.canSeeDfAdmin],
+    ['Can cross tenant', scope.canCrossTenant],
+    ['Child clients only', scope.canSeeChildClientsOnly],
+    ['Inherited from parent', scope.isInheritedFromParentClient],
+    ['Resolution source', scope.resolutionSource],
+  ];
+  const renderVal = (v: string | number | boolean | null) => {
+    if (v === null || v === undefined || v === '') return <span className="text-text-muted italic">not modelled</span>;
+    if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+    return String(v);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Summary card */}
+      <div className="rounded-lg border border-border bg-gray-50 p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${SCOPE_BADGE[scope.scopeKind] ?? 'bg-gray-100 text-gray-600'}`}>{scope.scopeKind}</span>
+          <span className="text-xs text-text-muted">resolved data scope</span>
+        </div>
+        <p className="text-sm font-semibold text-text-primary">{scope.summary}</p>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button onClick={() => copy('summary', scope.summary)} className="px-2.5 py-1 rounded-md border border-border text-xs text-text-secondary hover:bg-white">{copied === 'summary' ? '✓ Copied' : 'Copy summary'}</button>
+          <button onClick={() => copy('json', JSON.stringify(scope, null, 2))} className="px-2.5 py-1 rounded-md border border-border text-xs text-text-secondary hover:bg-white">{copied === 'json' ? '✓ Copied' : 'Copy JSON'}</button>
+          <button onClick={load} className="px-2.5 py-1 rounded-md border border-border text-xs text-text-secondary hover:bg-white">Refresh resolution</button>
+        </div>
+      </div>
+
+      {/* Structured fields grid */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+        {fields.map(([label, v]) => (
+          <div key={label} className="flex flex-col">
+            <span className="text-[11px] text-text-secondary uppercase tracking-wide">{label}</span>
+            <span className="text-sm text-text-primary">{renderVal(v)}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Decision trace */}
+      <div>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-text-primary mb-2">Decision trace</h4>
+        <ol className="space-y-1.5">
+          {scope.rules.map((r, i) => (
+            <li key={i} className="text-[13px] text-text-secondary flex gap-2"><span className="text-text-muted">{i + 1}.</span><span>{r}</span></li>
+          ))}
+        </ol>
+      </div>
+
+      {/* Honesty note — what the current resolver does NOT compute */}
+      {scope.notModelled.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold text-amber-800 mb-1">Not modelled by the current resolver</p>
+          <p className="text-[13px] text-amber-700">These fields are shown for spec completeness but the production filters do not compute them yet: {scope.notModelled.join('; ')}.</p>
+        </div>
+      )}
+
+      {/* Raw JSON expander */}
+      <div>
+        <button onClick={() => setShowJson(v => !v)} className="text-xs text-[#3bc7f4] hover:underline">{showJson ? '▾ Hide raw JSON' : '▸ Show raw JSON'}</button>
+        {showJson && <pre className="mt-2 p-3 rounded-lg bg-gray-900 text-gray-100 text-[12px] overflow-x-auto">{JSON.stringify(scope, null, 2)}</pre>}
       </div>
     </div>
   );

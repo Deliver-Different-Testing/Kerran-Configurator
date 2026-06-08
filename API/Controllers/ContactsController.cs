@@ -50,6 +50,18 @@ public class ContactsController(AdminContactService service) : BaseController
         return Ok(await service.GetHistoryAsync(id));
     }
 
+    // RESOLVED-DATA-SCOPE §7 — DF-admin-only inspector of a contact's effective
+    // data boundary. The AdminOnly policy already gates the surface; this adds
+    // the spec's explicit ClientTypeId=5 check (§5/§7.2) → 403 for non-DF.
+    [HttpGet("{id:int}/data-scope")]
+    public async Task<IActionResult> GetDataScope(int id)
+    {
+        var (dto, error) = await service.GetResolvedDataScopeAsync(id);
+        if (error == "forbidden")
+            return StatusCode(403, new { error = "DF_ADMIN_ONLY", message = "Resolved Data Scope is a DF-admin-only inspector." });
+        return dto is null ? NotFound(new { error = "Contact not found." }) : Ok(dto);
+    }
+
     [HttpGet("lookups/roles")]
     public async Task<ActionResult<List<NpRoleOptionDto>>> GetRoles([FromQuery] int clientType)
         => Ok(await service.GetAssignableRolesAsync(clientType));

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using DfrntDriveConfigurator.Core.Application.Authorization;
 using DfrntDriveConfigurator.Core.Domain;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -53,73 +54,59 @@ public class NpScopeResolver(
             return existing;
 
         var user = httpCtx.User;
-        // DF Admin bypass — no NP scope filter (sees all rows). Keyed on
-        // ClientType == 5 (DFRNTAdmin). (Was UserGroupID == 1; switched so a
-        // tenant Administrator on a ClientTypeId=4 client isn't treated as a
-        // DF admin.)
-        var clientTypeId = user.FindFirst("ClientTypeId")?.Value;
-        if (clientTypeId == "5")
-        {
-            var adminScope = new NpScope(IsAdmin: true, NpAgentId: null);
-            httpCtx.Items[CacheKey] = adminScope;
-            return adminScope;
-        }
 
-        // Tenant staff (not a Network Partner, and not a DF admin handled above)
-        // operate tenant-wide: the tenant Despatch DB connection is itself the
-        // scope boundary, so they see/manage every courier in their tenant —
-        // exactly like TenantAgentService, which applies no per-user filter.
-        // This is deliberately distinct from an NP user with a MISSING linkage
-        // (resolved below to NpAgentId=null → empty): the IsNetworkPartner claim
-        // is the differentiator, so tenant staff must NOT fall through to the
-        // "no linkage → empty" path. They resolve to the same unscoped view as
-        // an admin (within the current tenant DB, IsAdmin just means "no
-        // NpAgentId filter"). In practice this branch is only reached on the
-        // courier endpoints broadened to TenantStaffOrAdmin (NpFleet /
-        // CourierDocuments / NpLookup / NpDocumentType); genuine NP and DF-admin
-        // callers never take it, so behaviour on the other (still
-        // NetworkPartnerOrAdmin) NP controllers is unchanged.
-        var isNetworkPartner = user.FindFirst("IsNetworkPartner")?.Value;
-        if (!string.Equals(isNetworkPartner, "True", StringComparison.OrdinalIgnoreCase))
-        {
-            var tenantScope = new NpScope(IsAdmin: true, NpAgentId: null);
-            httpCtx.Items[CacheKey] = tenantScope;
-            return tenantScope;
-        }
-
+        // Gather the scope inputs from the cookie claims, then hand off to the
+        // canonical ScopeDecider (shared with the DF-admin Resolved Data Scope
+        // inspector — RESOLVED-DATA-SCOPE §8: one decision, two callers, so the
+        // inspector can never disagree with these production filters).
+        //   ClientTypeId=5            → DF admin, platform scope
+        //   not IsNetworkPartner      → tenant staff, tenant-wide (tenant DB is
+        //                               the boundary; mirrors TenantAgentService)
+        //   IsNetworkPartner + agent  → NP scope filtered by NpAgentId
+        //   IsNetworkPartner, no agent→ deny by default (empty result set)
+        var clientTypeId = int.TryParse(user.FindFirst("ClientTypeId")?.Value, out var ct) ? ct : (int?)null;
+        var isNetworkPartner = string.Equals(user.FindFirst("IsNetworkPartner")?.Value, "True", StringComparison.OrdinalIgnoreCase);
         var clientIdClaim = user.FindFirst("ClientID")?.Value;
+        var clientId = int.TryParse(clientIdClaim, out var cid) ? cid : (int?)null;
+
+        // Only an NP caller (not DF admin, not tenant staff) needs an NpAgentId,
+        // and only then do we touch the DB — preserving the original
+        // short-circuit where admins + tenant staff never hit the database.
         int? npAgentId = null;
+        if (clientTypeId != ScopeDecider.DfAdminClientType && isNetworkPartner)
+            npAgentId = await ResolveNpAgentIdAsync(user, clientId);
 
-        // Claim-first: Hub stamps NpAgentId at login. null = claim absent
-        // (pre-2026-06-03 cookie) → legacy DB fallback; "" or non-positive =
-        // Hub-authoritative "no linkage" → leave npAgentId null, no DB call.
-        var npAgentClaim = user.FindFirst("NpAgentId")?.Value;
-        if (npAgentClaim is null)
-        {
-            if (int.TryParse(clientIdClaim, out var clientId) && clientId > 0)
-            {
-                await using var ctx = await contextFactory.CreateDbContextAsync();
-                npAgentId = await ctx.TucClients
-                    .AsNoTracking()
-                    .Where(c => c.UcclId == clientId)
-                    .Select(c => c.NpAgentId)
-                    .FirstOrDefaultAsync();
-            }
-        }
-        else if (int.TryParse(npAgentClaim, out var claimedNpAgentId) && claimedNpAgentId > 0)
-        {
-            npAgentId = claimedNpAgentId;
-        }
+        var decision = ScopeDecider.Decide(new ScopeInputs(clientTypeId, isNetworkPartner, clientId, npAgentId));
 
-        if (npAgentId is null)
-        {
+        if (decision.Kind == ScopeKind.None)
             Log.Warning(
                 "NP-scoped request from non-admin user (ClientID={ClientId}); no tucClient.NpAgentId linkage configured. Returning empty result set.",
                 clientIdClaim ?? "null");
-        }
 
-        var scope = new NpScope(IsAdmin: false, NpAgentId: npAgentId);
+        var scope = new NpScope(decision.IsAdmin, decision.NpAgentId);
         httpCtx.Items[CacheKey] = scope;
         return scope;
+    }
+
+    // Claim-first NpAgentId resolution: Hub stamps NpAgentId at login
+    // (2026-06-03). A null claim = absent (pre-change cookie) → legacy DB
+    // fallback via ClientID → tucClient.NpAgentId; an "" / non-positive claim is
+    // the Hub-authoritative "no linkage" and triggers no DB call.
+    private async Task<int?> ResolveNpAgentIdAsync(System.Security.Claims.ClaimsPrincipal user, int? clientId)
+    {
+        var npAgentClaim = user.FindFirst("NpAgentId")?.Value;
+        if (npAgentClaim is null)
+        {
+            if (clientId is int id && id > 0)
+            {
+                await using var ctx = await contextFactory.CreateDbContextAsync();
+                return await ctx.TucClients.AsNoTracking()
+                    .Where(c => c.UcclId == id)
+                    .Select(c => c.NpAgentId)
+                    .FirstOrDefaultAsync();
+            }
+            return null;
+        }
+        return int.TryParse(npAgentClaim, out var claimed) && claimed > 0 ? claimed : null;
     }
 }

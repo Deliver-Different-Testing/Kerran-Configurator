@@ -148,6 +148,94 @@ public class AdminContactService(
         }).ToList();
     }
 
+    // ── Resolved Data Scope inspector (RESOLVED-DATA-SCOPE §7) ──────────────
+    // DF-admin-only view of a TARGET contact's effective data boundary. It runs
+    // the same ScopeDecider the production list/picker filters use (§8), so it
+    // can never disagree with them. Inputs are derived from the contact's DB row
+    // (the live session derives the identical decision from the Hub login
+    // claims). Returns ("forbidden") for non-DF callers, (null) for not-found.
+    public async Task<(ResolvedDataScopeDto? dto, string? error)> GetResolvedDataScopeAsync(int contactId)
+    {
+        if (!ActorIsDfAdmin) return (null, "forbidden");
+
+        var cc = await Context.TucClientContacts.AsNoTracking()
+            .Include(c => c.UcctClient)
+            .FirstOrDefaultAsync(c => c.UcctId == contactId);
+        if (cc?.UcctClient is null || !LaneAll.Contains(cc.UcctClient.ClientTypeId)) return (null, null);
+
+        var client = cc.UcctClient;
+        var clientTypeId = client.ClientTypeId;
+
+        // Derive the scope inputs from DB truth for this target contact. The live
+        // resolver gates NP scope on the Hub Master.User IsNetworkPartner claim,
+        // and NP users sit on a NetworkPartner-type client (ClientTypeId=3, per
+        // the A1 resolution) — so ClientTypeId=3 is the faithful DB proxy. An
+        // incidental tucClient.NpAgentId on a Tenant (4) client is therefore
+        // ignored, exactly as the live resolver ignores it for non-NP callers.
+        // The NpAgentId itself comes straight from tucClient.NpAgentId — the same
+        // value production filters would use once NP scope applies.
+        var isNetworkPartner = clientTypeId == ScopeDecider.NetworkPartnerClientType;
+        var decision = ScopeDecider.Decide(new ScopeInputs(clientTypeId, isNetworkPartner, cc.UcctClientId, client.NpAgentId));
+
+        var clientTypeName = await Context.ClientTypes.AsNoTracking()
+            .Where(t => t.Id == clientTypeId).Select(t => t.Name).FirstOrDefaultAsync()
+            ?? $"ClientType {clientTypeId}";
+
+        string? npAgentName = null;
+        if (decision.NpAgentId is int agentId)
+            npAgentName = await Context.TucAgents.AsNoTracking()
+                .Where(a => a.UcagId == agentId).Select(a => a.UcagName).FirstOrDefaultAsync();
+
+        var displayName = FullName(cc);
+        var summary = decision.Kind switch
+        {
+            ScopeKind.Platform => "DF Admin — platform-wide scope",
+            ScopeKind.Tenant => $"Tenant Staff — tenant-wide within {client.UcclName}",
+            ScopeKind.Np => $"NP Admin — restricted to {npAgentName ?? $"agent {decision.NpAgentId}"}",
+            _ => "No resolved scope — deny by default",
+        };
+
+        // Honest trace: lead with how the inputs were derived, then the decision.
+        var rules = new List<string>
+        {
+            "Inputs derived from the target contact's DB row: ClientTypeId, IsNetworkPartner≈(ClientTypeId=3), " +
+            "NpAgentId=tucClient.NpAgentId. The live session derives the same decision from the Hub login claims " +
+            "(ClientTypeId / IsNetworkPartner / NpAgentId).",
+        };
+        rules.AddRange(decision.Rules);
+
+        return (new ResolvedDataScopeDto
+        {
+            ContactId = cc.UcctId,
+            DisplayName = displayName,
+            ResolvedClientTypeId = clientTypeId,
+            ResolvedClientTypeName = clientTypeName,
+            ScopeKind = decision.Kind.ToString(),
+            Summary = summary,
+            HomeClientId = cc.UcctClientId,
+            HomeClientName = client.UcclName,
+            TenantClientId = null,          // tenant boundary = the tenant DB; no discrete id in this schema
+            TenantClientName = null,
+            NpAgentId = decision.NpAgentId,
+            NpAgentName = npAgentName,
+            CustomerClientId = null,        // not modelled by the current resolver
+            CourierId = null,               // not modelled by the current resolver
+            CanSeeDfAdmin = decision.CanSeeDfAdmin,
+            CanCrossTenant = decision.CanCrossTenant,
+            CanSeeChildClientsOnly = null,  // not modelled
+            IsInheritedFromParentClient = null, // not modelled
+            ResolutionSource = decision.ResolutionSource,
+            Rules = rules,
+            NotModelled = new List<string>
+            {
+                "ScopeKind Customer / Courier (the configurator resolver never emits these)",
+                "TenantClientId (tenant boundary is the tenant database, not a row)",
+                "CanSeeChildClientsOnly", "IsInheritedFromParentClient",
+                "CustomerClientId", "CourierId",
+            },
+        }, null);
+    }
+
     // ── Lookups ───────────────────────────────────────────────────────────
     public async Task<List<NpRoleOptionDto>> GetAssignableRolesAsync(int clientTypeId) =>
         await Context.TblContactRoles.AsNoTracking()

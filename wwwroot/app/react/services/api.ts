@@ -314,12 +314,29 @@ export interface AdminContactSave {
   jobTitle: string; mobile: string; directDial: string; notes: string;
   relationshipTypeId: number | null; roleIds: number[]; status: 'active' | 'inactive';
 }
+// RESOLVED-DATA-SCOPE §7.3 — DF-admin-only inspector of a contact's effective
+// data boundary. Reflects the real ScopeDecider; fields the resolver doesn't
+// compute are null and listed in notModelled.
+export interface ResolvedDataScope {
+  contactId: number; displayName: string;
+  resolvedClientTypeId: number; resolvedClientTypeName: string;
+  scopeKind: 'Platform' | 'Tenant' | 'Np' | 'Customer' | 'Courier' | 'None';
+  summary: string;
+  homeClientId: number | null; homeClientName: string | null;
+  tenantClientId: number | null; tenantClientName: string | null;
+  npAgentId: number | null; npAgentName: string | null;
+  customerClientId: number | null; courierId: number | null;
+  canSeeDfAdmin: boolean; canCrossTenant: boolean;
+  canSeeChildClientsOnly: boolean | null; isInheritedFromParentClient: boolean | null;
+  resolutionSource: string; rules: string[]; notModelled: string[];
+}
 
 export const contactsApi = {
   list: (lane: string) => request<AdminContactRow[]>(`/admin/contacts?lane=${encodeURIComponent(lane)}`),
   get: (id: number | string) => request<AdminContactDetail>(`/admin/contacts/${id}`),
   permissions: (id: number | string) => request<AdminResolvedTile[]>(`/admin/contacts/${id}/permissions`),
   history: (id: number | string) => request<AdminContactAudit[]>(`/admin/contacts/${id}/history`),
+  dataScope: (id: number | string) => request<ResolvedDataScope>(`/admin/contacts/${id}/data-scope`),
   roles: (clientType: number) => request<AdminRoleOption[]>(`/admin/contacts/lookups/roles?clientType=${clientType}`),
   relationshipTypes: () => request<AdminRelType[]>('/admin/contacts/lookups/relationship-types'),
   clients: (lane: string) => request<AdminClientOption[]>(`/admin/contacts/lookups/clients?lane=${encodeURIComponent(lane)}`),

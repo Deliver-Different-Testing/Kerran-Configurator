@@ -4,13 +4,8 @@ import ComplianceProfiles from './ComplianceProfiles';
 import DocumentTypeSettings from './DocumentTypeSettings';
 import AgentComplianceTab from './AgentComplianceTab';
 import { DriverApproval } from '@/pages/tenant/DriverApproval';
-import { useComplianceAlerts, useComplianceDashboard } from '@/hooks/useCompliance';
-import {
-  NP_DOC_REQUIREMENTS,
-  getBusinessComplianceSummary,
-  useAgents,
-} from '@/pages/tenant/agentComplianceService';
-import type { BusinessOnboardingRecord } from '@/services/tenant_agentOnboardingService';
+import { useComplianceAlerts } from '@/hooks/useCompliance';
+import { useAgents } from '@/hooks/useAgents';
 import { driverApprovalService } from '@/services/np_driverApprovalService';
 
 type LegacyDriverTab = 'dashboard' | 'documents' | 'profiles' | 'approval';
@@ -77,11 +72,12 @@ export default function ComplianceHub({
   initialTab?: LegacyDriverTab;
   standalone?: boolean;
 }) {
-  const agents = useAgents();
-  // Onboarding now lives in the real API (tenant_agentOnboardingService); this
-  // still-mock NP compliance view no longer cross-references it.
-  const onboardingRecords: BusinessOnboardingRecord[] = [];
-  const { data: driverDashboard } = useComplianceDashboard();
+  // Real Agent/NP roster (identity / status / NP flag) — GET /api/v1/tenant/agents.
+  // Option-3 scope (mgmt, 2026-06-09): post-activation business-document
+  // compliance for Agents/NPs has no backend yet, so the doc-derived NP metrics
+  // and Agent/NP critical-issue rows that used to be computed from mock npDocs
+  // have been removed rather than fabricated. Driver compliance below is live.
+  const { agents } = useAgents();
   const { alerts: driverAlerts } = useComplianceAlerts();
   const pendingCount = driverApprovalService.getPendingCount();
 
@@ -96,98 +92,19 @@ export default function ComplianceHub({
     }
   }, [initialTab]);
 
-  const businessMetrics = useMemo(() => {
-    let missingRequired = 0;
-    let rejectedDocs = 0;
-    let pendingReview = 0;
-    let onboardingReview = 0;
-
+  const npMetrics = useMemo(() => {
+    const totalAgents = agents.length;
+    const networkPartners = agents.filter((agent) => agent.isNetworkPartner).length;
     const activeAgents = agents.filter((agent) => agent.status === 'Active').length;
     const pendingNp = agents.filter((agent) => agent.status === 'Pending NP').length;
+    return { totalAgents, networkPartners, activeAgents, pendingNp };
+  }, [agents]);
 
-    agents.forEach((agent) => {
-      const summary = getBusinessComplianceSummary(agent.npDocs);
-      pendingReview += summary.pendingDocuments;
-      rejectedDocs += summary.rejectedDocuments;
-      missingRequired += NP_DOC_REQUIREMENTS
-        .filter((requirement) => requirement.mandatory)
-        .filter((requirement) => agent.npDocs.find((document) => document.requirementId === requirement.id)?.status === 'missing').length;
-    });
-
-    onboardingReview = onboardingRecords.filter((record) => record.stage === 'Review In Progress').length;
-
-    return { activeAgents, pendingNp, missingRequired, rejectedDocs, pendingReview, onboardingReview };
-  }, [agents, onboardingRecords]);
-
+  // Critical items are driver-sourced only — Agent/NP business-document
+  // compliance has no backend yet (Option-3 scope), so it contributes no rows
+  // here rather than mock ones.
   const criticalItems = useMemo<CriticalItem[]>(() => {
     const items: CriticalItem[] = [];
-
-    agents.forEach((agent) => {
-      const summary = getBusinessComplianceSummary(agent.npDocs);
-      const missingDocs = NP_DOC_REQUIREMENTS
-        .filter((requirement) => requirement.mandatory)
-        .filter((requirement) => agent.npDocs.find((document) => document.requirementId === requirement.id)?.status === 'missing');
-
-      if (missingDocs.length > 0) {
-        items.push({
-          id: `agent-missing-${agent.id}`,
-          scope: 'Agent/NP',
-          severity: 'Critical',
-          title: `${agent.name} has missing required paperwork`,
-          detail: `${missingDocs.map((requirement) => requirement.name).join(', ')}.`,
-          owner: agent.contactName,
-          actionLabel: 'Review Agent/NP queue',
-          targetTab: 'agent-np',
-        });
-      }
-
-      if (summary.rejectedDocuments > 0) {
-        items.push({
-          id: `agent-rejected-${agent.id}`,
-          scope: 'Agent/NP',
-          severity: 'Urgent',
-          title: `${agent.name} has rejected business documents`,
-          detail: `${summary.rejectedDocuments} rejected documents need resubmission or override.`,
-          owner: agent.contactName,
-          actionLabel: 'Open Agent/NP roster',
-          targetTab: 'agent-np',
-        });
-      }
-
-      if (summary.pendingDocuments > 0) {
-        items.push({
-          id: `agent-review-${agent.id}`,
-          scope: 'Agent/NP',
-          severity: 'Watch',
-          title: `${agent.name} is waiting on document review`,
-          detail: `${summary.pendingDocuments} uploaded business documents remain in queue.`,
-          owner: agent.contactName,
-          actionLabel: 'Open Agent/NP roster',
-          targetTab: 'agent-np',
-        });
-      }
-    });
-
-    onboardingRecords
-      .filter((record) => !record.archived && ['Documents Requested', 'Documents Received', 'Review In Progress'].includes(record.stage))
-      .slice(0, 6)
-      .forEach((record) => {
-        const missingCount = record.complianceItems.filter((item) => item.status === 'missing').length;
-        if (missingCount === 0 && record.stage !== 'Review In Progress') return;
-
-        items.push({
-          id: `onboarding-${record.id}`,
-          scope: 'Agent/NP',
-          severity: record.stage === 'Review In Progress' ? 'Urgent' : 'Watch',
-          title: `${record.businessName} is in onboarding compliance`,
-          detail: record.stage === 'Review In Progress'
-            ? `Formal review is open with ${missingCount} unresolved documentation gaps.`
-            : `${missingCount} required onboarding items are still outstanding.`,
-          owner: record.owner,
-          actionLabel: 'Open onboarding queue',
-          targetTab: 'agent-np',
-        });
-      });
 
     driverAlerts
       .filter((alert) => ['Expired', 'Missing', 'Expiring'].includes(alert.alertStatus))
@@ -234,20 +151,22 @@ export default function ComplianceHub({
 
     const weight = { Critical: 0, Urgent: 1, Watch: 2 };
     return items.sort((a, b) => weight[a.severity] - weight[b.severity]).slice(0, 12);
-  }, [agents, driverAlerts, onboardingRecords, pendingCount]);
+  }, [driverAlerts, pendingCount]);
 
+  // Driver-sourced only — see Option-3 note above. Business-doc figures are not
+  // tracked yet, so they no longer feed these rollups.
   const topMetrics = useMemo(() => {
     const expiredDriverItems = driverAlerts.filter((alert) => alert.alertStatus === 'Expired').length;
     const missingDriverItems = driverAlerts.filter((alert) => alert.alertStatus === 'Missing').length;
     const expiringDriverItems = driverAlerts.filter((alert) => alert.alertStatus === 'Expiring').length;
 
     return {
-      expiredPaperwork: businessMetrics.missingRequired + businessMetrics.rejectedDocs + expiredDriverItems,
-      urgentReview: businessMetrics.pendingReview + businessMetrics.onboardingReview + pendingCount,
-      missingDocs: businessMetrics.missingRequired + missingDriverItems,
+      expiredPaperwork: expiredDriverItems,
+      urgentReview: pendingCount,
+      missingDocs: missingDriverItems,
       expiringLicenses: expiringDriverItems,
     };
-  }, [businessMetrics, driverAlerts, pendingCount]);
+  }, [driverAlerts, pendingCount]);
 
   const tabs: TabDef[] = [
     {
@@ -258,9 +177,6 @@ export default function ComplianceHub({
     {
       id: 'agent-np',
       label: 'Agent / NP Compliance',
-      badge: businessMetrics.missingRequired + businessMetrics.rejectedDocs > 0
-        ? businessMetrics.missingRequired + businessMetrics.rejectedDocs
-        : undefined,
     },
     {
       id: 'driver',
@@ -303,44 +219,49 @@ export default function ComplianceHub({
         ))}
       </div>
 
-      {/* NP-Level Compliance Summary */}
+      {/* NP-Level roster summary (real). Business-document compliance for
+          Agents/NPs is not tracked in the backend yet (Option-3 scope), so the
+          doc-health cards that used to sit here were removed — these are live
+          roster counts plus the driver-approval queue only. */}
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        Business-document compliance for Agents / NPs isn’t tracked yet. The figures here cover live
+        Agent / NP records and driver compliance only; per-NP document health will appear once agent
+        document tracking is built.
+      </div>
+
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard
-          label="NPs Compliant"
-          value={agents.filter((a) => (a.isNetworkPartner || a.status === 'Pending NP') && getBusinessComplianceSummary(a.npDocs).missingDocuments === 0 && getBusinessComplianceSummary(a.npDocs).rejectedDocuments === 0).length}
-          detail={`of ${agents.filter((a) => a.isNetworkPartner || a.status === 'Pending NP').length} total NPs`}
+          label="Network Partners"
+          value={npMetrics.networkPartners}
+          detail={`of ${npMetrics.totalAgents} agent records`}
+          tone="text-violet-700"
+        />
+        <MetricCard
+          label="Active Agents"
+          value={npMetrics.activeAgents}
+          detail="Live Agent / NP records in the network."
           tone="text-green-700"
         />
         <MetricCard
-          label="Expiring Certs (All NPs)"
-          value={agents.filter((a) => a.isNetworkPartner || a.status === 'Pending NP').reduce((sum, a) => sum + getBusinessComplianceSummary(a.npDocs).pendingDocuments, 0)}
-          detail="Pending review across all network partners"
+          label="Pending NP"
+          value={npMetrics.pendingNp}
+          detail="Businesses moving through NP approval."
           tone="text-amber-700"
         />
         <MetricCard
-          label="High-Risk NPs"
-          value={agents.filter((a) => {
-            if (!a.isNetworkPartner && a.status !== 'Pending NP') return false;
-            const s = getBusinessComplianceSummary(a.npDocs);
-            const missingMandatory = NP_DOC_REQUIREMENTS.filter((r) => r.mandatory).filter((r) => a.npDocs.find((d) => d.requirementId === r.id)?.status === 'missing').length;
-            return missingMandatory >= 2 || s.rejectedDocuments > 0;
-          }).length}
-          detail="NPs with 2+ missing mandatory docs or rejections"
-          tone="text-red-700"
-        />
-        <MetricCard
-          label="Active NPs"
-          value={businessMetrics.activeAgents}
-          detail={`${businessMetrics.pendingNp} pending activation`}
+          label="Driver Approvals"
+          value={pendingCount}
+          detail="Pending driver onboarding approvals."
+          tone="text-sky-700"
         />
       </div>
 
       {activeTab === 'overall' && (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <MetricCard label="Expired / Blocked" value={topMetrics.expiredPaperwork} detail="Expired paperwork, rejected docs, and hard compliance blocks." tone="text-red-700" />
-            <MetricCard label="Urgent Review" value={topMetrics.urgentReview} detail="Pending business review items plus driver approvals." tone="text-amber-700" />
-            <MetricCard label="Missing Required Docs" value={topMetrics.missingDocs} detail="Mandatory business and driver documents not on file." tone="text-red-700" />
+            <MetricCard label="Expired Driver Docs" value={topMetrics.expiredPaperwork} detail="Driver documents currently expired." tone="text-red-700" />
+            <MetricCard label="Driver Approvals" value={topMetrics.urgentReview} detail="Driver onboarding approvals waiting for action." tone="text-amber-700" />
+            <MetricCard label="Missing Driver Docs" value={topMetrics.missingDocs} detail="Mandatory driver documents not on file." tone="text-red-700" />
             <MetricCard label="Expiring Soon" value={topMetrics.expiringLicenses} detail="Driver licenses and other tracked items nearing expiry." tone="text-sky-700" />
           </div>
 

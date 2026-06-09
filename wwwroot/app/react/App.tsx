@@ -57,6 +57,9 @@ import TeamUsersPage from './pages/settings/TeamUsers';
 // Public (anonymous) routes — slice 2b external-carrier flow.
 import QuoteResponse from './pages/public/QuoteResponse';
 
+// Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder).
+import RateScheduleReport from './pages/reporting/RateSchedule';
+
 export default function App() {
   // All hooks first (Rules of Hooks — same call order every render).
   // AuthProvider wraps the app even for public routes; AuthContext returns
@@ -121,6 +124,8 @@ export default function App() {
             <Route path="settings/tenant-config" element={<TenantConfigPage />} />
             <Route path="settings/feature-matrix" element={<FeatureMatrixPage />} />
             <Route path="team" element={<TeamUsersPage />} />
+            <Route path="reporting" element={<Navigate to="/reporting/rate-schedule" replace />} />
+            <Route path="reporting/rate-schedule" element={<RateScheduleReport />} />
             <Route path="settings/roles" element={<RolesPage />} />
             <Route path="settings/role-permissions" element={<RolePermissionsPage />} />
             <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
@@ -191,6 +196,8 @@ export default function App() {
         <Routes>
           <Route element={<AppLayout onUpgrade={() => setUpgradeOpen(true)} selectedCourierId={selectedCourierId} />}>
             <Route index element={<TenantDashboard />} />
+            <Route path="reporting" element={<Navigate to="/reporting/rate-schedule" replace />} />
+            <Route path="reporting/rate-schedule" element={<RateScheduleReport />} />
             <Route path="agents" element={<AgentList />} />
             <Route path="agents/find" element={<AgentList />} />
             <Route path="agents/import" element={<AgentImport />} />

@@ -241,6 +241,15 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     });
   }
 
+  // Client Reporting — DF Admin + Tenant lanes (both use buildTenantSections).
+  // Rate Schedule is the first slice; the section is shaped to grow.
+  sections.push({
+    id: 'client-reporting', label: 'Client Reporting', icon: icons.reports,
+    items: [
+      { id: '/reporting/rate-schedule', label: 'Rate Schedule', implemented: true },
+    ],
+  });
+
   return sections;
 }
 

@@ -340,6 +340,12 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tena
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantProspectService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantRouteService>();
 
+// Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder)
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.ReportingLookupService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.RegionalRateService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.InternationalRateService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.RateScheduleService>();
+
 // Automation repository (CRUD for configurator UI — engine execution lives in separate AutomationEngine service)
 builder.Services.AddScoped<IAutomationRepository, AutomationRepository>();
 

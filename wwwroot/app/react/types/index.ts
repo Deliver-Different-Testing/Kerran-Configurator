@@ -72,6 +72,10 @@ export interface Courier {
   bankAcct: string;
   payPct: number;
   bonusPct: number;
+  // Sub-courier split percentages — shown on the Financial tab only when type === 'Sub'.
+  subContractorPercentage: number;
+  subContractorFuelPercentage: number;
+  subContractorBonusPercentage: number;
   paydayReg: boolean;
   contractSigned: string;
   securityCheck: string;

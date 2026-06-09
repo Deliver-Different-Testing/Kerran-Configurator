@@ -621,6 +621,9 @@ public class NpFleetService(
         c.UccrBankAccountNo = dto.BankAcct;
         c.UccrPercentage = dto.PayPct;
         c.BonusPercentage = dto.BonusPct;
+        c.SubContractorPercentage = dto.SubContractorPercentage;
+        c.SubContractorFuelPercentage = dto.SubContractorFuelPercentage;
+        c.SubContractorBonusPercentage = dto.SubContractorBonusPercentage;
         c.PaydayFileRegistration = dto.PaydayReg;
         c.UccrContractDate = dto.ContractSigned;
         c.UccrSecurityDate = dto.SecurityCheck;
@@ -719,6 +722,9 @@ public class NpFleetService(
         BankAcct = c.UccrBankAccountNo ?? string.Empty,
         PayPct = c.UccrPercentage,
         BonusPct = c.BonusPercentage,
+        SubContractorPercentage = c.SubContractorPercentage,
+        SubContractorFuelPercentage = c.SubContractorFuelPercentage,
+        SubContractorBonusPercentage = c.SubContractorBonusPercentage,
         PaydayReg = c.PaydayFileRegistration ?? false,
         ContractSigned = c.UccrContractDate,
         SecurityCheck = c.UccrSecurityDate,

@@ -617,11 +617,21 @@ export default function CourierSetup({ onSelectCourier }: Props) {
           </div>
 
           <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Pay Rates</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Pay Percentage (%)" {...bindNum('payPct')} />
-              <FormField label="Bonus Percentage (%)" {...bindNum('bonusPct')} />
-            </div>
+            <h3 className="text-sm font-semibold text-text-primary mb-4">
+              {c.type === 'Sub' ? 'Sub Pay Rates' : 'Pay Rates'}
+            </h3>
+            {c.type === 'Sub' ? (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Sub Pay Percentage (%)" {...bindNum('subContractorPercentage')} />
+                <FormField label="Sub Fuel Percentage (%)" {...bindNum('subContractorFuelPercentage')} />
+                <FormField label="Sub Bonus Percentage (%)" {...bindNum('subContractorBonusPercentage')} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Pay Percentage (%)" {...bindNum('payPct')} />
+                <FormField label="Bonus Percentage (%)" {...bindNum('bonusPct')} />
+              </div>
+            )}
             <div className="mt-3">
               <FormField label="Payroll Registration" type="checkbox" {...bindBool('paydayReg')} />
             </div>

@@ -92,6 +92,12 @@ public class NpFleetCourierDto
     public string BankAcct { get; set; } = string.Empty;
     public double? PayPct { get; set; }
     public decimal? BonusPct { get; set; }
+    // Sub-courier split percentages (tucCourier.SubContractor*Percentage,
+    // numeric(5,4)). Surfaced on the Financial tab only when CourierTypeId == 3
+    // (Sub); generic PayPct/BonusPct stay for every other role.
+    public decimal? SubContractorPercentage { get; set; }
+    public decimal? SubContractorFuelPercentage { get; set; }
+    public decimal? SubContractorBonusPercentage { get; set; }
     public bool PaydayReg { get; set; }
     public DateTime? ContractSigned { get; set; }
     public DateTime? SecurityCheck { get; set; }
@@ -213,6 +219,11 @@ public class NpFleetCourierUpdateDto
     public string BankAcct { get; set; } = string.Empty;
     public double? PayPct { get; set; }
     public decimal? BonusPct { get; set; }
+    // Sub-courier split percentages — editable on the Financial tab for Sub
+    // couriers (CourierTypeId == 3). Persisted to tucCourier.SubContractor*.
+    public decimal? SubContractorPercentage { get; set; }
+    public decimal? SubContractorFuelPercentage { get; set; }
+    public decimal? SubContractorBonusPercentage { get; set; }
     public bool PaydayReg { get; set; }
     public DateTime? ContractSigned { get; set; }
     public DateTime? SecurityCheck { get; set; }

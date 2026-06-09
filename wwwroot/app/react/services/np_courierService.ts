@@ -72,6 +72,9 @@ interface NpFleetCourierApi {
   bankAcct: string;
   payPct: number | null;
   bonusPct: number | null;
+  subContractorPercentage: number | null;
+  subContractorFuelPercentage: number | null;
+  subContractorBonusPercentage: number | null;
   paydayReg: boolean;
   contractSigned: string | null;
   securityCheck: string | null;
@@ -201,6 +204,9 @@ function toCourier(dto: NpFleetCourierApi): Courier {
     bankAcct: dto.bankAcct,
     payPct: dto.payPct ?? 0,
     bonusPct: dto.bonusPct ?? 0,
+    subContractorPercentage: dto.subContractorPercentage ?? 0,
+    subContractorFuelPercentage: dto.subContractorFuelPercentage ?? 0,
+    subContractorBonusPercentage: dto.subContractorBonusPercentage ?? 0,
     paydayReg: dto.paydayReg,
     contractSigned: dateOnly(dto.contractSigned),
     securityCheck: dateOnly(dto.securityCheck),
@@ -331,6 +337,9 @@ function toUpdatePayload(c: Partial<Courier>): Record<string, unknown> {
     bankAcct: c.bankAcct ?? '',
     payPct: numOrNull(c.payPct),
     bonusPct: numOrNull(c.bonusPct),
+    subContractorPercentage: numOrNull(c.subContractorPercentage),
+    subContractorFuelPercentage: numOrNull(c.subContractorFuelPercentage),
+    subContractorBonusPercentage: numOrNull(c.subContractorBonusPercentage),
     paydayReg: !!c.paydayReg,
     contractSigned: isoOrNull(c.contractSigned),
     securityCheck: isoOrNull(c.securityCheck),

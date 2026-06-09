@@ -75,9 +75,10 @@ public class RateScheduleService(
         }
 
         decimal markupMultiplier = 1m + ((decimal)request.Markup / 100m);
-        decimal ppdMultiplier = 1m;
-        if (!request.IncludePpd && clientInfo.PpdRate.HasValue && clientInfo.PpdRate.Value > 0)
-            ppdMultiplier = 1m - clientInfo.PpdRate.Value;
+        // PPD is applied inside UTL_fncJob_Rate via the @IncludePpd argument
+        // (the function divides by (1 - tucClient.PPDRate) when set). Do NOT
+        // re-apply it here or it double-counts. Fuel is likewise the function's
+        // job (@IncludeFuelSurcharge); only markup + GST are applied in C#.
 
         var ratingEnabledGroupIds = db.TucJobTypeGroupings
             .Where(g => g.RatingEnabled)
@@ -122,12 +123,12 @@ public class RateScheduleService(
 
                 decimal rawRate = await CallJobRateAsync(
                     db, request.ClientId, modFromId, modToId, jobType.UcjtId,
-                    modSize, modPedal, false, 0, today, request.IncludeFuelSurcharge, ct);
+                    modSize, modPedal, false, 0, today, request.IncludeFuelSurcharge, request.IncludePpd, ct);
 
                 string availability = await CallIsValidAsync(
                     db, jobType.UcjtId, modFromId, modToId, request.ClientId, modSize, ct);
 
-                decimal finalRate = Math.Round(rawRate * markupMultiplier * gstMultiplier * ppdMultiplier, 2);
+                decimal finalRate = Math.Round(rawRate * markupMultiplier * gstMultiplier, 2);
 
                 items.Add(new RateScheduleItem
                 {
@@ -255,7 +256,7 @@ public class RateScheduleService(
 
                 decimal rawRate = await CallJobRateAsync(
                     db, prospectClientId, modFromId, modToId, jobType.UcjtId,
-                    modSize, modPedal, false, 0, today, request.IncludeFuelSurcharge, ct);
+                    modSize, modPedal, false, 0, today, request.IncludeFuelSurcharge, false, ct);
 
                 string availability = await CallIsValidAsync(
                     db, jobType.UcjtId, modFromId, modToId, prospectClientId, modSize, ct);
@@ -364,15 +365,23 @@ public class RateScheduleService(
         return ((int)pFrom.Value, (int)pTo.Value, (int)pSize.Value, (int)pSpeed.Value, (bool)pPedal.Value);
     }
 
+    // Calls the legacy rating function. Current signature (dbmigrationsv2
+    // 20260423144029_ScheduleRerate) is 16 args, positional:
+    //   1 ClientID, 2 FromSuburbID, 3 ToSuburbID, 4 Speed(=jobTypeId), 5 Size,
+    //   6 Pedal, 7 Return, 8 Weight, 9 Date, 10 Booked(NULL), 11 IncludeFuelSurcharge,
+    //   12 OurRef(NULL), 13 ClientRefA(NULL), 14 ClientRefB(NULL), 15 Quantity(1),
+    //   16 IncludePpd.
+    // Scalar UDFs reject a short arg list even though @IncludePpd has a default,
+    // so all 16 must be supplied. The prototype targeted the older 15-arg version.
     private static async Task<decimal> CallJobRateAsync(
         DynamicDespatchDbContext db, int clientId, int fromSuburbId, int toSuburbId, int jobTypeId,
         int size, bool pedal, bool isReturn, int weight, DateTime date,
-        bool includeFuelSurcharge, CancellationToken ct)
+        bool includeFuelSurcharge, bool includePpd, CancellationToken ct)
     {
         const string sql = @"SELECT dbo.UTL_fncJob_Rate(
             @ClientID, @FromSuburbID, @ToSuburbID, @JobTypeID,
             @Size, @Pedal, @Return, @Weight, @Date,
-            NULL, @IncludeFuelSurcharge, NULL, NULL, NULL, NULL) AS Rate";
+            NULL, @IncludeFuelSurcharge, NULL, NULL, NULL, 1, @IncludePpd) AS Rate";
 
         var connection = db.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open) await db.Database.OpenConnectionAsync(ct);
@@ -388,6 +397,7 @@ public class RateScheduleService(
         cmd.Parameters.Add(new SqlParameter("@Weight",              weight));
         cmd.Parameters.Add(new SqlParameter("@Date",                date));
         cmd.Parameters.Add(new SqlParameter("@IncludeFuelSurcharge", includeFuelSurcharge));
+        cmd.Parameters.Add(new SqlParameter("@IncludePpd",          includePpd));
 
         var result = await cmd.ExecuteScalarAsync(ct);
         return result == null || result == DBNull.Value ? 0m : Convert.ToDecimal(result);

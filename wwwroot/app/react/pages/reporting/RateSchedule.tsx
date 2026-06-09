@@ -570,7 +570,7 @@ export default function RateSchedule() {
 
             <Toggle checked={includeGst} onChange={setIncludeGst} label="Include GST" />
             <Toggle checked={includeFuel} onChange={setIncludeFuel} label="Include Fuel Surcharge" />
-            <Toggle checked={includePpd} onChange={setIncludePpd} label="Exclude PPD" />
+            <Toggle checked={includePpd} onChange={setIncludePpd} label="Include PPD" />
 
             <div>
               <label className="block text-sm text-[#0d0c2c] mb-1">Markup %</label>

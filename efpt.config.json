@@ -179,6 +179,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tblSetting]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tblSite]",
          "ObjectType": 0
       },
@@ -256,6 +260,10 @@
       },
       {
          "Name": "[dbo].[tucJobType]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucJobTypeGrouping]",
          "ObjectType": 0
       },
       {

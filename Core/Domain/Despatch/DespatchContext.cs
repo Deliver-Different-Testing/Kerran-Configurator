@@ -91,6 +91,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<TblRelationshipType> TblRelationshipTypes { get; set; }
 
+    public virtual DbSet<TblSetting> TblSettings { get; set; }
+
     public virtual DbSet<TblSite> TblSites { get; set; }
 
     public virtual DbSet<TblUser> TblUsers { get; set; }
@@ -130,6 +132,8 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<TucJobStatus> TucJobStatuses { get; set; }
 
     public virtual DbSet<TucJobType> TucJobTypes { get; set; }
+
+    public virtual DbSet<TucJobTypeGrouping> TucJobTypeGroupings { get; set; }
 
     public virtual DbSet<TucNote> TucNotes { get; set; }
 
@@ -1391,11 +1395,6 @@ public partial class DespatchContext : DbContext
             entity.HasOne(d => d.TenantClient).WithMany(p => p.TblContactRoles)
                 .HasForeignKey(d => d.TenantClientId)
                 .HasConstraintName("FK_ContactRole_TenantClient");
-
-            // tblRoleClientType + tblContactContactRole are configured as
-            // explicit join entities in DynamicDespatchDbContext.OnModelCreating
-            // (hand-managed; excluded from efpt.config.json so regen won't
-            // re-collapse them into skip-nav m2m).
         });
 
         modelBuilder.Entity<TblRelationshipType>(entity =>
@@ -1407,6 +1406,267 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.Name)
                 .IsRequired()
                 .HasMaxLength(80);
+        });
+
+        modelBuilder.Entity<TblSetting>(entity =>
+        {
+            entity.HasKey(e => e.SettingId).IsClustered(false);
+
+            entity.ToTable("tblSetting");
+
+            entity.HasIndex(e => e.CourierInvoiceBatchPaymentTermId, "IX_CourierInvoiceBatchPaymentTermId");
+
+            entity.HasIndex(e => e.InvoiceTemplateId, "IX_InvoiceTemplateId");
+
+            entity.HasIndex(e => e.PaymentTermId, "IX_PaymentTermId");
+
+            entity.Property(e => e.SettingId).HasColumnName("SettingID");
+            entity.Property(e => e.AccountsCodeBonus).HasMaxLength(50);
+            entity.Property(e => e.AccountsCodePpd).HasMaxLength(50);
+            entity.Property(e => e.AccountsDescriptionBonus).HasMaxLength(50);
+            entity.Property(e => e.AccountsDescriptionPpd).HasMaxLength(50);
+            entity.Property(e => e.AccountsItemCodeBonus).HasMaxLength(50);
+            entity.Property(e => e.AccountsRefreshToken).HasMaxLength(200);
+            entity.Property(e => e.AccountsStartDate).HasPrecision(3);
+            entity.Property(e => e.AccountsTenantId).HasMaxLength(200);
+            entity.Property(e => e.AddressValidationPass).HasMaxLength(50);
+            entity.Property(e => e.AddressValidationUrl)
+                .HasMaxLength(200)
+                .HasColumnName("AddressValidationURL");
+            entity.Property(e => e.AddressValidationUser).HasMaxLength(50);
+            entity.Property(e => e.AdminEmail)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.AllowPostingToOa)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_tblSetting_AllowPostingToOA")
+                .HasColumnName("AllowPostingToOA");
+            entity.Property(e => e.ApplicationName)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.AutomaticUpdateLoading).HasAnnotation("Relational:DefaultConstraintName", "DF_tblSetting_AutomaticUpdateLoading");
+            entity.Property(e => e.BurstTheBubbleCourierId).HasColumnName("BurstTheBubbleCourierID");
+            entity.Property(e => e.ClientServiceProcessed).HasPrecision(3);
+            entity.Property(e => e.CommunicationFileDirectory)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.CompanyAddress).HasMaxLength(100);
+            entity.Property(e => e.CompanyBankNumber).HasMaxLength(100);
+            entity.Property(e => e.ComposerExtrasPath).HasMaxLength(500);
+            entity.Property(e => e.ContactUsEmailSubject)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.CountryCode).HasMaxLength(50);
+            entity.Property(e => e.CourierServiceProcessed).HasPrecision(3);
+            entity.Property(e => e.Created).HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.DataComClientId)
+                .HasMaxLength(50)
+                .HasColumnName("DataComClientID");
+            entity.Property(e => e.DefaultClass).HasMaxLength(50);
+            entity.Property(e => e.DefaultCourierWithholdingTaxPercentage).HasColumnType("decimal(8, 2)");
+            entity.Property(e => e.DefaultDateRange)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.DefaultItemCode).HasMaxLength(50);
+            entity.Property(e => e.DefaultItemCodeFuel).HasMaxLength(50);
+            entity.Property(e => e.DefaultRevenueAccount).HasMaxLength(50);
+            entity.Property(e => e.DespatchCheckContactHasEmail).HasAnnotation("Relational:DefaultConstraintName", "DF_tblSetting_DespatchCheckContactHasEmail");
+            entity.Property(e => e.DespatchUniqueEmailNotifyAddress).HasMaxLength(200);
+            entity.Property(e => e.DirectDebitBankAuthorisationCode).HasMaxLength(50);
+            entity.Property(e => e.DpspayRoot)
+                .HasMaxLength(200)
+                .HasColumnName("DPSPayRoot");
+            entity.Property(e => e.EnquiryEmail)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.EntryFormCount).HasAnnotation("Relational:DefaultConstraintName", "DF_tblSetting_EntryFormCount");
+            entity.Property(e => e.FaxHeadLogo)
+                .IsRequired()
+                .HasColumnType("image");
+            entity.Property(e => e.FaxHeadLogoSmall)
+                .IsRequired()
+                .HasColumnType("image");
+            entity.Property(e => e.GoogleAnalyticsCode).HasMaxLength(50);
+            entity.Property(e => e.GoogleMapApikey)
+                .HasMaxLength(200)
+                .HasColumnName("GoogleMapAPIKey");
+            entity.Property(e => e.GoogleMapGeneratorRoot).HasMaxLength(200);
+            entity.Property(e => e.GoogleMapRoot).HasMaxLength(50);
+            entity.Property(e => e.GooglePlaceAutocompleteApikey)
+                .HasMaxLength(200)
+                .HasColumnName("GooglePlaceAutocompleteAPIKey");
+            entity.Property(e => e.GoogleSmtpserver)
+                .HasMaxLength(50)
+                .HasColumnName("GoogleSMTPServer");
+            entity.Property(e => e.GoogleSmtpserverActive).HasColumnName("GoogleSMTPServerActive");
+            entity.Property(e => e.GoogleSmtpserverPass)
+                .HasMaxLength(20)
+                .HasColumnName("GoogleSMTPServerPass");
+            entity.Property(e => e.GoogleSmtpserverUser)
+                .HasMaxLength(50)
+                .HasColumnName("GoogleSMTPServerUser");
+            entity.Property(e => e.Gstrate)
+                .HasColumnType("decimal(18, 3)")
+                .HasColumnName("GSTRate");
+            entity.Property(e => e.GstregistrationNumber)
+                .HasMaxLength(100)
+                .HasColumnName("GSTRegistrationNumber");
+            entity.Property(e => e.InboundUrl).HasMaxLength(2048);
+            entity.Property(e => e.InternetClientDetailsEmail)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.InternetClientDetailsSubject)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.InternetInvoiceReportId).HasColumnName("InternetInvoiceReportID");
+            entity.Property(e => e.InternetInvoiceSignatureReportId).HasColumnName("InternetInvoiceSignatureReportID");
+            entity.Property(e => e.InternetJobEmailSubject)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.InternetJobPoaemail)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasColumnName("InternetJobPOAEmail");
+            entity.Property(e => e.InternetJobPoaemailSubject)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasColumnName("InternetJobPOAEmailSubject");
+            entity.Property(e => e.InternetJobStaffId).HasColumnName("InternetJobStaffID");
+            entity.Property(e => e.InternetRateScheduleReportId).HasColumnName("InternetRateScheduleReportID");
+            entity.Property(e => e.InternetRoot)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.InternetStatementReportId).HasColumnName("InternetStatementReportID");
+            entity.Property(e => e.InvoiceMemo).HasMaxLength(100);
+            entity.Property(e => e.JobDetailsReplyFromEmail)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.JobFeedbackSubject)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.JobPackingReportId).HasColumnName("JobPackingReportID");
+            entity.Property(e => e.JoinOurTeamEmail)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.JoinOurTeamReplyAttachment).HasMaxLength(500);
+            entity.Property(e => e.JoinOurTeamReplyFromEmail)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.JoinOurTeamReplyMessage)
+                .IsRequired()
+                .HasColumnType("ntext");
+            entity.Property(e => e.JoinOurTeamReplySubject)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.JoinOurTeamSubject)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.JournalCreatedBy).HasMaxLength(50);
+            entity.Property(e => e.JournalEntityCode).HasMaxLength(10);
+            entity.Property(e => e.JournalNarration).HasMaxLength(100);
+            entity.Property(e => e.JournalTransactionCode).HasMaxLength(10);
+            entity.Property(e => e.LastJobArchive).HasPrecision(3);
+            entity.Property(e => e.LastModified).HasColumnType("datetime");
+            entity.Property(e => e.LastModifiedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.LetterHeadLogo)
+                .IsRequired()
+                .HasColumnType("image");
+            entity.Property(e => e.MapRoot).HasMaxLength(200);
+            entity.Property(e => e.MinFlightKms).HasColumnName("MinFlightKMs");
+            entity.Property(e => e.NationwideAreaId).HasColumnName("NationwideAreaID");
+            entity.Property(e => e.NewsImageDirectory)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.Notes).HasColumnType("ntext");
+            entity.Property(e => e.OpenforceActivationCode).HasMaxLength(100);
+            entity.Property(e => e.OpenforceApiKey).HasMaxLength(50);
+            entity.Property(e => e.OpenforceClientGuid).HasMaxLength(50);
+            entity.Property(e => e.OpenforceClientId).HasMaxLength(100);
+            entity.Property(e => e.OpenforceDefault).HasAnnotation("Relational:DefaultConstraintName", "DF_TblSettings_OpenforceDefault");
+            entity.Property(e => e.ParentJobCourierId).HasColumnName("ParentJobCourierID");
+            entity.Property(e => e.PpdAppliedDescription)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.PpdCode).HasMaxLength(50);
+            entity.Property(e => e.PpdDescription)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.PpdItemCode).HasMaxLength(50);
+            entity.Property(e => e.QuickBooksRefreshToken).HasMaxLength(200);
+            entity.Property(e => e.RateGuideCommunicationTypeId).HasColumnName("RateGuideCommunicationTypeID");
+            entity.Property(e => e.RatesGuideImagePath).HasMaxLength(500);
+            entity.Property(e => e.ReceivableAccount).HasMaxLength(100);
+            entity.Property(e => e.ReportDomain)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.ReportFolder).HasMaxLength(100);
+            entity.Property(e => e.ReportPassword)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.ReportServicesUrl)
+                .HasMaxLength(100)
+                .HasColumnName("ReportServicesURL");
+            entity.Property(e => e.ReportUserName)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Smtpserver)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasColumnName("SMTPServer");
+            entity.Property(e => e.SqlerrorEmailAddress)
+                .HasMaxLength(500)
+                .HasColumnName("SQLErrorEmailAddress");
+            entity.Property(e => e.SqlerrorMobile)
+                .HasMaxLength(500)
+                .HasColumnName("SQLErrorMobile");
+            entity.Property(e => e.StaffImageDirectory)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.StatementBccEmailAddress).HasMaxLength(500);
+            entity.Property(e => e.StatementDirectory).HasMaxLength(500);
+            entity.Property(e => e.StatementEmailAddress).HasMaxLength(100);
+            entity.Property(e => e.StatementOutputDirectory).HasMaxLength(200);
+            entity.Property(e => e.StatementReport).HasMaxLength(500);
+            entity.Property(e => e.StatementSubject).HasMaxLength(200);
+            entity.Property(e => e.SystemName)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.ToolTipImageDirectory)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.TrackAndTrackReplyFromEmail)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.TrackingUrl).HasMaxLength(2048);
+            entity.Property(e => e.UncheckDirectEmailMessage)
+                .IsRequired()
+                .HasColumnType("ntext");
+            entity.Property(e => e.UncheckDirectEmailReply)
+                .IsRequired()
+                .HasMaxLength(200);
+            entity.Property(e => e.UncheckDirectEmailSubject)
+                .IsRequired()
+                .HasMaxLength(200);
+            entity.Property(e => e.UtadditionalFileImageDirectory)
+                .HasMaxLength(100)
+                .HasColumnName("UTAdditionalFileImageDirectory");
+            entity.Property(e => e.UtadditionalFileStyleDirectory)
+                .HasMaxLength(100)
+                .HasColumnName("UTAdditionalFileStyleDirectory");
+            entity.Property(e => e.UtlogoImagePath)
+                .HasMaxLength(100)
+                .HasColumnName("UTLogoImagePath");
+            entity.Property(e => e.UtstyleSheetPath)
+                .HasMaxLength(100)
+                .HasColumnName("UTStyleSheetPath");
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .HasMaxLength(10);
+            entity.Property(e => e.XeroServiceRefreshToken).HasMaxLength(200);
         });
 
         modelBuilder.Entity<TblSite>(entity =>
@@ -2232,9 +2492,6 @@ public partial class DespatchContext : DbContext
             entity.HasOne(d => d.UcctClient).WithMany(p => p.TucClientContacts)
                 .HasForeignKey(d => d.UcctClientId)
                 .HasConstraintName("FK_tucClientContact_tucClient");
-
-            // tblContactContactRole join entity configured explicitly in
-            // DynamicDespatchDbContext.OnModelCreating (see note above).
         });
 
         modelBuilder.Entity<TucCourier>(entity =>
@@ -4205,6 +4462,23 @@ public partial class DespatchContext : DbContext
                 .HasColumnName("ucjtUnitRate");
             entity.Property(e => e.WebJobEntry).HasAnnotation("Relational:DefaultConstraintName", "DF_tucJobType_WebJobEntry");
             entity.Property(e => e.WebServiceEntry).HasAnnotation("Relational:DefaultConstraintName", "DF_tucJobType_WebServiceEntry");
+
+            entity.HasOne(d => d.Grouping).WithMany(p => p.TucJobTypes)
+                .HasForeignKey(d => d.GroupingId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__tucJobTyp__Group__1F3A56BC");
+        });
+
+        modelBuilder.Entity<TucJobTypeGrouping>(entity =>
+        {
+            entity.HasKey(e => e.GroupingId).HasName("PK__tucJobTy__573C11ED01D93790");
+
+            entity.ToTable("tucJobTypeGrouping");
+
+            entity.Property(e => e.GroupingId).HasColumnName("GroupingID");
+            entity.Property(e => e.GroupingName)
+                .IsRequired()
+                .HasMaxLength(100);
         });
 
         modelBuilder.Entity<TucNote>(entity =>

@@ -1,17 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAgents } from '@/hooks/useAgents';
+import { useAgentComplianceRoster } from '@/hooks/useAgentCompliance';
+import type { AgentRiskLevel } from '@/services/np_agentComplianceService';
 import type { AgentStatus } from '@/types';
 
 // Agent / NP compliance roster.
 //
-// Option-3 scope (mgmt, 2026-06-09): the agent identity / status / NP roster is
-// now REAL (GET /api/v1/tenant/agents via useAgents). Post-activation business-
-// document compliance (the old NP_DOC_REQUIREMENTS / npDocs matrix) has no
-// backend yet, so the doc-health, review-queue, risk and driver-exposure columns
-// — all previously derived from in-memory mock data — have been removed rather
-// than shown as fabricated numbers. A notice flags the gap. Driver compliance
-// remains on its own live tab in ComplianceHub.
+// Identity / status / NP roster is REAL (GET /api/v1/tenant/agents via useAgents).
+// Business-document compliance is now REAL too (Phase 1): per-NP doc-health is
+// sourced from GET /api/v1/np/compliance/agents/roster and joined by agentId.
+// Driver compliance remains on its own live tab in ComplianceHub.
 
 const STATUS_TONE: Record<AgentStatus, string> = {
   Active: 'bg-green-100 text-green-700',
@@ -23,25 +22,11 @@ const STATUS_TONE: Record<AgentStatus, string> = {
   Archived: 'bg-gray-100 text-gray-500',
 };
 
-function MetricCard({
-  label,
-  value,
-  detail,
-  tone = 'text-text-primary',
-}: {
-  label: string;
-  value: number | string;
-  detail: string;
-  tone?: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-muted">{label}</div>
-      <div className={`mt-3 text-3xl font-bold ${tone}`}>{value}</div>
-      <div className="mt-2 text-sm text-text-secondary">{detail}</div>
-    </div>
-  );
-}
+const RISK_TONE: Record<AgentRiskLevel, string> = {
+  High: 'bg-red-100 text-red-700',
+  Medium: 'bg-amber-100 text-amber-700',
+  Low: 'bg-green-100 text-green-700',
+};
 
 function SectionCard({
   title,
@@ -65,16 +50,9 @@ function SectionCard({
 
 export default function AgentComplianceTab() {
   const { agents, loading } = useAgents();
+  const { byId: complianceById } = useAgentComplianceRoster();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-
-  const metrics = useMemo(() => {
-    const totalAgents = agents.length;
-    const networkPartners = agents.filter((agent) => agent.isNetworkPartner).length;
-    const livePartners = agents.filter((agent) => agent.status === 'Active').length;
-    const pendingNp = agents.filter((agent) => agent.status === 'Pending NP').length;
-    return { totalAgents, networkPartners, livePartners, pendingNp };
-  }, [agents]);
 
   const filteredRows = useMemo(() => agents.filter((agent) => {
     const haystack = `${agent.name} ${agent.contactName} ${agent.city} ${agent.state}`.toLowerCase();
@@ -85,20 +63,6 @@ export default function AgentComplianceTab() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard label="Live Partners" value={metrics.livePartners} detail="Active Agent / NP records in the network." tone="text-green-700" />
-        <MetricCard label="Network Partners" value={metrics.networkPartners} detail="Agents flagged as Network Partners." tone="text-violet-700" />
-        <MetricCard label="Pending NP" value={metrics.pendingNp} detail="Businesses still moving through NP approval." tone="text-amber-700" />
-        <MetricCard label="Total Agents" value={metrics.totalAgents} detail="All Agent / NP records on file." />
-      </div>
-
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Business-document compliance for Agents / NPs isn’t tracked in the backend yet. This roster
-        shows live Agent / NP records only — per-NP document health, review queue and risk scoring
-        will appear here once agent document tracking is built. Driver compliance is live on the
-        <span className="font-semibold"> Driver Compliance</span> tab.
-      </div>
-
       <SectionCard
         title="Agent / NP Roster"
         subtitle="Live operational roster of Agent / NP records sourced from the tenant directory."
@@ -133,6 +97,8 @@ export default function AgentComplianceTab() {
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Business</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Status</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Network Partner</th>
+                <th className="px-3 py-3 text-left font-semibold text-text-muted">Doc Compliance</th>
+                <th className="px-3 py-3 text-left font-semibold text-text-muted">Risk</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Association</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Actions</th>
               </tr>
@@ -140,11 +106,11 @@ export default function AgentComplianceTab() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-text-muted">Loading Agent / NP records…</td>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-text-muted">Loading Agent / NP records…</td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-text-muted">No Agent / NP records match the current filters.</td>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-text-muted">No Agent / NP records match the current filters.</td>
                 </tr>
               ) : filteredRows.map((agent) => (
                 <tr key={agent.id} className="border-b border-border last:border-b-0">
@@ -166,6 +132,32 @@ export default function AgentComplianceTab() {
                       <span className="text-xs text-text-muted">—</span>
                     )}
                   </td>
+                  {(() => {
+                    const c = complianceById.get(agent.id);
+                    return (
+                      <>
+                        <td className="px-3 py-3">
+                          {c ? (
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-200">
+                                <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${c.compliancePercent}%` }} />
+                              </div>
+                              <span className="text-xs text-text-secondary">{c.summary.approvedMandatoryDocuments}/{c.summary.mandatoryDocuments}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          {c ? (
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${RISK_TONE[c.riskLevel]}`}>{c.riskLevel}</span>
+                          ) : (
+                            <span className="text-xs text-text-muted">—</span>
+                          )}
+                        </td>
+                      </>
+                    );
+                  })()}
                   <td className="px-3 py-3 text-text-secondary">
                     {agent.association && agent.association !== 'None' ? agent.association : <span className="text-text-muted">—</span>}
                   </td>

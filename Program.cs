@@ -300,6 +300,8 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.N
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpRegistrationSiteService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpApplicantService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.CourierDocumentService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.AgentDocumentService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpAgentComplianceService>();
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpScopeResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpScopeResolver>();

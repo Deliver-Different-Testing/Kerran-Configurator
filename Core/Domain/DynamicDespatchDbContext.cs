@@ -23,6 +23,11 @@ namespace DfrntDriveConfigurator.Core.Domain
         public virtual DbSet<TucAgentOnboardingCompliance> TucAgentOnboardingCompliances { get; set; }
         public virtual DbSet<TucAgentOnboardingTimeline> TucAgentOnboardingTimelines { get; set; }
 
+        // Agent/NP post-activation business-document compliance (2026-06-10).
+        // Hand-authored entity (database/040), configured here so it survives
+        // EFPT regen (not in efpt.config.json).
+        public virtual DbSet<TucAgentDocument> TucAgentDocuments { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -103,6 +108,20 @@ namespace DfrntDriveConfigurator.Core.Domain
                     .HasForeignKey(e => e.UcaoId)
                     .OnDelete(DeleteBehavior.Cascade)
                     .HasConstraintName("FK_tucAgentOnboardingTimeline_tucAgentOnboarding");
+            });
+
+            modelBuilder.Entity<TucAgentDocument>(entity =>
+            {
+                entity.HasKey(e => e.UcadId);
+                entity.ToTable("tucAgentDocument");
+                // PascalCase columns match property names (database/040) — no
+                // per-property HasColumnName needed. Only the DocumentType join
+                // is configured; the AgentId FK is enforced by the DB constraint
+                // and queried as a plain int (no nav, to avoid widening tucAgent).
+                entity.HasOne(e => e.DocumentType).WithMany()
+                    .HasForeignKey(e => e.DocumentTypeId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_tucAgentDocument_DocumentType");
             });
         }
     }

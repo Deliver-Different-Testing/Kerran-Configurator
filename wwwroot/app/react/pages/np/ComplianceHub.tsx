@@ -6,6 +6,7 @@ import AgentComplianceTab from './AgentComplianceTab';
 import { DriverApproval } from '@/pages/tenant/DriverApproval';
 import { useComplianceAlerts } from '@/hooks/useCompliance';
 import { useAgents } from '@/hooks/useAgents';
+import { useAgentComplianceRoster } from '@/hooks/useAgentCompliance';
 import { driverApprovalService } from '@/services/np_driverApprovalService';
 
 type LegacyDriverTab = 'dashboard' | 'documents' | 'profiles' | 'approval';
@@ -73,12 +74,12 @@ export default function ComplianceHub({
   standalone?: boolean;
 }) {
   // Real Agent/NP roster (identity / status / NP flag) — GET /api/v1/tenant/agents.
-  // Option-3 scope (mgmt, 2026-06-09): post-activation business-document
-  // compliance for Agents/NPs has no backend yet, so the doc-derived NP metrics
-  // and Agent/NP critical-issue rows that used to be computed from mock npDocs
-  // have been removed rather than fabricated. Driver compliance below is live.
+  // Business-document compliance for Agents/NPs is now live (Phase 1) — per-NP
+  // doc-health comes from GET /api/v1/np/compliance/agents/* and feeds the
+  // Agent/NP metric cards + critical-issue rows below. Driver compliance is live.
   const { agents } = useAgents();
   const { alerts: driverAlerts } = useComplianceAlerts();
+  const { byId: agentComplianceById } = useAgentComplianceRoster();
   const pendingCount = driverApprovalService.getPendingCount();
 
   const initialHubTab: HubTab = initialTab ? 'driver' : 'overall';
@@ -97,14 +98,31 @@ export default function ComplianceHub({
     const networkPartners = agents.filter((agent) => agent.isNetworkPartner).length;
     const activeAgents = agents.filter((agent) => agent.status === 'Active').length;
     const pendingNp = agents.filter((agent) => agent.status === 'Pending NP').length;
-    return { totalAgents, networkPartners, activeAgents, pendingNp };
-  }, [agents]);
+    const highRiskNps = agents.filter((agent) => agentComplianceById.get(agent.id)?.riskLevel === 'High').length;
+    const missingNpDocs = agents.reduce((sum, agent) => sum + (agentComplianceById.get(agent.id)?.summary.missingDocuments ?? 0), 0);
+    return { totalAgents, networkPartners, activeAgents, pendingNp, highRiskNps, missingNpDocs };
+  }, [agents, agentComplianceById]);
 
-  // Critical items are driver-sourced only — Agent/NP business-document
-  // compliance has no backend yet (Option-3 scope), so it contributes no rows
-  // here rather than mock ones.
+  // Critical items combine live Agent/NP business-document compliance (high-risk
+  // NPs — missing or rejected mandatory docs) with the live driver alerts.
   const criticalItems = useMemo<CriticalItem[]>(() => {
     const items: CriticalItem[] = [];
+
+    agents.forEach((agent) => {
+      const c = agentComplianceById.get(agent.id);
+      if (!c || c.riskLevel !== 'High') return;
+      const gaps = c.summary.missingDocuments + c.summary.rejectedDocuments;
+      items.push({
+        id: `agentnp-${agent.id}`,
+        scope: 'Agent/NP',
+        severity: 'Critical',
+        title: `${agent.name} has ${gaps} mandatory document${gaps === 1 ? '' : 's'} outstanding`,
+        detail: `${c.summary.approvedMandatoryDocuments}/${c.summary.mandatoryDocuments} required documents approved · ${c.summary.missingDocuments} missing · ${c.summary.rejectedDocuments} rejected.`,
+        owner: 'Agent / NP compliance',
+        actionLabel: 'Open Agent / NP compliance',
+        targetTab: 'agent-np',
+      });
+    });
 
     driverAlerts
       .filter((alert) => ['Expired', 'Missing', 'Expiring'].includes(alert.alertStatus))
@@ -151,7 +169,7 @@ export default function ComplianceHub({
 
     const weight = { Critical: 0, Urgent: 1, Watch: 2 };
     return items.sort((a, b) => weight[a.severity] - weight[b.severity]).slice(0, 12);
-  }, [driverAlerts, pendingCount]);
+  }, [agents, agentComplianceById, driverAlerts, pendingCount]);
 
   // Driver-sourced only — see Option-3 note above. Business-doc figures are not
   // tracked yet, so they no longer feed these rollups.
@@ -219,16 +237,7 @@ export default function ComplianceHub({
         ))}
       </div>
 
-      {/* NP-Level roster summary (real). Business-document compliance for
-          Agents/NPs is not tracked in the backend yet (Option-3 scope), so the
-          doc-health cards that used to sit here were removed — these are live
-          roster counts plus the driver-approval queue only. */}
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Business-document compliance for Agents / NPs isn’t tracked yet. The figures here cover live
-        Agent / NP records and driver compliance only; per-NP document health will appear once agent
-        document tracking is built.
-      </div>
-
+      {/* NP-Level roster + live business-document compliance summary. */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard
           label="Network Partners"
@@ -237,15 +246,15 @@ export default function ComplianceHub({
           tone="text-violet-700"
         />
         <MetricCard
-          label="Active Agents"
-          value={npMetrics.activeAgents}
-          detail="Live Agent / NP records in the network."
-          tone="text-green-700"
+          label="High-Risk NPs"
+          value={npMetrics.highRiskNps}
+          detail="Missing or rejected mandatory documents."
+          tone="text-red-700"
         />
         <MetricCard
-          label="Pending NP"
-          value={npMetrics.pendingNp}
-          detail="Businesses moving through NP approval."
+          label="Missing NP Docs"
+          value={npMetrics.missingNpDocs}
+          detail="Required Agent / NP documents not on file."
           tone="text-amber-700"
         />
         <MetricCard

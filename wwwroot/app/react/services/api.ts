@@ -302,6 +302,8 @@ export interface AdminContactDetail {
   id: number; firstName: string; lastName: string; email: string; jobTitle: string;
   mobile: string; directDial: string; notes: string; relationshipTypeId: number | null;
   roleIds: number[]; status: 'active' | 'inactive'; clientId: number | null; clientName: string; clientTypeId: number;
+  // Only present on the create response — the Hub-identity/invite outcome notice.
+  inviteNotice?: string | null;
 }
 export interface AdminResolvedPerm { key: string; displayName: string; level: number; }
 export interface AdminResolvedTile { key: string; displayName: string; level: number; items: AdminResolvedPerm[]; }

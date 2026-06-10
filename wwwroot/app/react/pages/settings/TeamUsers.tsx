@@ -182,7 +182,7 @@ function ContactModal({ contactId, lane, onClose }: { contactId: number | 'new';
       relationshipTypeId: d.relationshipTypeId, roleIds: d.roleIds, status: d.status,
     };
     try {
-      if (isNew) { await contactsApi.create(body); onClose('Contact added.'); }
+      if (isNew) { const created = await contactsApi.create(body); onClose(created?.inviteNotice ?? 'Contact added.'); }
       else { await contactsApi.update(contactId, body); onClose('Changes saved.'); }
     } catch (e: any) {
       const code = e?.response?.data?.error ?? e?.message;

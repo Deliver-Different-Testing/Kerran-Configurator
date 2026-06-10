@@ -38,7 +38,12 @@ public record NpInviteResult(
 
 public interface INpUserInviteService
 {
-    Task<NpInviteResult> InviteAsync(string email, CancellationToken cancellationToken = default);
+    // isNetworkPartner selects the Hub provisioning endpoint:
+    //   true  -> POST /api/admin/users         (Master.User IsNetworkPartner=true)
+    //   false -> POST /api/admin/users/tenant  (tenant/DF-admin user, IsNetworkPartner=false)
+    // Defaults to true so the original NP cascade callers are unchanged.
+    Task<NpInviteResult> InviteAsync(
+        string email, bool isNetworkPartner = true, CancellationToken cancellationToken = default);
 }
 
 public class NpUserInviteService(
@@ -46,7 +51,8 @@ public class NpUserInviteService(
     IHttpContextAccessor httpContextAccessor,
     AppSettings appSettings) : INpUserInviteService
 {
-    public async Task<NpInviteResult> InviteAsync(string email, CancellationToken cancellationToken = default)
+    public async Task<NpInviteResult> InviteAsync(
+        string email, bool isNetworkPartner = true, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(email))
             return new NpInviteResult(false, false, null, "Email is required.");
@@ -72,7 +78,8 @@ public class NpUserInviteService(
                 "CurrentTenantID claim missing — Hub invite cascade cannot resolve the tenant for the new user.");
         }
 
-        var url = $"{appSettings.HubBaseUrl}/api/admin/users";
+        var route = isNetworkPartner ? "/api/admin/users" : "/api/admin/users/tenant";
+        var url = $"{appSettings.HubBaseUrl}{route}";
         var client = httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(30);
 

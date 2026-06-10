@@ -49,6 +49,11 @@ public class NpUserDetailDto
     public int? ClientId { get; set; }
     public string ClientName { get; set; } = string.Empty;
     public int ClientTypeId { get; set; }   // drives clientType-aware role lookup in the modal
+
+    // Populated only by the multi-lane Team & Users create cascade
+    // (AdminContactService.CreateAsync) to surface the Hub-identity/invite
+    // outcome in the success toast. Null for every other load path.
+    public string? InviteNotice { get; set; }
 }
 
 // Update — modal Save (Profile tab). Mutable class per [FromBody] convention.

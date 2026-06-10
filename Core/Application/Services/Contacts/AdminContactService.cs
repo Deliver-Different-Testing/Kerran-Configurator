@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Authorization;
 using DfrntDriveConfigurator.Core.Application.Dtos.Contacts;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
+using DfrntDriveConfigurator.Core.Application.Services.Common;
 using DfrntDriveConfigurator.Core.Application.Services.Permissions;
 using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
@@ -21,9 +22,11 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Contacts;
 public class AdminContactService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
     IRolePermissionResolver rolePermissionResolver,
+    INpUserInviteService npUserInviteService,
     IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
 {
     private static readonly int[] LaneAll = { 3, 4, 5 };   // NP, Tenant, DFAdmin (never Customer 2)
+    private const int NetworkPartnerClientType = 3;        // selects the Hub NP vs tenant invite endpoint
 
     private static int[] LaneTypes(string lane) => lane?.ToLowerInvariant() switch
     {
@@ -291,7 +294,32 @@ public class AdminContactService(
         if (err is not null) return (null, err);
         Context.TblContactAudits.Add(Audit(contact.UcctId, "Created", null, FullName(contact)));
         await Context.SaveChangesAsync();
-        return (await GetDetailAsync(contact.UcctId), null);
+
+        // Hub identity cascade. The tenant-side tucClientContact now exists and is
+        // committed; provision the matching Master.User in Hub (+ invite email) so
+        // the new user can actually log in / reset their password. Without this,
+        // a contact created here has no Hub identity and forgot-password fails at
+        // GetUserByEmail. The NP lane (ClientType 3) targets Hub's NP endpoint;
+        // tenant (4) and DF-admin (5) target /api/admin/users/tenant. Non-fatal:
+        // the contact is already created, so an invite failure surfaces as a
+        // notice rather than rolling back.
+        var detail = await GetDetailAsync(contact.UcctId);
+        var invite = await npUserInviteService.InviteAsync(
+            email, isNetworkPartner: client.ClientTypeId == NetworkPartnerClientType);
+        if (detail is not null) detail.InviteNotice = InviteNotice(invite, email);
+        return (detail, null);
+    }
+
+    // Maps the three Hub-invite outcome states to an operator-facing notice,
+    // mirroring TenantAgentService.FireHubInviteAsync. Surfaced in the success
+    // toast on the Team & Users page (the contact itself was created either way).
+    private static string InviteNotice(NpInviteResult invite, string email)
+    {
+        if (invite.FullySucceeded)
+            return $"Contact added. Hub login provisioned and an invite email was sent to {email}.";
+        if (invite.PartialSuccess)
+            return $"Contact added. Hub login provisioned (id {invite.HubUserId}) but the invite email did NOT send — re-issue the invite from Hub admin.";
+        return $"Contact added, but the Hub login was NOT provisioned: {invite.FailureMessage} The contact cannot log in until this is resolved.";
     }
 
     public async Task<(NpUserDetailDto? detail, string? error)> UpdateAsync(int contactId, AdminContactUpdateDto dto)

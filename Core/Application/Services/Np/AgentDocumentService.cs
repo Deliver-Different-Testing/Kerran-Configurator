@@ -29,7 +29,8 @@ public class AgentDocumentService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
     INpScopeResolver scopeResolver,
     IS3StorageService storage,
-    IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
+    IHttpContextAccessor httpContextAccessor,
+    IAgentDocumentAiReviewer aiReviewer) : BaseService(contextFactory)
 {
     // ─── LIST ────────────────────────────────────────────────────────────
 
@@ -142,6 +143,13 @@ public class AgentDocumentService(
             }
             return Fail(messageId, "Could not save document metadata.");
         }
+
+        // Advisory AI review (Phase 3) — runs post-save and writes an expiry +
+        // accept/reject SUGGESTION onto the row's Ai* columns (never changes
+        // VerifyStatus). Guarded + no-op without an API key, so an AI problem can
+        // never fail the upload. Inline so the suggestion is in the response.
+        try { await aiReviewer.ReviewAsync(row.UcadId, ct); }
+        catch (Exception ex) { Log.Warning(ex, "AI review threw for agent document {Id} — continuing.", row.UcadId); }
 
         return await ReadByIdAsync(row.UcadId, messageId, ct);
     }

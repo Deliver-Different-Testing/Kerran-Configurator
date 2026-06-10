@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AssociationBadge } from '@/components/common/AssociationBadge';
 import { TierBadge } from '@/components/tenant/TierBadge';
 import type { BusinessComplianceDocument, TenantCourier } from '@/types';
 import { Modal } from '@/components/tenant/Modal';
 import {
-  NP_DOC_REQUIREMENTS,
   archiveAgent,
   getAgentStatusTone,
   getBusinessComplianceSummary,
@@ -14,6 +13,12 @@ import {
   getDriversForAgent,
   type AgentWorkspaceRecord,
 } from '@/pages/tenant/agentComplianceService';
+import { useAgentComplianceDetail } from '@/hooks/useAgentCompliance';
+import {
+  staffAgentDocsApi,
+  type AgentComplianceDetail,
+  type AgentDocument,
+} from '@/services/np_agentComplianceService';
 
 type WorkspaceTab = 'overview' | 'agent-np-compliance' | 'drivers' | 'driver-compliance';
 
@@ -293,66 +298,153 @@ function OverviewTab({ agent, drivers }: { agent: AgentWorkspaceRecord; drivers:
   );
 }
 
-function ComplianceTab({ agent }: { agent: AgentWorkspaceRecord }) {
-  const summary = getBusinessComplianceSummary(agent.npDocs);
+function aiTone(decision?: string | null): string {
+  switch (decision) {
+    case 'accept': return 'bg-green-50 text-green-700 ring-1 ring-green-200';
+    case 'reject': return 'bg-red-50 text-red-700 ring-1 ring-red-200';
+    default: return 'bg-slate-50 text-slate-600 ring-1 ring-slate-200';
+  }
+}
+function aiLabel(decision?: string | null): string {
+  switch (decision) {
+    case 'accept': return 'AI: Accept';
+    case 'reject': return 'AI: Reject';
+    case 'needs_review': return 'AI: Needs review';
+    default: return 'AI: —';
+  }
+}
+
+// Real business-document compliance + staff review. detail (requirements +
+// summary) comes from /api/v1/np/compliance/agents/:id; the document instances
+// (with their Pending/Verified/Rejected status + the advisory AI suggestion)
+// come from /api/v1/np/agents/:id/documents. Staff verify/reject here.
+function ComplianceTab({ agentId, detail, onChanged }: {
+  agentId: number;
+  detail: AgentComplianceDetail | null;
+  onChanged: () => void;
+}) {
+  const [docs, setDocs] = useState<AgentDocument[]>([]);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [rejectFor, setRejectFor] = useState<AgentDocument | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const loadDocs = useCallback(async () => {
+    try { setDocs(await staffAgentDocsApi.list(agentId)); } catch { /* surfaced via empty state */ }
+  }, [agentId]);
+  useEffect(() => { loadDocs(); }, [loadDocs]);
+
+  // Latest active doc per type (server already filters IsActive).
+  const docByType = useMemo(() => {
+    const m = new Map<number, AgentDocument>();
+    [...docs].sort((a, b) => b.uploadedDate.localeCompare(a.uploadedDate))
+      .forEach((d) => { if (!m.has(d.documentTypeId)) m.set(d.documentTypeId, d); });
+    return m;
+  }, [docs]);
+
+  const summary = detail?.summary;
+  const requirements = detail?.requirements ?? [];
+
+  const after = async () => { await loadDocs(); onChanged(); setBusyId(null); };
+  const onVerify = async (d: AgentDocument) => {
+    setBusyId(d.id);
+    try { await staffAgentDocsApi.verify(agentId, d.id); } finally { await after(); }
+  };
+  const confirmReject = async () => {
+    if (!rejectFor) return;
+    const id = rejectFor.id;
+    setBusyId(id);
+    setRejectFor(null);
+    try { await staffAgentDocsApi.reject(agentId, id, rejectReason.trim() || 'Rejected'); }
+    finally { setRejectReason(''); await after(); }
+  };
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <StatCard label="Required Approved" value={`${summary.approvedMandatoryDocuments}/${summary.mandatoryDocuments}`} />
-        <StatCard label="Pending Review" value={summary.pendingDocuments} />
-        <StatCard label="Rejected" value={summary.rejectedDocuments} />
-        <StatCard label="Missing" value={summary.missingDocuments} />
-        <StatCard label="Linked Onboarding" value={agent.onboardingRecordId ? `#${agent.onboardingRecordId}` : 'None'} />
+        <StatCard label="Required Approved" value={summary ? `${summary.approvedMandatoryDocuments}/${summary.mandatoryDocuments}` : '—'} />
+        <StatCard label="Pending Review" value={summary?.pendingDocuments ?? '—'} />
+        <StatCard label="Rejected" value={summary?.rejectedDocuments ?? '—'} />
+        <StatCard label="Missing" value={summary?.missingDocuments ?? '—'} />
+        <StatCard label="NP Score" value={detail ? `${detail.overallScorePercent}%` : '—'} detail={detail ? `docs ${detail.compliancePercent}% · fleet ${detail.courierCompliancePercent}%` : undefined} />
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="w-full min-w-[920px] text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <thead>
             <tr className="border-b border-border bg-slate-50">
               <th className="px-3 py-2.5 text-left font-medium text-text-muted">Requirement</th>
               <th className="px-3 py-2.5 text-left font-medium text-text-muted">Required</th>
               <th className="px-3 py-2.5 text-left font-medium text-text-muted">Status</th>
-              <th className="px-3 py-2.5 text-left font-medium text-text-muted">Uploaded</th>
-              <th className="px-3 py-2.5 text-left font-medium text-text-muted">Reviewed</th>
-              <th className="px-3 py-2.5 text-left font-medium text-text-muted">Source</th>
-              <th className="px-3 py-2.5 text-left font-medium text-text-muted">Notes</th>
+              <th className="px-3 py-2.5 text-left font-medium text-text-muted">AI suggestion</th>
+              <th className="px-3 py-2.5 text-left font-medium text-text-muted">Expiry</th>
+              <th className="px-3 py-2.5 text-left font-medium text-text-muted">File</th>
+              <th className="px-3 py-2.5 text-left font-medium text-text-muted">Action</th>
             </tr>
           </thead>
           <tbody>
-            {NP_DOC_REQUIREMENTS.map((requirement) => {
-              // Defensive fallback: if the agent has no docs (e.g. live-data
-              // agents from the DB before document tracking is wired), render
-              // each requirement as 'missing' rather than crashing on the
-              // non-null assertion.
-              const document = agent.npDocs?.find((item) => item.requirementId === requirement.id) ?? {
-                requirementId: requirement.id,
-                status: 'missing' as const,
-                source: 'directory' as const,
-              };
-
+            {requirements.map((req) => {
+              const doc = docByType.get(req.documentTypeId);
+              const pending = doc?.verifyStatus === 'Pending';
               return (
-                <tr key={requirement.id} className="border-b border-border last:border-b-0">
-                  <td className="px-3 py-3">
-                    <div className="font-semibold text-text-primary">{requirement.name}</div>
-                    <div className="text-xs text-text-secondary">{requirement.description}</div>
+                <tr key={req.documentTypeId} className="border-b border-border last:border-b-0">
+                  <td className="px-3 py-3 font-semibold text-text-primary">
+                    {req.documentTypeName}
+                    {req.source === 'onboarding' && <span className="ml-2 text-xs font-normal text-text-muted">(from onboarding)</span>}
                   </td>
-                  <td className="px-3 py-3">{requirement.mandatory ? 'Required' : 'Optional'}</td>
+                  <td className="px-3 py-3">{req.mandatory ? 'Required' : 'Optional'}</td>
                   <td className="px-3 py-3">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${complianceTone(document.status)}`}>
-                      {complianceLabel(document.status)}
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${complianceTone(req.status as BusinessComplianceDocument['status'])}`}>
+                      {complianceLabel(req.status as BusinessComplianceDocument['status'])}
                     </span>
                   </td>
-                  <td className="px-3 py-3">{document.uploadedDate || '—'}</td>
-                  <td className="px-3 py-3">{document.reviewedDate || '—'}</td>
-                  <td className="px-3 py-3">{document.source === 'onboarding' ? 'Onboarding' : 'Directory'}</td>
-                  <td className="px-3 py-3 text-text-secondary">{document.notes || '—'}</td>
+                  <td className="px-3 py-3">
+                    {doc?.aiSuggestedDecision ? (
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${aiTone(doc.aiSuggestedDecision)}`} title={doc.aiRationale ?? ''}>
+                        {aiLabel(doc.aiSuggestedDecision)}
+                        {doc.aiSuggestedExpiry ? ` · exp ${doc.aiSuggestedExpiry}` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-text-secondary">
+                    {req.expiryDate ? <span className={req.isExpired ? 'text-red-600' : req.isExpiring ? 'text-amber-600' : ''}>{req.expiryDate}</span> : '—'}
+                  </td>
+                  <td className="px-3 py-3">
+                    {doc ? (
+                      <a href={staffAgentDocsApi.downloadUrl(agentId, doc.id)} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand-cyan hover:underline">Download</a>
+                    ) : <span className="text-xs text-text-muted">—</span>}
+                  </td>
+                  <td className="px-3 py-3">
+                    {pending && doc ? (
+                      <div className="flex gap-2">
+                        <button onClick={() => onVerify(doc)} disabled={busyId === doc.id} className="rounded-lg bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50">Verify</button>
+                        <button onClick={() => setRejectFor(doc)} disabled={busyId === doc.id} className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50">Reject</button>
+                      </div>
+                    ) : doc?.verifyStatus === 'Rejected' ? (
+                      <span className="text-xs text-red-600" title={doc.rejectReason}>Rejected</span>
+                    ) : doc?.verifyStatus === 'Verified' ? (
+                      <span className="text-xs text-green-700">Verified</span>
+                    ) : <span className="text-xs text-text-muted">—</span>}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {rejectFor && (
+        <Modal isOpen onClose={() => { setRejectFor(null); setRejectReason(''); }} title="Reject document" size="sm" footer={
+          <>
+            <button onClick={() => { setRejectFor(null); setRejectReason(''); }} className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary">Cancel</button>
+            <button onClick={confirmReject} className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700">Reject document</button>
+          </>
+        }>
+          <p className="text-sm text-text-secondary mb-3">Tell the NP why <strong>{rejectFor.documentTypeName}</strong> was rejected so they can re-upload.</p>
+          <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} placeholder="Reason for rejection…" className="w-full rounded-lg border border-border px-3 py-2 text-sm" />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -461,8 +553,8 @@ export function AgentWorkspace({
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
   const drivers = useMemo(() => getDriversForAgent(agent.id), [agent.id]);
-  const complianceSummary = getBusinessComplianceSummary(agent.npDocs);
-  const compliancePercentage = getCompliancePercentage(agent.npDocs);
+  const { detail, refresh: refreshDetail } = useAgentComplianceDetail(agent.id);
+  const summary = detail?.summary;
 
   const tabs: { id: WorkspaceTab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
@@ -496,10 +588,10 @@ export function AgentWorkspace({
           </div>
 
           <div className={`grid gap-2 ${variant === 'page' ? 'min-w-[320px] grid-cols-2 lg:grid-cols-4' : 'min-w-[240px] grid-cols-2'}`}>
-            <StatCard label="Compliance" value={`${complianceSummary.approvedMandatoryDocuments}/${complianceSummary.mandatoryDocuments}`} detail={`${compliancePercentage}% required approved`} />
+            <StatCard label="Compliance" value={summary ? `${summary.approvedMandatoryDocuments}/${summary.mandatoryDocuments}` : '—'} detail={detail ? `${detail.overallScorePercent}% NP score` : undefined} />
             <StatCard label="Drivers" value={drivers.length} />
-            <StatCard label="Pending Review" value={complianceSummary.pendingDocuments} />
-            <StatCard label="Rejected / Missing" value={complianceSummary.rejectedDocuments + complianceSummary.missingDocuments} />
+            <StatCard label="Pending Review" value={summary?.pendingDocuments ?? '—'} />
+            <StatCard label="Rejected / Missing" value={summary ? summary.rejectedDocuments + summary.missingDocuments : '—'} />
           </div>
         </div>
 
@@ -520,7 +612,7 @@ export function AgentWorkspace({
 
       <div className={variant === 'page' ? '' : 'mt-4'}>
         {activeTab === 'overview' && <OverviewTab agent={agent} drivers={drivers} />}
-        {activeTab === 'agent-np-compliance' && <ComplianceTab agent={agent} />}
+        {activeTab === 'agent-np-compliance' && <ComplianceTab agentId={agent.id} detail={detail} onChanged={refreshDetail} />}
         {activeTab === 'drivers' && <DriversTab drivers={drivers} />}
         {activeTab === 'driver-compliance' && <DriverComplianceTab drivers={drivers} />}
       </div>

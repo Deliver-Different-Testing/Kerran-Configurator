@@ -119,6 +119,30 @@ export const myAgentDocsApi = {
   },
 };
 
+// Tenant-staff / DF-admin document review (Phase 1 controller +
+// Phase 3a AI suggestion). agentId is in the URL; staff can verify/reject.
+// Backed by /api/v1/np/agents/{agentId}/documents.
+export const staffAgentDocsApi = {
+  async list(agentId: number): Promise<AgentDocument[]> {
+    const { data } = await api.get<AgentDocument[]>(`/agents/${agentId}/documents`);
+    return data;
+  },
+
+  async verify(agentId: number, id: number): Promise<AgentDocument> {
+    const { data } = await api.put<AgentDocument>(`/agents/${agentId}/documents/${id}/verify`);
+    return data;
+  },
+
+  async reject(agentId: number, id: number, reason: string): Promise<AgentDocument> {
+    const { data } = await api.put<AgentDocument>(`/agents/${agentId}/documents/${id}/reject`, { reason });
+    return data;
+  },
+
+  downloadUrl(agentId: number, id: number): string {
+    return `/api/v1/np/agents/${agentId}/documents/${id}/download`;
+  },
+};
+
 export const agentComplianceApi = {
   async getDashboard(): Promise<AgentComplianceDashboard> {
     const { data } = await api.get<AgentComplianceDashboard>('/compliance/agents/dashboard');

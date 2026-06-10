@@ -67,6 +67,37 @@ public class ReportingLookupService(
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<CourierSearchResult>> SearchCouriersAsync(
+        string term, int limit = 20, CancellationToken ct = default)
+    {
+        var scope = await scopeResolver.ResolveAsync();
+        if (!scope.IsAdmin && scope.NpAgentId is null)
+            return Array.Empty<CourierSearchResult>();
+
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+
+        var query = db.TucCouriers.AsNoTracking()
+            .Where(c => c.Active &&
+                        (c.Code.StartsWith(term) || c.UccrName.Contains(term) || c.UccrSurname.Contains(term)));
+
+        if (!scope.IsAdmin)
+            query = query.Where(c => c.NpAgentId == scope.NpAgentId);
+
+        var rows = await query
+            .OrderBy(c => c.Code.StartsWith(term) ? 0 : 1)
+            .ThenBy(c => c.UccrSurname)
+            .Take(limit)
+            .Select(c => new { c.UccrId, c.Code, c.UccrName, c.UccrSurname })
+            .ToListAsync(ct);
+
+        return rows.Select(c => new CourierSearchResult
+        {
+            Id = c.UccrId,
+            Code = c.Code,
+            Name = $"{c.UccrName} {c.UccrSurname}".Trim(),
+        }).ToList();
+    }
+
     public async Task<IReadOnlyList<SiteResult>> GetSitesAsync(CancellationToken ct = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(ct);

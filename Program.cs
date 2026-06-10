@@ -347,6 +347,7 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Repo
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.InternationalRateService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.RateScheduleService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.ClientMonthlyReportService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.CourierJobDetailReportService>();
 // Shared report-rendering package (QuestPDF docs + ClosedXML + tenant branding).
 // ITenantBrandingService pulls per-tenant branding from Hub. The configurator
 // exposes this as HubBaseUrl (K8S_SECRET_HubBaseUrl); AdminManager uses HubUrl.

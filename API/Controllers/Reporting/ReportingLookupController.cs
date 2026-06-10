@@ -37,6 +37,24 @@ public class ReportingLookupController(ReportingLookupService lookupService) : B
         }
     }
 
+    [HttpGet("couriers")]
+    public async Task<IActionResult> SearchCouriers([FromQuery] string? q, [FromQuery] int limit = 20, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+            return Ok(Array.Empty<object>());
+
+        try
+        {
+            var results = await lookupService.SearchCouriersAsync(q.Trim(), limit, ct);
+            return Ok(results);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to search reporting couriers for term {Term}", q);
+            throw;
+        }
+    }
+
     [HttpGet("sites")]
     public async Task<IActionResult> GetSites(CancellationToken ct)
     {

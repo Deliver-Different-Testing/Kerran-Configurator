@@ -37,7 +37,8 @@ public class AgentDocRequirementStatusDto
     public int? DocumentId { get; set; }              // tucAgentDocument.UcadId when source = upload
     public string? ExpiryDate { get; set; }           // ISO "yyyy-MM-dd" or null
     public int? DaysUntilExpiry { get; set; }
-    public bool IsExpiring { get; set; }              // approved + within warning window
+    public bool IsExpiring { get; set; }              // approved + within warning (orange) window
+    public bool IsExpiringUrgent { get; set; }        // approved + within urgent (red) window
     public bool IsExpired { get; set; }
 }
 

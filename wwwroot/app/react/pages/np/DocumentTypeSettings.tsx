@@ -42,6 +42,7 @@ interface EditState {
   mandatory: boolean;
   hasExpiry: boolean;
   expiryWarningDays: number;
+  expiryUrgentDays: number;
   blockOnExpiry: boolean;
   appliesTo: DocumentAppliesTo;
   sortOrder: number;
@@ -61,6 +62,7 @@ const emptyEdit: EditState = {
   mandatory: false,
   hasExpiry: false,
   expiryWarningDays: 30,
+  expiryUrgentDays: 7,
   blockOnExpiry: false,
   appliesTo: 'Both',
   sortOrder: 0,
@@ -89,6 +91,7 @@ export default function DocumentTypeSettings() {
       mandatory: dt.mandatory,
       hasExpiry: dt.hasExpiry,
       expiryWarningDays: dt.expiryWarningDays,
+      expiryUrgentDays: dt.expiryUrgentDays ?? 7,
       blockOnExpiry: dt.blockOnExpiry,
       appliesTo: dt.appliesTo,
       sortOrder: dt.sortOrder,
@@ -112,6 +115,7 @@ export default function DocumentTypeSettings() {
         mandatory: editing.mandatory,
         hasExpiry: editing.hasExpiry,
         expiryWarningDays: editing.expiryWarningDays,
+        expiryUrgentDays: editing.expiryUrgentDays,
         blockOnExpiry: editing.blockOnExpiry,
         appliesTo: editing.appliesTo,
         sortOrder: editing.sortOrder,
@@ -533,7 +537,7 @@ export default function DocumentTypeSettings() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1">Sort Order</label>
                   <input
@@ -544,13 +548,24 @@ export default function DocumentTypeSettings() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1">Warning Days</label>
+                  <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1">Warning Days (orange)</label>
                   <input
                     type="number"
                     value={editing.expiryWarningDays}
                     onChange={(e) => setEditing({ ...editing, expiryWarningDays: Number(e.target.value) })}
                     className="w-full border border-border rounded-md px-3 py-2 text-sm"
                     disabled={!editing.hasExpiry}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1">Urgent Days (red)</label>
+                  <input
+                    type="number"
+                    value={editing.expiryUrgentDays}
+                    onChange={(e) => setEditing({ ...editing, expiryUrgentDays: Number(e.target.value) })}
+                    className="w-full border border-border rounded-md px-3 py-2 text-sm"
+                    disabled={!editing.hasExpiry}
+                    title="Within this many days of expiry, the status turns red (≤ warning days)."
                   />
                 </div>
               </div>

@@ -453,6 +453,7 @@ export interface DocumentType {
   active: boolean;
   hasExpiry: boolean;
   expiryWarningDays: number;
+  expiryUrgentDays?: number;
   blockOnExpiry: boolean;
   appliesTo: DocumentAppliesTo;
   sortOrder: number;

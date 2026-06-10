@@ -408,7 +408,7 @@ function ComplianceTab({ agentId, detail, onChanged }: {
                     )}
                   </td>
                   <td className="px-3 py-3 text-text-secondary">
-                    {req.expiryDate ? <span className={req.isExpired ? 'text-red-600' : req.isExpiring ? 'text-amber-600' : ''}>{req.expiryDate}</span> : '—'}
+                    {req.expiryDate ? <span className={(req.isExpired || req.isExpiringUrgent) ? 'text-red-600' : req.isExpiring ? 'text-amber-600' : ''}>{req.expiryDate}</span> : '—'}
                   </td>
                   <td className="px-3 py-3">
                     {doc ? (

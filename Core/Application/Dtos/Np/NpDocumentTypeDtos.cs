@@ -17,6 +17,7 @@ public class NpDocumentTypeDto
     public bool Active { get; set; }
     public bool HasExpiry { get; set; }
     public int ExpiryWarningDays { get; set; }
+    public int ExpiryUrgentDays { get; set; }
     public bool BlockOnExpiry { get; set; }
     public string AppliesTo { get; set; } = "Both";
     public int SortOrder { get; set; }
@@ -46,6 +47,7 @@ public class NpDocumentTypeUpsertDto
     public bool Active { get; set; } = true;
     public bool HasExpiry { get; set; }
     public int ExpiryWarningDays { get; set; } = 30;
+    public int ExpiryUrgentDays { get; set; } = 7;
     public bool BlockOnExpiry { get; set; }
     public string AppliesTo { get; set; } = "Both";
     public int SortOrder { get; set; }

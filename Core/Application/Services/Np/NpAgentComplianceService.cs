@@ -26,6 +26,7 @@ public class NpAgentComplianceService(
     NpComplianceService courierCompliance) : BaseService(contextFactory)
 {
     private const int ExpiryWarningDaysFallback = 30;
+    private const int ExpiryUrgentDaysFallback = 7;
 
     // NP score weighting (Steve, 2026-06-10): courier roll-up is the real risk.
     private const decimal DocWeight = 0.25m;
@@ -179,10 +180,12 @@ public class NpAgentComplianceService(
                     var diff = exp.DayNumber - today.DayNumber;
                     row.DaysUntilExpiry = diff;
                     var warn = dt.ExpiryWarningDays > 0 ? dt.ExpiryWarningDays : ExpiryWarningDaysFallback;
+                    var urgent = dt.ExpiryUrgentDays > 0 ? dt.ExpiryUrgentDays : ExpiryUrgentDaysFallback;
                     if (row.Status == "approved")
                     {
                         row.IsExpired = diff < 0;
-                        row.IsExpiring = diff >= 0 && diff <= warn;
+                        row.IsExpiringUrgent = diff >= 0 && diff <= urgent;   // red band
+                        row.IsExpiring = diff >= 0 && diff <= warn;           // orange band (superset)
                     }
                 }
             }
@@ -275,7 +278,7 @@ public class NpAgentComplianceService(
         await Context.DocumentTypes.AsNoTracking()
             .Where(d => d.IsActive && (d.AppliesTo == "NP" || d.AppliesTo == "All"))
             .OrderBy(d => d.SortOrder).ThenBy(d => d.Name)
-            .Select(d => new DocTypeSnapshot(d.Id, d.Name ?? string.Empty, d.Category ?? "Other", d.Mandatory, d.ExpiryWarningDays))
+            .Select(d => new DocTypeSnapshot(d.Id, d.Name ?? string.Empty, d.Category ?? "Other", d.Mandatory, d.ExpiryWarningDays, d.ExpiryUrgentDays))
             .ToListAsync(ct);
 
     private async Task<Dictionary<int, List<DocSnapshot>>> LoadAgentDocsAsync(IReadOnlyCollection<int> agentIds, CancellationToken ct)
@@ -314,6 +317,6 @@ public class NpAgentComplianceService(
 
     // ─── Records ─────────────────────────────────────────────────────────
 
-    private sealed record DocTypeSnapshot(int Id, string Name, string Category, bool Mandatory, int ExpiryWarningDays);
+    private sealed record DocTypeSnapshot(int Id, string Name, string Category, bool Mandatory, int ExpiryWarningDays, int ExpiryUrgentDays);
     private sealed record DocSnapshot(int Id, int DocTypeId, string VerifyStatus, DateOnly? Expiry, DateTime UploadedDate);
 }

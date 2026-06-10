@@ -190,7 +190,7 @@ export default function MyComplianceDocuments() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-text-secondary">
-                        {r.expiryDate ? <span className={r.isExpired ? 'text-red-600' : r.isExpiring ? 'text-amber-600' : ''}>{r.expiryDate}</span> : '—'}
+                        {r.expiryDate ? <span className={(r.isExpired || r.isExpiringUrgent) ? 'text-red-600' : r.isExpiring ? 'text-amber-600' : ''}>{r.expiryDate}</span> : '—'}
                       </td>
                       <td className="px-3 py-3">
                         {docId ? (

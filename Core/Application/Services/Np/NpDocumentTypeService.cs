@@ -217,6 +217,7 @@ public class NpDocumentTypeService(
         e.IsActive = dto.Active;
         e.HasExpiry = dto.HasExpiry;
         e.ExpiryWarningDays = dto.ExpiryWarningDays;
+        e.ExpiryUrgentDays = dto.ExpiryUrgentDays;
         e.BlockOnExpiry = dto.BlockOnExpiry;
         e.AppliesTo = string.IsNullOrWhiteSpace(dto.AppliesTo) ? "Both" : dto.AppliesTo;
         e.SortOrder = dto.SortOrder;
@@ -239,6 +240,7 @@ public class NpDocumentTypeService(
         Active = d.IsActive,
         HasExpiry = d.HasExpiry,
         ExpiryWarningDays = d.ExpiryWarningDays,
+        ExpiryUrgentDays = d.ExpiryUrgentDays,
         BlockOnExpiry = d.BlockOnExpiry,
         AppliesTo = d.AppliesTo ?? "Both",
         SortOrder = d.SortOrder,

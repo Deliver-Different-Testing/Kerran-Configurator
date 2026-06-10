@@ -29,7 +29,8 @@ export interface AgentDocRequirementStatus {
   documentId?: number | null;
   expiryDate?: string | null;
   daysUntilExpiry?: number | null;
-  isExpiring: boolean;
+  isExpiring: boolean;        // within the warning (orange) window
+  isExpiringUrgent: boolean;  // within the urgent (red) window
   isExpired: boolean;
 }
 

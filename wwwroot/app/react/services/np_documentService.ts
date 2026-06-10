@@ -26,6 +26,7 @@ interface DocumentTypeApi {
   active: boolean;
   hasExpiry: boolean;
   expiryWarningDays: number;
+  expiryUrgentDays: number;
   blockOnExpiry: boolean;
   appliesTo: string;
   sortOrder: number;
@@ -51,6 +52,7 @@ function toDocumentType(d: DocumentTypeApi): DocumentType {
     active: d.active,
     hasExpiry: d.hasExpiry,
     expiryWarningDays: d.expiryWarningDays,
+    expiryUrgentDays: d.expiryUrgentDays,
     blockOnExpiry: d.blockOnExpiry,
     appliesTo: (d.appliesTo || 'Both') as DocumentAppliesTo,
     sortOrder: d.sortOrder,
@@ -78,6 +80,7 @@ function toUpsert(p: Partial<DocumentType>) {
     active: p.active ?? true,
     hasExpiry: !!p.hasExpiry,
     expiryWarningDays: p.expiryWarningDays ?? 30,
+    expiryUrgentDays: p.expiryUrgentDays ?? 7,
     blockOnExpiry: !!p.blockOnExpiry,
     appliesTo: p.appliesTo ?? 'Both',
     sortOrder: p.sortOrder ?? 0,

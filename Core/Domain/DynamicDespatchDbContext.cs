@@ -110,11 +110,14 @@ namespace DfrntDriveConfigurator.Core.Domain
                     .HasConstraintName("FK_tucAgentOnboardingTimeline_tucAgentOnboarding");
             });
 
-            // Phase 3b — map the hand-authored DocumentType.ReviewCriteria column
-            // (database/041) onto the EFPT-scaffolded entity. Survives regen.
-            modelBuilder.Entity<DocumentType>()
-                .Property(e => e.ReviewCriteria)
-                .HasColumnName("ReviewCriteria");
+            // Phase 3b/4b — map the hand-authored DocumentType.ReviewCriteria
+            // (database/041) + ExpiryUrgentDays (database/042) columns onto the
+            // EFPT-scaffolded entity. Survives regen.
+            modelBuilder.Entity<DocumentType>(e =>
+            {
+                e.Property(d => d.ReviewCriteria).HasColumnName("ReviewCriteria");
+                e.Property(d => d.ExpiryUrgentDays).HasColumnName("ExpiryUrgentDays");
+            });
 
             modelBuilder.Entity<TucAgentDocument>(entity =>
             {

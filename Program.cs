@@ -348,11 +348,19 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Repo
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.RateScheduleService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.ClientMonthlyReportService>();
 // Shared report-rendering package (QuestPDF docs + ClosedXML + tenant branding).
-// ITenantBrandingService pulls per-tenant branding from Hub (reuses HubBaseUrl).
-builder.Services.AddTenantBranding(opts =>
+// ITenantBrandingService pulls per-tenant branding from Hub. The configurator
+// exposes this as HubBaseUrl (K8S_SECRET_HubBaseUrl); AdminManager uses HubUrl.
+// Guarded so a missing/blank value can't crash app startup (the package throws
+// "BrandingApiBaseUrl setup is required") — report endpoints fail instead.
+var brandingApiBaseUrl = builder.Configuration["HubBaseUrl"];
+if (!string.IsNullOrWhiteSpace(brandingApiBaseUrl))
 {
-    opts.BrandingApiBaseUrl = builder.Configuration["HubBaseUrl"] ?? string.Empty;
-});
+    builder.Services.AddTenantBranding(opts => opts.BrandingApiBaseUrl = brandingApiBaseUrl);
+}
+else
+{
+    Log.Warning("HubBaseUrl not set — Client Reporting tenant branding is unavailable; report generation will fail until it is configured.");
+}
 
 // Automation repository (CRUD for configurator UI — engine execution lives in separate AutomationEngine service)
 builder.Services.AddScoped<IAutomationRepository, AutomationRepository>();

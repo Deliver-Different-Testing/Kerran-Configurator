@@ -28,6 +28,13 @@ const RISK_TONE: Record<AgentRiskLevel, string> = {
   Low: 'bg-green-100 text-green-700',
 };
 
+// Blended 25/75 NP score colour: green ≥ 80, amber ≥ 50, red below.
+function scoreTone(pct: number): string {
+  if (pct >= 80) return 'text-green-700';
+  if (pct >= 50) return 'text-amber-700';
+  return 'text-red-700';
+}
+
 function SectionCard({
   title,
   subtitle,
@@ -98,6 +105,7 @@ export default function AgentComplianceTab() {
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Status</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Network Partner</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Doc Compliance</th>
+                <th className="px-3 py-3 text-left font-semibold text-text-muted">NP Score</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Risk</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Association</th>
                 <th className="px-3 py-3 text-left font-semibold text-text-muted">Actions</th>
@@ -106,11 +114,11 @@ export default function AgentComplianceTab() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-text-muted">Loading Agent / NP records…</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-text-muted">Loading Agent / NP records…</td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-text-muted">No Agent / NP records match the current filters.</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-text-muted">No Agent / NP records match the current filters.</td>
                 </tr>
               ) : filteredRows.map((agent) => (
                 <tr key={agent.id} className="border-b border-border last:border-b-0">
@@ -143,6 +151,16 @@ export default function AgentComplianceTab() {
                                 <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${c.compliancePercent}%` }} />
                               </div>
                               <span className="text-xs text-text-secondary">{c.summary.approvedMandatoryDocuments}/{c.summary.mandatoryDocuments}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          {c ? (
+                            <div>
+                              <span className={`text-base font-bold ${scoreTone(c.overallScorePercent)}`}>{c.overallScorePercent}%</span>
+                              <div className="text-[11px] text-text-muted">docs {c.compliancePercent}% · fleet {c.courierCompliancePercent}%</div>
                             </div>
                           ) : (
                             <span className="text-xs text-text-muted">—</span>

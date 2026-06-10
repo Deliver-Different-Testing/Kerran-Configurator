@@ -22,9 +22,14 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Np;
 // only its own agent record (UcagId == scope.NpAgentId).
 public class NpAgentComplianceService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
-    INpScopeResolver scopeResolver) : BaseService(contextFactory)
+    INpScopeResolver scopeResolver,
+    NpComplianceService courierCompliance) : BaseService(contextFactory)
 {
     private const int ExpiryWarningDaysFallback = 30;
+
+    // NP score weighting (Steve, 2026-06-10): courier roll-up is the real risk.
+    private const decimal DocWeight = 0.25m;
+    private const decimal CourierWeight = 0.75m;
 
     // Onboarding RequirementKey → NP DocumentType.Name (carry-through map).
     // Keys come from TenantAgentOnboardingService's default requirement set.
@@ -58,6 +63,9 @@ public class NpAgentComplianceService(
             docs.TryGetValue(agentId, out var ad) ? ad : new(),
             onboarding.TryGetValue(agentId, out var ob) ? ob : new());
 
+        var rollups = await courierCompliance.GetCourierComplianceByAgentAsync(ct);
+        ApplyScore(detail, rollups);
+
         return new AgentComplianceDetailResponse(messageId) { Success = true, Detail = detail };
     }
 
@@ -74,16 +82,20 @@ public class NpAgentComplianceService(
         var docTypes = await LoadNpDocTypesAsync(ct);
         var docs = await LoadAgentDocsAsync(agentIds, ct);
         var onboarding = await LoadOnboardingApprovedAsync(agentIds, ct);
+        var rollups = await courierCompliance.GetCourierComplianceByAgentAsync(ct);
 
         var roster = agentIds.Select(id =>
         {
             var detail = ComposeDetail(id, docTypes,
                 docs.TryGetValue(id, out var ad) ? ad : new(),
                 onboarding.TryGetValue(id, out var ob) ? ob : new());
+            ApplyScore(detail, rollups);
             return new AgentComplianceRosterItemDto
             {
                 AgentId = id,
                 CompliancePercent = detail.CompliancePercent,
+                CourierCompliancePercent = detail.CourierCompliancePercent,
+                OverallScorePercent = detail.OverallScorePercent,
                 RiskLevel = RiskLevel(detail),
                 Summary = detail.Summary,
             };
@@ -217,6 +229,17 @@ public class NpAgentComplianceService(
             RejectedDocuments = reqs.Count(r => r.Status == "rejected"),
             MissingDocuments = reqs.Count(r => r.Status == "missing"),
         };
+    }
+
+    // Blend the 25/75 NP score onto a composed detail. No-couriers → 100% courier
+    // (vacuously compliant, mirrors NpComplianceService.FleetCompliancePercent).
+    private static void ApplyScore(
+        AgentComplianceDetailDto detail,
+        IReadOnlyDictionary<int, NpComplianceService.CourierComplianceRollup> rollups)
+    {
+        var courierPct = rollups.TryGetValue(detail.AgentId, out var r) ? r.Percent : 100m;
+        detail.CourierCompliancePercent = courierPct;
+        detail.OverallScorePercent = Math.Round(DocWeight * detail.CompliancePercent + CourierWeight * courierPct, 1);
     }
 
     private static string RiskLevel(AgentComplianceDetailDto d)

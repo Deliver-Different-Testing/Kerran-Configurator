@@ -35,7 +35,9 @@ export interface AgentDocRequirementStatus {
 
 export interface AgentComplianceDetail {
   agentId: number;
-  compliancePercent: number;
+  compliancePercent: number;          // business-doc completeness % (25% weight)
+  courierCompliancePercent: number;   // courier roll-up % (75% weight)
+  overallScorePercent: number;        // blended 25/75 NP score
   summary: AgentBusinessComplianceSummary;
   requirements: AgentDocRequirementStatus[];
 }
@@ -43,6 +45,8 @@ export interface AgentComplianceDetail {
 export interface AgentComplianceRosterItem {
   agentId: number;
   compliancePercent: number;
+  courierCompliancePercent: number;
+  overallScorePercent: number;
   riskLevel: AgentRiskLevel;
   summary: AgentBusinessComplianceSummary;
 }

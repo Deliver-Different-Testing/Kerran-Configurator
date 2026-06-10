@@ -185,6 +185,37 @@ public class NpComplianceService(
         };
     }
 
+    // Per-agent courier-compliance roll-up — the 75% component of the NP score
+    // (Phase 4). Returns, for each NpAgentId in scope, how many of that agent's
+    // active couriers are fully compliant (no expired, no mandatory-missing, no
+    // expiring) out of the total. Same scope rules as the dashboard.
+    public async Task<Dictionary<int, CourierComplianceRollup>> GetCourierComplianceByAgentAsync(CancellationToken ct = default)
+    {
+        var result = new Dictionary<int, CourierComplianceRollup>();
+        var scope = await scopeResolver.ResolveAsync();
+        if (!scope.IsAdmin && scope.NpAgentId is null) return result;
+
+        var matrix = await BuildMatrixAsync(scope, ct);
+        foreach (var courier in matrix.Couriers)
+        {
+            if (courier.NpAgentId is not int agentId) continue;
+
+            bool hasExpiredOrMissing = false, hasExpiring = false;
+            foreach (var dt in matrix.DocTypes)
+            {
+                var (status, _) = ResolveStatus(courier, dt, matrix);
+                if (status == "Expired") hasExpiredOrMissing = true;
+                else if (status == "Missing" && dt.Mandatory) hasExpiredOrMissing = true;
+                else if (status == "Expiring") hasExpiring = true;
+            }
+
+            if (!result.TryGetValue(agentId, out var roll)) result[agentId] = roll = new CourierComplianceRollup();
+            roll.Total++;
+            if (!hasExpiredOrMissing && !hasExpiring) roll.Compliant++;
+        }
+        return result;
+    }
+
     // ─── Matrix builder ──────────────────────────────────────────────────
 
     private async Task<ComplianceMatrix> BuildMatrixAsync(NpScope scope, CancellationToken ct)
@@ -198,7 +229,7 @@ public class NpComplianceService(
             courierQuery = courierQuery.Where(c => c.NpAgentId == scope.NpAgentId);
 
         var couriers = await courierQuery
-            .Select(c => new CourierSnapshot(c.UccrId, ((c.UccrName ?? string.Empty) + " " + (c.UccrSurname ?? string.Empty)).Trim()))
+            .Select(c => new CourierSnapshot(c.UccrId, ((c.UccrName ?? string.Empty) + " " + (c.UccrSurname ?? string.Empty)).Trim(), c.NpAgentId))
             .ToListAsync(ct);
 
         if (couriers.Count == 0)
@@ -406,7 +437,15 @@ public class NpComplianceService(
 
     // ─── Internal records ────────────────────────────────────────────────
 
-    private sealed record CourierSnapshot(int Id, string Name);
+    private sealed record CourierSnapshot(int Id, string Name, int? NpAgentId);
+
+    // Per-agent courier-compliance tally (public — consumed by NpAgentComplianceService).
+    public sealed class CourierComplianceRollup
+    {
+        public int Compliant { get; set; }
+        public int Total { get; set; }
+        public decimal Percent => Total == 0 ? 100m : Math.Round((decimal)Compliant * 100m / Total, 1);
+    }
     private sealed record DocTypeSnapshot(int Id, string Name, string Category, bool Mandatory, int ExpiryWarningDays);
     private sealed record DocSnapshot(int CourierId, int DocTypeId, DateOnly? Expiry);
 

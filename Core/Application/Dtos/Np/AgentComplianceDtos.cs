@@ -46,7 +46,9 @@ public class AgentDocRequirementStatusDto
 public class AgentComplianceDetailDto
 {
     public int AgentId { get; set; }
-    public decimal CompliancePercent { get; set; }
+    public decimal CompliancePercent { get; set; }       // business-doc completeness % (25% weight)
+    public decimal CourierCompliancePercent { get; set; } // courier roll-up % (75% weight)
+    public decimal OverallScorePercent { get; set; }     // 0.25*docs + 0.75*courier (Steve, 2026-06-10)
     public AgentBusinessComplianceSummaryDto Summary { get; set; } = new();
     public List<AgentDocRequirementStatusDto> Requirements { get; set; } = new();
 }
@@ -56,8 +58,10 @@ public class AgentComplianceDetailDto
 public class AgentComplianceRosterItemDto
 {
     public int AgentId { get; set; }
-    public decimal CompliancePercent { get; set; }
-    public string RiskLevel { get; set; } = "Low";    // High | Medium | Low
+    public decimal CompliancePercent { get; set; }        // business-doc completeness %
+    public decimal CourierCompliancePercent { get; set; } // courier roll-up %
+    public decimal OverallScorePercent { get; set; }      // blended 25/75 NP score
+    public string RiskLevel { get; set; } = "Low";        // High | Medium | Low
     public AgentBusinessComplianceSummaryDto Summary { get; set; } = new();
 }
 

@@ -247,6 +247,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     id: 'client-reporting', label: 'Client Reporting', icon: icons.reports,
     items: [
       { id: '/reporting/rate-schedule', label: 'Rate Schedule', implemented: true },
+      { id: '/reporting/client-monthly', label: 'Client Monthly Report', implemented: true },
     ],
   });
 

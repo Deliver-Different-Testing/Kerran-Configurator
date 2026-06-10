@@ -59,6 +59,7 @@ import QuoteResponse from './pages/public/QuoteResponse';
 
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder).
 import RateScheduleReport from './pages/reporting/RateSchedule';
+import ClientMonthlyReport from './pages/reporting/ClientMonthlyReport';
 
 export default function App() {
   // All hooks first (Rules of Hooks — same call order every render).
@@ -126,6 +127,7 @@ export default function App() {
             <Route path="team" element={<TeamUsersPage />} />
             <Route path="reporting" element={<Navigate to="/reporting/rate-schedule" replace />} />
             <Route path="reporting/rate-schedule" element={<RateScheduleReport />} />
+            <Route path="reporting/client-monthly" element={<ClientMonthlyReport />} />
             <Route path="settings/roles" element={<RolesPage />} />
             <Route path="settings/role-permissions" element={<RolePermissionsPage />} />
             <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
@@ -198,6 +200,7 @@ export default function App() {
             <Route index element={<TenantDashboard />} />
             <Route path="reporting" element={<Navigate to="/reporting/rate-schedule" replace />} />
             <Route path="reporting/rate-schedule" element={<RateScheduleReport />} />
+            <Route path="reporting/client-monthly" element={<ClientMonthlyReport />} />
             <Route path="agents" element={<AgentList />} />
             <Route path="agents/find" element={<AgentList />} />
             <Route path="agents/import" element={<AgentImport />} />

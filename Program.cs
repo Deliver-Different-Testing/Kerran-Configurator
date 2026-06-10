@@ -7,6 +7,7 @@ using Amazon;
 using Amazon.Runtime;
 using Amazon.Runtime.CredentialManagement;
 using Amazon.S3;
+using DeliverDifferentReporting.Extensions;
 using DfrntDriveConfigurator;
 using DfrntDriveConfigurator.Core.Application.Interfaces;
 using DfrntDriveConfigurator.Core.Application.Services;
@@ -345,6 +346,13 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Repo
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.RegionalRateService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.InternationalRateService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.RateScheduleService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.ClientMonthlyReportService>();
+// Shared report-rendering package (QuestPDF docs + ClosedXML + tenant branding).
+// ITenantBrandingService pulls per-tenant branding from Hub (reuses HubBaseUrl).
+builder.Services.AddTenantBranding(opts =>
+{
+    opts.BrandingApiBaseUrl = builder.Configuration["HubBaseUrl"] ?? string.Empty;
+});
 
 // Automation repository (CRUD for configurator UI — engine execution lives in separate AutomationEngine service)
 builder.Services.AddScoped<IAutomationRepository, AutomationRepository>();

@@ -111,29 +111,34 @@ public class ReportingLookupService(
     {
         await using var db = await contextFactory.CreateDbContextAsync(ct);
 
-        var ratingEnabledGroupIds = db.TucJobTypeGroupings
-            .Where(g => g.RatingEnabled)
-            .Select(g => g.GroupingId);
+        // Fetch the rating-enabled groupings once (id -> name) instead of a
+        // correlated subquery per job-type row — simpler plan, faster cold
+        // compile and execution.
+        var groupNames = (await db.TucJobTypeGroupings.AsNoTracking()
+                .Where(g => g.RatingEnabled)
+                .Select(g => new { g.GroupingId, g.GroupingName })
+                .ToListAsync(ct))
+            .ToDictionary(g => g.GroupingId, g => g.GroupingName);
+        var enabledGroupIds = groupNames.Keys.ToList();
 
-        return await db.TucJobTypes.AsNoTracking()
+        var speeds = await db.TucJobTypes.AsNoTracking()
             .Where(jt => !ExcludedSystemNames.Contains(jt.SystemName)
-                      && ratingEnabledGroupIds.Contains(jt.GroupingId))
+                      && enabledGroupIds.Contains(jt.GroupingId))
             .OrderBy(jt => jt.GroupingId)
             .ThenBy(jt => jt.Minutes)
-            .Select(jt => new SpeedResult
-            {
-                Id           = jt.UcjtId,
-                Name         = jt.UcjtName,
-                ShortName    = jt.ShortName,
-                SystemName   = jt.SystemName,
-                Minutes      = jt.Minutes,
-                GroupingId   = jt.GroupingId,
-                GroupingName = db.TucJobTypeGroupings
-                                 .Where(g => g.GroupingId == jt.GroupingId)
-                                 .Select(g => g.GroupingName)
-                                 .FirstOrDefault(),
-            })
+            .Select(jt => new { jt.UcjtId, jt.UcjtName, jt.ShortName, jt.SystemName, jt.Minutes, jt.GroupingId })
             .ToListAsync(ct);
+
+        return speeds.Select(jt => new SpeedResult
+        {
+            Id           = jt.UcjtId,
+            Name         = jt.UcjtName,
+            ShortName    = jt.ShortName,
+            SystemName   = jt.SystemName,
+            Minutes      = jt.Minutes,
+            GroupingId   = jt.GroupingId,
+            GroupingName = groupNames.GetValueOrDefault(jt.GroupingId),
+        }).ToList();
     }
 
     public async Task<IReadOnlyList<SuburbResult>> GetSuburbsBySiteAsync(int siteId, CancellationToken ct = default)

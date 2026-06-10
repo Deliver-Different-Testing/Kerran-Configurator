@@ -379,6 +379,10 @@ builder.Services.AddScoped<IDbContextFactory<DynamicDespatchDbContext>>(sp =>
     return new DynamicDespatchDbContextFactoryAdapter(inner);
 });
 
+// Build the large Despatch EF model at startup (offline) so the first user
+// request after a pod starts doesn't pay the one-time model-build cost.
+builder.Services.AddHostedService<DfrntDriveConfigurator.Infrastructure.EfModelWarmupService>();
+
 // MasterContext — single fixed connection onto the master-controller (auth) DB.
 // Used to provision courier login rows (IsCourier = 1) so new couriers can sign
 // in to the mobile app. Same MasterSQLConnection env var AdminManager uses.

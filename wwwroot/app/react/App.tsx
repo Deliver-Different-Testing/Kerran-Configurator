@@ -20,6 +20,7 @@ import Users from './pages/np/Users';
 import UserImport from './pages/np/UserImport';
 import Reports from './pages/np/Reports';
 import ComplianceHub from './pages/np/ComplianceHub';
+import MyComplianceDocuments from './pages/np/MyComplianceDocuments';
 import RecruitmentPipeline from './pages/np/RecruitmentPipeline';
 import ApplicantDetail from './pages/np/ApplicantDetail';
 import RecruitmentStageSettings from './pages/np/RecruitmentStageSettings';
@@ -168,6 +169,7 @@ export default function App() {
             <Route path="reports" element={<Reports />} />
             <Route path="quotes" element={<NpQuotes />} />
             <Route path="compliance" element={<ComplianceHub />} />
+            <Route path="compliance/my-documents" element={<MyComplianceDocuments />} />
             <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
             <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
             <Route path="recruitment" element={<RecruitmentPipeline />} />

@@ -63,6 +63,58 @@ export interface AgentOnboardingComplianceSummary {
   agentsWithCarriedDocs: number;
 }
 
+// A single uploaded agent business-document instance (read shape — AgentDocumentDto).
+export interface AgentDocument {
+  id: number;
+  agentId: number;
+  documentTypeId: number;
+  documentTypeName: string;
+  fileName: string;
+  contentType: string;
+  length: number;
+  uploadedDate: string;
+  uploadedBy: string;
+  verifyStatus: 'Pending' | 'Verified' | 'Rejected';
+  verifiedDate: string | null;
+  verifiedBy: string;
+  rejectReason: string;
+  expiryDate: string | null;
+  aiSuggestedDecision?: string | null;
+  aiSuggestedExpiry?: string | null;
+  aiRationale?: string | null;
+  isActive: boolean;
+}
+
+// NP self-service (Phase 2) — the caller's OWN documents, agent resolved from
+// scope server-side (no agentId in the URL). Backed by /api/v1/np/my-documents.
+export const myAgentDocsApi = {
+  async getCompliance(): Promise<AgentComplianceDetail> {
+    const { data } = await api.get<AgentComplianceDetail>('/my-documents/compliance');
+    return data;
+  },
+
+  async list(): Promise<AgentDocument[]> {
+    const { data } = await api.get<AgentDocument[]>('/my-documents');
+    return data;
+  },
+
+  async upload(documentTypeId: number, file: File, expiryDate?: string | null): Promise<AgentDocument> {
+    const form = new FormData();
+    form.append('File', file);
+    form.append('DocumentTypeId', String(documentTypeId));
+    if (expiryDate) form.append('ExpiryDate', expiryDate);
+    const { data } = await api.post<AgentDocument>('/my-documents', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
+  // Proxy-download URL — browser streams via cookie auth, API streams from S3.
+  downloadUrl(id: number): string {
+    return `/api/v1/np/my-documents/${id}/download`;
+  },
+};
+
 export const agentComplianceApi = {
   async getDashboard(): Promise<AgentComplianceDashboard> {
     const { data } = await api.get<AgentComplianceDashboard>('/compliance/agents/dashboard');

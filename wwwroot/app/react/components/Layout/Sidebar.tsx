@@ -213,7 +213,6 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     alertDot: true, // Red dot: agents have expired/out-of-compliance docs
     items: [
       { id: '/compliance', label: 'Compliance', implemented: true },
-      { id: '/compliance/my-documents', label: 'My Documents', implemented: true },
     ],
   });
 
@@ -291,6 +290,7 @@ function buildNpSections(): NavSection[] {
       featureKey: 'courier-compliance',
       items: [
         { id: '/compliance', label: 'Compliance', implemented: true },
+        { id: '/compliance/my-documents', label: 'My Documents', implemented: true },
       ],
     },
     {

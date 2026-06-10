@@ -226,6 +226,7 @@ public class NpDocumentTypeService(
         e.ContentUrl = dto.ContentUrl;
         e.EstimatedMinutes = dto.EstimatedMinutes;
         e.QuizRequired = dto.QuizRequired;
+        e.ReviewCriteria = dto.ReviewCriteria;
     }
 
     private static readonly Expression<Func<DocumentType, NpDocumentTypeDto>> ProjectToDto = d => new NpDocumentTypeDto
@@ -245,6 +246,7 @@ public class NpDocumentTypeService(
         ContentUrl = d.ContentUrl ?? string.Empty,
         EstimatedMinutes = d.EstimatedMinutes,
         QuizRequired = d.QuizRequired,
+        ReviewCriteria = d.ReviewCriteria ?? string.Empty,
         HasTemplate = d.HasTemplate,
         TemplateFileName = d.TemplateFileName ?? string.Empty,
         TemplateMimeType = d.TemplateMimeType ?? string.Empty,

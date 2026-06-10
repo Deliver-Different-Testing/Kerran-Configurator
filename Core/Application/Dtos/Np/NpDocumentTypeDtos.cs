@@ -27,6 +27,9 @@ public class NpDocumentTypeDto
     public bool HasTemplate { get; set; }
     public string TemplateFileName { get; set; } = string.Empty;
     public string TemplateMimeType { get; set; } = string.Empty;
+    // Tenant-defined AI accept/reject criteria for this doc type (Phase 3b).
+    // Null/empty → the reviewer falls back to its built-in default prompt.
+    public string ReviewCriteria { get; set; } = string.Empty;
     public DateTime CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
 }
@@ -50,6 +53,7 @@ public class NpDocumentTypeUpsertDto
     public string ContentUrl { get; set; } = string.Empty;
     public int? EstimatedMinutes { get; set; }
     public bool QuizRequired { get; set; }
+    public string ReviewCriteria { get; set; } = string.Empty;
 }
 
 public class NpDocumentTypesResponse : BaseResponse

@@ -463,6 +463,8 @@ export interface DocumentType {
   hasTemplate: boolean;
   templateFileName?: string | null;
   templateMimeType?: string | null;
+  // Tenant-defined AI accept/reject criteria (Phase 3b). Empty → reviewer uses its default.
+  reviewCriteria?: string;
   tenantId?: number;
   createdDate?: string;
   modifiedDate?: string | null;

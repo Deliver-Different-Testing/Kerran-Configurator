@@ -81,7 +81,11 @@ public class AgentDocumentAiReviewer(
 
         var model = Environment.GetEnvironmentVariable("ANTHROPIC_MODEL") ?? DefaultModel;
         var docTypeName = doc.DocumentType?.Name ?? "business document";
-        var criteria = ResolveCriteria(doc.DocumentType?.Name);
+        // Prefer the tenant's per-doc-type criteria (Phase 3b); fall back to the
+        // built-in default when none has been configured.
+        var criteria = !string.IsNullOrWhiteSpace(doc.DocumentType?.ReviewCriteria)
+            ? doc.DocumentType!.ReviewCriteria
+            : DefaultCriteria(doc.DocumentType?.Name);
 
         JObject? input;
         try
@@ -208,8 +212,19 @@ public class AgentDocumentAiReviewer(
             return null;
         }
 
-        // Find the forced tool_use block and return its input object.
         var parsed = JObject.Parse(json);
+
+        // Log exact token usage + an Opus-4.8-rate cost estimate per review, so
+        // per-document cost is observable in the logs (input $5/M, output $25/M).
+        if (parsed["usage"] is JObject usage)
+        {
+            var inTok = (int?)usage["input_tokens"] ?? 0;
+            var outTok = (int?)usage["output_tokens"] ?? 0;
+            var estCost = inTok / 1_000_000m * 5m + outTok / 1_000_000m * 25m;
+            Log.Information("AI review usage (model {Model}): input={In} output={Out} est_cost=${Cost:F4}", model, inTok, outTok, estCost);
+        }
+
+        // Find the forced tool_use block and return its input object.
         if (parsed["content"] is JArray content)
         {
             foreach (var blk in content)
@@ -238,9 +253,9 @@ public class AgentDocumentAiReviewer(
         return null;
     }
 
-    // Default per-doc-type criteria. Phase 3b adds an editable DocumentTypes.ReviewCriteria
-    // column + admin UI; until then this generic-but-targeted prompt is used.
-    private static string ResolveCriteria(string? docTypeName)
+    // Built-in default criteria — used when a doc type has no tenant-defined
+    // ReviewCriteria (Phase 3b). Generic but targeted by document-type name.
+    private static string DefaultCriteria(string? docTypeName)
     {
         var name = string.IsNullOrWhiteSpace(docTypeName) ? "the required document" : docTypeName;
         return

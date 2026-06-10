@@ -36,6 +36,7 @@ interface DocumentTypeApi {
   hasTemplate: boolean;
   templateFileName: string;
   templateMimeType: string;
+  reviewCriteria: string;
   createdDate: string;
   modifiedDate: string | null;
 }
@@ -60,6 +61,7 @@ function toDocumentType(d: DocumentTypeApi): DocumentType {
     hasTemplate: d.hasTemplate,
     templateFileName: d.templateFileName || null,
     templateMimeType: d.templateMimeType || null,
+    reviewCriteria: d.reviewCriteria || undefined,
     createdDate: d.createdDate,
     modifiedDate: d.modifiedDate ?? null,
   };
@@ -83,6 +85,7 @@ function toUpsert(p: Partial<DocumentType>) {
     contentUrl: p.contentUrl ?? '',
     estimatedMinutes: p.estimatedMinutes ?? null,
     quizRequired: !!p.quizRequired,
+    reviewCriteria: p.reviewCriteria ?? '',
   };
 }
 

@@ -49,6 +49,7 @@ interface EditState {
   contentUrl: string;
   estimatedMinutes: number;
   quizRequired: boolean;
+  reviewCriteria: string;
 }
 
 const emptyEdit: EditState = {
@@ -67,6 +68,7 @@ const emptyEdit: EditState = {
   contentUrl: '',
   estimatedMinutes: 0,
   quizRequired: false,
+  reviewCriteria: '',
 };
 
 export default function DocumentTypeSettings() {
@@ -94,6 +96,7 @@ export default function DocumentTypeSettings() {
       contentUrl: dt.contentUrl || '',
       estimatedMinutes: dt.estimatedMinutes || 0,
       quizRequired: dt.quizRequired ?? false,
+      reviewCriteria: dt.reviewCriteria || '',
     });
   };
 
@@ -113,6 +116,7 @@ export default function DocumentTypeSettings() {
         appliesTo: editing.appliesTo,
         sortOrder: editing.sortOrder,
         purpose: editing.purpose,
+        reviewCriteria: editing.reviewCriteria || undefined,
       };
       if (editing.purpose === 'Training') {
         payload.contentUrl = editing.contentUrl || undefined;
@@ -390,6 +394,17 @@ export default function DocumentTypeSettings() {
                   rows={2}
                   placeholder="Instructions shown to uploader"
                 />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1">AI review criteria</label>
+                <textarea
+                  value={editing.reviewCriteria}
+                  onChange={(e) => setEditing({ ...editing, reviewCriteria: e.target.value })}
+                  className="w-full border border-border rounded-md px-3 py-2 text-sm"
+                  rows={3}
+                  placeholder="What the AI reviewer should check before suggesting accept/reject (e.g. must be a current commercial vehicle insurance certificate naming the business; reject travel/personal policies). Leave blank to use the built-in default."
+                />
+                <p className="mt-1 text-[11px] text-text-muted">Advisory only — the AI suggests, staff decide. Blank = built-in default.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

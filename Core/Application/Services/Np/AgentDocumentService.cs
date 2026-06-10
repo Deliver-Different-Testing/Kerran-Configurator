@@ -165,6 +165,12 @@ public class AgentDocumentService(
         doc.VerifiedDate = DateTime.UtcNow;
         doc.VerifiedBy = ResolveActor();
         doc.RejectReason = null;
+        // Staff-confirmed verify accepts the AI-extracted expiry when none was
+        // entered at upload — saves manual entry. Explicit expiry is left as-is.
+        if (doc.ExpiryDate is null && doc.AiSuggestedExpiry is not null)
+        {
+            doc.ExpiryDate = doc.AiSuggestedExpiry;
+        }
         doc.ModifiedDate = DateTime.UtcNow;
         await Context.SaveChangesAsync(ct);
 

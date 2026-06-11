@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useComplianceDashboard } from '@/hooks/useCompliance';
 import StatCard from '@/components/common/StatCard';
@@ -14,9 +15,20 @@ interface Props {
 
 export default function Dashboard({ onUpgrade }: Props) {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [tab, setTab] = useState<DashTab>('np');
   const { stats, complianceAlerts, activity } = useDashboard();
   const { data: complianceDashboard } = useComplianceDashboard();
+
+  // This dashboard is the index for BOTH the dfadmin and np lanes. For an NP,
+  // '/compliance' renders the tenant-wide ComplianceHub aggregate they must not
+  // see (Steve security log Issue 3), so point NP compliance links at their own
+  // scoped surfaces: fleet/driver compliance → /fleet (matches the "Review
+  // compliance" alert below), business docs → /compliance/my-documents. DF
+  // Admin keeps the tenant ComplianceHub.
+  const isNp = role === 'np';
+  const fleetComplianceTarget = isNp ? '/fleet' : '/compliance';
+  const complianceDocsTarget = isNp ? '/compliance/my-documents' : '/compliance';
 
   const tabs: { key: DashTab; label: string; count?: number }[] = [
     { key: 'onboarding', label: 'On-boarding', count: 4 },
@@ -81,7 +93,7 @@ export default function Dashboard({ onUpgrade }: Props) {
           </div>
           <div className="flex gap-3 flex-wrap">
             <QuickAction icon="➕" label="Add Applicant" onClick={() => navigate('/recruitment')} />
-            <QuickAction icon="📋" label="Compliance Docs" onClick={() => navigate('/compliance')} />
+            <QuickAction icon="📋" label="Compliance Docs" onClick={() => navigate(complianceDocsTarget)} />
           </div>
         </>
       )}
@@ -140,7 +152,7 @@ export default function Dashboard({ onUpgrade }: Props) {
       {/* Compliance Summary Card */}
       {complianceDashboard && (
         <div
-          onClick={() => navigate('/compliance')}
+          onClick={() => navigate(fleetComplianceTarget)}
           className="bg-white border border-border rounded-lg p-5 mb-4 cursor-pointer hover:border-brand-cyan transition-colors"
         >
           <div className="flex items-center gap-4">
@@ -166,7 +178,7 @@ export default function Dashboard({ onUpgrade }: Props) {
               </div>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); navigate('/compliance'); }}
+              onClick={(e) => { e.stopPropagation(); navigate(fleetComplianceTarget); }}
               className="text-brand-cyan text-sm font-medium hover:underline whitespace-nowrap"
             >
               View Dashboard →

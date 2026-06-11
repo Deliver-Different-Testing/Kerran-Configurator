@@ -287,8 +287,14 @@ function buildNpSections(): NavSection[] {
       ],
     },
     {
+      // NO featureKey: My Documents must NOT be gated by the tenant's
+      // 'courier-compliance' Feature Matrix toggle. That toggle is meant to
+      // hide the tenant-staff compliance surfaces — but binding it here also
+      // hid the NP's own self-upload page, i.e. the only way to block the
+      // leak (Issue 1) was to break the NP's ability to comply (Steve
+      // security log Issue 2). My Documents is always operationally required
+      // for an NP, so it is shown unconditionally.
       id: 'compliance', label: 'Compliance', icon: icons.compliance,
-      featureKey: 'courier-compliance',
       items: [
         // NP lane is self-service only: Monitoring (tenant roster of all
         // agents) + Set up (TenantStaffOrAdmin doc-type/profile config) are

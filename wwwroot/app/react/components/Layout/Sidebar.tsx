@@ -212,7 +212,8 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     badge: 3, // e.g. 2 expiring docs + 1 pending approval
     alertDot: true, // Red dot: agents have expired/out-of-compliance docs
     items: [
-      { id: '/compliance', label: 'Compliance', implemented: true },
+      { id: '/compliance', label: 'Monitoring', implemented: true },
+      { id: '/compliance/setup', label: 'Set up', implemented: true },
     ],
   });
 
@@ -289,7 +290,8 @@ function buildNpSections(): NavSection[] {
       id: 'compliance', label: 'Compliance', icon: icons.compliance,
       featureKey: 'courier-compliance',
       items: [
-        { id: '/compliance', label: 'Compliance', implemented: true },
+        { id: '/compliance', label: 'Monitoring', implemented: true },
+        { id: '/compliance/setup', label: 'Set up', implemented: true },
         { id: '/compliance/my-documents', label: 'My Documents', implemented: true },
       ],
     },

@@ -118,6 +118,7 @@ export default function App() {
             <Route path="quotes" element={<QuoteRequests />} />
             <Route path="associations" element={<AssociationStats />} />
             <Route path="compliance" element={<ComplianceHub />} />
+            <Route path="compliance/setup" element={<ComplianceHub />} />
             <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
             <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
             <Route path="recruitment" element={<RecruitmentPipeline />} />
@@ -169,6 +170,7 @@ export default function App() {
             <Route path="reports" element={<Reports />} />
             <Route path="quotes" element={<NpQuotes />} />
             <Route path="compliance" element={<ComplianceHub />} />
+            <Route path="compliance/setup" element={<ComplianceHub />} />
             <Route path="compliance/my-documents" element={<MyComplianceDocuments />} />
             <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
             <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
@@ -223,6 +225,7 @@ export default function App() {
             <Route path="fleet/import" element={<CourierImport />} />
             <Route path="courier/:id" element={<CourierSetup onSelectCourier={setSelectedCourierId} />} />
             <Route path="compliance" element={<ComplianceHub />} />
+            <Route path="compliance/setup" element={<ComplianceHub />} />
             <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
             <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
             <Route path="recruitment" element={<RecruitmentPipeline />} />

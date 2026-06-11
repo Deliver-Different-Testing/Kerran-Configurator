@@ -104,7 +104,7 @@ export default function ComplianceHub({
     const items = agents.flatMap((agent) => {
       const c = agentComplianceById.get(agent.id);
       if (!c || c.riskLevel === 'Low') return [];
-      const severity = c.riskLevel === 'High' ? 'Critical' : 'Watch';
+      const severity: 'Critical' | 'Watch' = c.riskLevel === 'High' ? 'Critical' : 'Watch';
       const gaps = c.summary.missingDocuments + c.summary.rejectedDocuments;
       return [{
         id: agent.id,

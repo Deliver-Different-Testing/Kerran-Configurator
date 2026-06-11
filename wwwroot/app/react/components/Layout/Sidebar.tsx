@@ -290,8 +290,10 @@ function buildNpSections(): NavSection[] {
       id: 'compliance', label: 'Compliance', icon: icons.compliance,
       featureKey: 'courier-compliance',
       items: [
-        { id: '/compliance', label: 'Monitoring', implemented: true },
-        { id: '/compliance/setup', label: 'Set up', implemented: true },
+        // NP lane is self-service only: Monitoring (tenant roster of all
+        // agents) + Set up (TenantStaffOrAdmin doc-type/profile config) are
+        // staff surfaces — Set up 403s and Monitoring's "Open workspace" links
+        // 404 in the NP lane. NPs get just their own document compliance.
         { id: '/compliance/my-documents', label: 'My Documents', implemented: true },
       ],
     },

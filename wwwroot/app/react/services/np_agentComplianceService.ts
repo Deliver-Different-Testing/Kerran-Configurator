@@ -144,6 +144,37 @@ export const staffAgentDocsApi = {
   },
 };
 
+// Client compliance-profile overlays (Phase 4b-ii). Tenant assigns profiles to
+// an NP; the NP's scorecard then also requires those profiles' docs.
+export interface ComplianceProfileOption {
+  id: number;
+  name: string;
+  description: string;
+}
+export interface AgentComplianceProfiles {
+  available: ComplianceProfileOption[];
+  assignedProfileIds: number[];
+}
+export interface ProfileAgent {
+  agentId: number;
+  agentName: string;
+}
+
+export const agentProfilesApi = {
+  async getForAgent(agentId: number): Promise<AgentComplianceProfiles> {
+    const { data } = await api.get<AgentComplianceProfiles>(`/agents/${agentId}/compliance-profiles`);
+    return data;
+  },
+  async setForAgent(agentId: number, profileIds: number[]): Promise<AgentComplianceProfiles> {
+    const { data } = await api.put<AgentComplianceProfiles>(`/agents/${agentId}/compliance-profiles`, { profileIds });
+    return data;
+  },
+  async getAgentsForProfile(profileId: number): Promise<ProfileAgent[]> {
+    const { data } = await api.get<ProfileAgent[]>(`/compliance-profiles/${profileId}/agents`);
+    return data;
+  },
+};
+
 export const agentComplianceApi = {
   async getDashboard(): Promise<AgentComplianceDashboard> {
     const { data } = await api.get<AgentComplianceDashboard>('/compliance/agents/dashboard');

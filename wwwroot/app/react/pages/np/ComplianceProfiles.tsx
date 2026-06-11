@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { complianceProfileService } from '@/services/np_complianceProfileService';
 import { documentTypeService } from '@/services/np_documentService';
+import { agentProfilesApi, type ProfileAgent } from '@/services/np_agentComplianceService';
 import type { ComplianceProfile, ComplianceRequirement, DocumentType } from '@/types';
 
 function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -23,6 +24,9 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
 function ProfileCard({ profile, eligibleCount, onClick, onDuplicate }: { profile: ComplianceProfile; eligibleCount: number; onClick: () => void; onDuplicate: () => void }) {
   const complianceReqs = profile.requirements.filter(r => r.purpose === 'Compliance');
   const trainingReqs = profile.requirements.filter(r => r.purpose === 'Training');
+  // Phase 4b-ii reverse view — which NPs carry this profile.
+  const [assignedNps, setAssignedNps] = useState<ProfileAgent[]>([]);
+  useEffect(() => { agentProfilesApi.getAgentsForProfile(profile.id).then(setAssignedNps).catch(() => {}); }, [profile.id]);
 
   return (
     <button
@@ -69,6 +73,12 @@ function ProfileCard({ profile, eligibleCount, onClick, onDuplicate }: { profile
           <span className="text-text-muted">drivers eligible</span>
         </div>
       </div>
+      {assignedNps.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-border text-[11px] text-text-secondary">
+          <span className="font-medium">{assignedNps.length} NP{assignedNps.length === 1 ? '' : 's'} assigned:</span>{' '}
+          {assignedNps.map(n => n.agentName).join(', ')}
+        </div>
+      )}
     </button>
   );
 }

@@ -56,11 +56,13 @@ public class NpAgentComplianceService(
         if (!exists)
             return new AgentComplianceDetailResponse(messageId) { Success = false };
 
-        var docTypes = await LoadNpDocTypesAsync(ct);
+        var baseDocTypes = await LoadNpDocTypesAsync(ct);
+        var overlay = await LoadOverlayDocTypesAsync(new[] { agentId }, ct);
         var docs = await LoadAgentDocsAsync(new[] { agentId }, ct);
         var onboarding = await LoadOnboardingApprovedAsync(new[] { agentId }, ct);
 
-        var detail = ComposeDetail(agentId, docTypes,
+        var detail = ComposeDetail(agentId,
+            CombineDocTypes(baseDocTypes, overlay.TryGetValue(agentId, out var ov) ? ov : new()),
             docs.TryGetValue(agentId, out var ad) ? ad : new(),
             onboarding.TryGetValue(agentId, out var ob) ? ob : new());
 
@@ -80,14 +82,16 @@ public class NpAgentComplianceService(
         if (agentIds.Count == 0)
             return new AgentComplianceRosterResponse(messageId) { Success = true, Roster = new() };
 
-        var docTypes = await LoadNpDocTypesAsync(ct);
+        var baseDocTypes = await LoadNpDocTypesAsync(ct);
+        var overlay = await LoadOverlayDocTypesAsync(agentIds, ct);
         var docs = await LoadAgentDocsAsync(agentIds, ct);
         var onboarding = await LoadOnboardingApprovedAsync(agentIds, ct);
         var rollups = await courierCompliance.GetCourierComplianceByAgentAsync(ct);
 
         var roster = agentIds.Select(id =>
         {
-            var detail = ComposeDetail(id, docTypes,
+            var detail = ComposeDetail(id,
+                CombineDocTypes(baseDocTypes, overlay.TryGetValue(id, out var ov) ? ov : new()),
                 docs.TryGetValue(id, out var ad) ? ad : new(),
                 onboarding.TryGetValue(id, out var ob) ? ob : new());
             ApplyScore(detail, rollups);
@@ -280,6 +284,64 @@ public class NpAgentComplianceService(
             .OrderBy(d => d.SortOrder).ThenBy(d => d.Name)
             .Select(d => new DocTypeSnapshot(d.Id, d.Name ?? string.Empty, d.Category ?? "Other", d.Mandatory, d.ExpiryWarningDays, d.ExpiryUrgentDays))
             .ToListAsync(ct);
+
+    // Phase 4b-ii — doc types required by each agent's assigned client compliance
+    // profiles (tucAgentComplianceProfile → ComplianceProfileRequirements →
+    // DocumentTypes). Deduped per agent; Mandatory = OR across the profiles that
+    // require it. Unioned onto the base NP set by CombineDocTypes.
+    private async Task<Dictionary<int, List<DocTypeSnapshot>>> LoadOverlayDocTypesAsync(IReadOnlyCollection<int> agentIds, CancellationToken ct = default)
+    {
+        var rows = await Context.TucAgentComplianceProfiles.AsNoTracking()
+            .Where(a => agentIds.Contains(a.AgentId))
+            .Join(Context.ComplianceProfileRequirements.AsNoTracking(),
+                a => a.ProfileId, r => r.ProfileId, (a, r) => new { a.AgentId, r.DocumentTypeId, r.Mandatory })
+            .Join(Context.DocumentTypes.AsNoTracking().Where(d => d.IsActive),
+                x => x.DocumentTypeId, d => d.Id,
+                (x, d) => new { x.AgentId, ReqMandatory = x.Mandatory, d.Id, d.Name, d.Category, d.ExpiryWarningDays, d.ExpiryUrgentDays })
+            .ToListAsync(ct);
+
+        var result = new Dictionary<int, List<DocTypeSnapshot>>();
+        foreach (var grp in rows.GroupBy(r => r.AgentId))
+        {
+            var perType = new Dictionary<int, DocTypeSnapshot>();
+            foreach (var r in grp)
+            {
+                if (perType.TryGetValue(r.Id, out var existing))
+                {
+                    if (r.ReqMandatory && !existing.Mandatory) perType[r.Id] = existing with { Mandatory = true };
+                }
+                else
+                {
+                    perType[r.Id] = new DocTypeSnapshot(r.Id, r.Name ?? string.Empty, r.Category ?? "Other", r.ReqMandatory, r.ExpiryWarningDays, r.ExpiryUrgentDays);
+                }
+            }
+            result[grp.Key] = perType.Values.ToList();
+        }
+        return result;
+    }
+
+    // Union of base NP doc types + an agent's overlay doc types. Dedup by Id;
+    // a doc type present in both becomes mandatory if either side requires it.
+    private static List<DocTypeSnapshot> CombineDocTypes(List<DocTypeSnapshot> baseTypes, List<DocTypeSnapshot> overlay)
+    {
+        if (overlay.Count == 0) return baseTypes;
+        var byId = new Dictionary<int, int>();   // id -> index in ordered
+        var ordered = new List<DocTypeSnapshot>(baseTypes.Count + overlay.Count);
+        foreach (var dt in baseTypes) { byId[dt.Id] = ordered.Count; ordered.Add(dt); }
+        foreach (var ov in overlay)
+        {
+            if (byId.TryGetValue(ov.Id, out var idx))
+            {
+                if (ov.Mandatory && !ordered[idx].Mandatory) ordered[idx] = ordered[idx] with { Mandatory = true };
+            }
+            else
+            {
+                byId[ov.Id] = ordered.Count;
+                ordered.Add(ov);
+            }
+        }
+        return ordered;
+    }
 
     private async Task<Dictionary<int, List<DocSnapshot>>> LoadAgentDocsAsync(IReadOnlyCollection<int> agentIds, CancellationToken ct)
     {

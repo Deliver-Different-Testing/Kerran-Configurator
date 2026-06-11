@@ -28,6 +28,9 @@ namespace DfrntDriveConfigurator.Core.Domain
         // EFPT regen (not in efpt.config.json).
         public virtual DbSet<TucAgentDocument> TucAgentDocuments { get; set; }
 
+        // Agent/NP client compliance-profile overlays (2026-06-11, database/043).
+        public virtual DbSet<TucAgentComplianceProfile> TucAgentComplianceProfiles { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -117,6 +120,14 @@ namespace DfrntDriveConfigurator.Core.Domain
             {
                 e.Property(d => d.ReviewCriteria).HasColumnName("ReviewCriteria");
                 e.Property(d => d.ExpiryUrgentDays).HasColumnName("ExpiryUrgentDays");
+            });
+
+            modelBuilder.Entity<TucAgentComplianceProfile>(entity =>
+            {
+                entity.HasKey(e => e.UacpId);
+                entity.ToTable("tucAgentComplianceProfile");
+                // PascalCase columns match property names (database/043); no FK
+                // navs modelled (queried by AgentId / ProfileId as plain ints).
             });
 
             modelBuilder.Entity<TucAgentDocument>(entity =>

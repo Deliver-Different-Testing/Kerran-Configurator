@@ -15,8 +15,10 @@ import {
 } from '@/pages/tenant/agentComplianceService';
 import { useAgentComplianceDetail } from '@/hooks/useAgentCompliance';
 import {
+  agentProfilesApi,
   staffAgentDocsApi,
   type AgentComplianceDetail,
+  type AgentComplianceProfiles,
   type AgentDocument,
 } from '@/services/np_agentComplianceService';
 
@@ -167,6 +169,48 @@ function ArchiveModal({ agentName, onClose, onConfirm }: { agentName: string; on
   );
 }
 
+// Tenant-administered client compliance-profile overlays (Phase 4b-ii). Assigned
+// profiles add their required documents to this NP's compliance scorecard.
+function ClientProfilesPanel({ agentId }: { agentId: number }) {
+  const [data, setData] = useState<AgentComplianceProfiles | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { agentProfilesApi.getForAgent(agentId).then(setData).catch(() => {}); }, [agentId]);
+
+  const toggle = async (pid: number, on: boolean) => {
+    if (!data) return;
+    const next = on ? [...data.assignedProfileIds, pid] : data.assignedProfileIds.filter((x) => x !== pid);
+    setBusy(true);
+    try { setData(await agentProfilesApi.setForAgent(agentId, next)); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-surface-light p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Client Compliance Profiles</div>
+      {!data ? (
+        <div className="mt-1 text-sm text-text-secondary">Loading…</div>
+      ) : data.available.length === 0 ? (
+        <div className="mt-1 text-sm text-text-secondary">No client profiles configured yet.</div>
+      ) : (
+        <>
+          <div className="mt-2 space-y-1.5">
+            {data.available.map((p) => {
+              const on = data.assignedProfileIds.includes(p.id);
+              return (
+                <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" className="w-4 h-4 accent-brand-cyan" checked={on} disabled={busy} onChange={(e) => toggle(p.id, e.target.checked)} />
+                  <span className="text-text-primary">{p.name}</span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-text-muted">Assigned profiles add their required documents to this NP's compliance.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function OverviewTab({ agent, drivers }: { agent: AgentWorkspaceRecord; drivers: TenantCourier[] }) {
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [reactivatedAt, setReactivatedAt] = useState<string | null>(null);
@@ -246,6 +290,8 @@ function OverviewTab({ agent, drivers }: { agent: AgentWorkspaceRecord; drivers:
           <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Driver Roster</div>
           <div className="mt-1 text-sm text-text-secondary">{drivers.length} assigned driver{drivers.length === 1 ? '' : 's'}</div>
         </div>
+
+        <ClientProfilesPanel agentId={agent.id} />
 
         {/* Status Toggle */}
         <div className="rounded-xl border border-slate-200 bg-surface-light p-3">

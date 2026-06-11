@@ -5,11 +5,8 @@ import ComplianceProfiles from './ComplianceProfiles';
 import DocumentTypeSettings from './DocumentTypeSettings';
 import AgentComplianceTab from './AgentComplianceTab';
 import QuizBuilderPage from './QuizBuilderPage';
-import { DriverApproval } from '@/pages/tenant/DriverApproval';
-import { useComplianceAlerts } from '@/hooks/useCompliance';
 import { useAgents } from '@/hooks/useAgents';
 import { useAgentComplianceRoster } from '@/hooks/useAgentCompliance';
-import { driverApprovalService } from '@/services/np_driverApprovalService';
 
 type LegacyDriverTab = 'dashboard' | 'documents' | 'profiles' | 'approval';
 type HubSection = 'monitoring' | 'setup';
@@ -56,9 +53,7 @@ export default function ComplianceHub({
   const location = useLocation();
   const navigate = useNavigate();
   const { agents } = useAgents();
-  const { alerts: driverAlerts } = useComplianceAlerts();
   const { byId: agentComplianceById } = useAgentComplianceRoster();
-  const pendingCount = driverApprovalService.getPendingCount();
 
   const derivedSection: HubSection = location.pathname.startsWith('/compliance/setup') ? 'setup' : 'monitoring';
   const initialMonitoringTab: MonitoringTab = initialTab === 'dashboard' || initialTab === 'approval' ? 'driver' : 'agent-np';
@@ -92,13 +87,6 @@ export default function ComplianceHub({
     return { totalAgents, compliant, atRisk, nonComplying, networkPartners };
   }, [agents, agentComplianceById]);
 
-  const driverMetrics = useMemo(() => ({
-    totalAlerts: driverAlerts.length,
-    compliant: Math.max(0, driverAlerts.length - driverAlerts.filter((a) => ['Expired', 'Missing', 'Expiring'].includes(a.alertStatus)).length),
-    atRisk: driverAlerts.filter((a) => a.alertStatus === 'Expiring').length,
-    nonComplying: driverAlerts.filter((a) => a.alertStatus === 'Expired' || a.alertStatus === 'Missing').length,
-    pendingApprovals: pendingCount,
-  }), [driverAlerts, pendingCount]);
 
   const agentCriticalItems = useMemo(() => {
     const items = agents.flatMap((agent) => {
@@ -207,16 +195,11 @@ export default function ComplianceHub({
           )}
 
           {activeMonitoringTab === 'driver' && (
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <MetricCard label="Pending Approvals" value={driverMetrics.pendingApprovals} detail="Driver onboarding approvals waiting" tone="text-sky-700" />
-                <MetricCard label="At Risk" value={driverMetrics.atRisk} detail="Expiring documents" tone="text-amber-700" />
-                <MetricCard label="Non-Complying" value={driverMetrics.nonComplying} detail="Expired or missing documents" tone="text-red-700" />
-                <MetricCard label="Alerts Tracked" value={driverMetrics.totalAlerts} detail="Driver / contractor compliance alerts" tone="text-violet-700" />
-              </div>
-
-              {initialTab === 'approval' ? <DriverApproval /> : <ComplianceDashboard />}
-            </div>
+            // ComplianceDashboard now owns the full Drivers/Contractors view:
+            // the Fleet Compliance Overview, then the Compliance Risk / Awaiting
+            // Approval tabs. The legacy /driver-approval route (initialTab
+            // 'approval') opens straight onto the approval tab.
+            <ComplianceDashboard initialTab={initialTab === 'approval' ? 'approval' : 'risk'} />
           )}
         </div>
       )}

@@ -4,7 +4,19 @@ import { useComplianceDashboard, useComplianceAlerts } from '@/hooks/useComplian
 import { complianceProfileService } from '@/services/np_complianceProfileService';
 import { quizService } from '@/services/np_quizService';
 import StatCard from '@/components/common/StatCard';
+import { DriverApproval } from '@/pages/tenant/DriverApproval';
 import type { ComplianceAlertFilter, ComplianceProfile } from '@/types';
+
+// Monitoring › Drivers/Contractors sub-tabs (Steve refinement 2026-06-11):
+// the Fleet Compliance Overview stays above; the lower area splits into the
+// expiry/compliance-risk list and the tenant courier-approval queue.
+type DriverMonitorTab = 'risk' | 'approval';
+
+interface ComplianceDashboardProps {
+  // Lets a caller open straight onto a tab — e.g. the legacy /driver-approval
+  // route lands on 'approval'. Defaults to the compliance-risk list.
+  initialTab?: DriverMonitorTab;
+}
 
 type DrilldownFilter = {
   status?: string;
@@ -113,7 +125,7 @@ function ComplianceScoreRing({ percent }: { percent: number }) {
   );
 }
 
-export default function ComplianceDashboard() {
+export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceDashboardProps = {}) {
   const navigate = useNavigate();
   const { data: dashboard, loading: dashLoading } = useComplianceDashboard();
 
@@ -123,6 +135,7 @@ export default function ComplianceDashboard() {
   const [sortAsc, setSortAsc] = useState(true);
   const [profiles, setProfiles] = useState<ComplianceProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
+  const [driverTab, setDriverTab] = useState<DriverMonitorTab>(initialTab);
 
   useEffect(() => {
     complianceProfileService.getAll().then(ps => setProfiles(ps.filter(p => p.active)));
@@ -194,6 +207,7 @@ export default function ComplianceDashboard() {
     } else {
       setDrilldown({ status, label });
       setSearchText('');
+      setDriverTab('risk'); // surface the risk list when drilling in from the overview
     }
   }, [drilldown]);
 
@@ -218,6 +232,7 @@ export default function ComplianceDashboard() {
       label: `${docType} — ${statusLabel[status] || status}`,
     });
     setSearchText('');
+    setDriverTab('risk'); // surface the risk list when drilling in from the breakdown
   }, []);
 
   const handleSendReminder = async (courierId: number) => {
@@ -426,7 +441,32 @@ export default function ComplianceDashboard() {
         </div>
       </div>
 
-      {/* Drill-down List */}
+      {/* Drivers / Contractors monitoring tabs — Compliance Risk (the
+          expiry/drill-down list below) and Awaiting Approval (the tenant
+          courier-approval queue). Fleet Compliance Overview above stays put. */}
+      <div className="flex gap-1 rounded-2xl border border-border bg-white p-1 shadow-sm w-fit">
+        <button
+          onClick={() => setDriverTab('risk')}
+          className={`rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+            driverTab === 'risk' ? 'bg-brand-cyan/15 text-brand-dark' : 'text-text-secondary hover:bg-slate-50'
+          }`}
+        >
+          Compliance Risk
+        </button>
+        <button
+          onClick={() => setDriverTab('approval')}
+          className={`rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+            driverTab === 'approval' ? 'bg-brand-cyan/15 text-brand-dark' : 'text-text-secondary hover:bg-slate-50'
+          }`}
+        >
+          Awaiting Approval
+        </button>
+      </div>
+
+      {driverTab === 'approval' && <DriverApproval />}
+
+      {/* Drill-down List — Compliance Risk tab */}
+      {driverTab === 'risk' && (
         <div className="bg-white border border-border rounded-lg p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-3">
@@ -570,6 +610,7 @@ export default function ComplianceDashboard() {
             </div>
           )}
         </div>
+      )}
     </div>
   );
 }

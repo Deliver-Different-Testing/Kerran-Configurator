@@ -6,7 +6,6 @@ import { AgentWorkspace, NpComplianceBar } from '@/components/tenant/AgentWorksp
 import { TierBadge } from '@/components/tenant/TierBadge';
 import { getAgentStatusTone } from './agentComplianceService';
 import { useAgents as useLiveAgents } from '@/hooks/useAgents';
-import { NpManagement } from './NpManagement';
 import { agentService, tenantLookupService, LookupItem } from '@/services/tenant_agentService';
 import { prospectService, ProspectAgent } from '@/services/tenant_prospectService';
 import type { Agent, CitySuggestion } from '@/types';
@@ -20,7 +19,6 @@ function AgentStatusBadge({ status }: { status: string }) {
 }
 
 type ListMode = 'directory' | 'find';
-type AgentTab = 'all' | 'network-partners';
 
 export function AgentList() {
   const location = useLocation();
@@ -182,7 +180,6 @@ export function AgentList() {
       setSaving(false);
     }
   }
-  const [activeTab, setActiveTab] = useState<AgentTab>('all');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [assocFilter, setAssocFilter] = useState('');
@@ -255,26 +252,9 @@ export function AgentList() {
         </button>
       </div>
 
-      {/* Tab bar */}
-      <div className="mb-5 flex gap-1 border-b border-border">
-        {([['all', 'All Agents'], ['network-partners', 'Network Partners']] as [AgentTab, string][]).map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === id
-                ? 'border-brand-cyan text-brand-cyan'
-                : 'border-transparent text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'network-partners' ? (
-        <NpManagement />
-      ) : mode === 'find' ? (
+      {/* Network Partners tab removed (Steve refinement 2026-06-11) — this is
+          now the Agents/NPs directory only; NP management lives elsewhere. */}
+      {mode === 'find' ? (
         <div className="space-y-6">
           <div className="rounded-lg border border-blue-200 bg-white p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

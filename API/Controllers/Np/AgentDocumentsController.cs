@@ -20,7 +20,10 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 /// </summary>
 [Route("api/v1/np/agents/{agentId:int}/documents")]
 [ApiController]
-[Authorize(Policy = "TenantStaffOrAdmin")]
+// Staff manage ANY agent's docs by id — NPs are REJECTED here (they would
+// otherwise be able to read/verify other agents' documents). NP self-service
+// uses MyAgentDocumentsController (/np/my-documents, NetworkPartnerOrAdmin).
+[Authorize(Policy = "TenantStaffOrAdminNoNp")]
 public class AgentDocumentsController(AgentDocumentService service) : BaseController
 {
     [HttpGet]

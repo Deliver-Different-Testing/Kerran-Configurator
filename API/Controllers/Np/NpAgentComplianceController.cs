@@ -15,7 +15,11 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 /// </summary>
 [Route("api/v1/np/compliance")]
 [ApiController]
-[Authorize(Policy = "TenantStaffOrAdmin")]
+// Tenant-wide aggregates (dashboard / roster / per-agent scorecards across the
+// whole tenant) — NPs must NOT see these (Steve security log Issue 1). NoNp
+// rejects Network Partner sessions; they use NpComplianceController (their own
+// driver compliance) + /np/my-documents (self-upload) instead.
+[Authorize(Policy = "TenantStaffOrAdminNoNp")]
 public class NpAgentComplianceController(NpAgentComplianceService service) : BaseController
 {
     [HttpGet("agents/dashboard")]

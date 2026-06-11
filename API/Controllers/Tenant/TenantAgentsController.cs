@@ -10,11 +10,13 @@ namespace DfrntDriveConfigurator.Api.Controllers.Tenant;
 
 // Tenant-side agents directory — read by AgentList, edit/create from the Edit
 // Agent modal. Visible to any tenant staff (the agents directory is a tenant-
-// marketplace concept) plus DF Admins; NPs also pass because they're staff at
-// their own tenant.
+// marketplace concept) plus DF Admins. NPs are REJECTED — the agents directory
+// is a tenant-wide roster of all NPs/agents, which a single NP has no business
+// enumerating (Steve security log Issue 1: the "19 agent records / 9 NPs"
+// figures the leaked NP dashboard surfaced came from here).
 [Route("api/v1/tenant/agents")]
 [ApiController]
-[Authorize(Policy = "TenantStaffOrAdmin")]
+[Authorize(Policy = "TenantStaffOrAdminNoNp")]
 public class TenantAgentsController(TenantAgentService tenantAgentService) : BaseController
 {
     [HttpGet]

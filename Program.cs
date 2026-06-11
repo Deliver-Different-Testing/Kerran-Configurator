@@ -257,6 +257,32 @@ builder.Services.AddAuthorization(options =>
                 && !string.Equals(isCourier, "True", StringComparison.OrdinalIgnoreCase);
         }));
 
+    // Tenant-AGGREGATE surfaces — the agent/NP compliance dashboard + roster
+    // and the agents directory — expose data about ALL of a tenant's NPs and
+    // agents. Unlike TenantStaffOrAdmin above (which intentionally admits NPs
+    // so they can reach their own scoped surfaces), these must FAIL CLOSED for
+    // Network Partner sessions: an NP has no business seeing tenant-wide
+    // aggregates or other NPs' records (Steve security log Issue 1, 2026-06-11
+    // — jim@JIMCOURIER.com saw a 19-agent / 9-NP dashboard). Same admit rule as
+    // TenantStaffOrAdmin minus Network Partners. DF Admin + tenant staff keep
+    // access; NPs get 403 and use their NP-scoped endpoints instead
+    // (/np/compliance/* driver compliance, /np/my-documents self-upload).
+    options.AddPolicy("TenantStaffOrAdminNoNp", policy =>
+        policy.RequireAssertion(context =>
+        {
+            // Legacy despatch staff (UserGroupID present) are never NPs.
+            var userGroupId = context.User.FindFirst("UserGroupID")?.Value;
+            if (!string.IsNullOrEmpty(userGroupId)) return true;
+
+            var isNp = context.User.FindFirst("IsNetworkPartner")?.Value;
+            if (string.Equals(isNp, "True", StringComparison.OrdinalIgnoreCase)) return false;
+
+            var currentTenantId = context.User.FindFirst("CurrentTenantID")?.Value;
+            var isCourier = context.User.FindFirst("IsCourier")?.Value;
+            return !string.IsNullOrEmpty(currentTenantId)
+                && !string.Equals(isCourier, "True", StringComparison.OrdinalIgnoreCase);
+        }));
+
     // Phase 5+31 R3 retired the 9 hardcoded Np* policies that were
     // registered here (NpManageUsers / NpEditSettings / NpViewFinancials /
     // NpAssignCouriers / NpManageCouriers / NpManageFleet / NpViewDispatch /

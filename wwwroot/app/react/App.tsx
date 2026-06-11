@@ -169,16 +169,23 @@ export default function App() {
             <Route path="users/import" element={<UserImport />} />
             <Route path="reports" element={<Reports />} />
             <Route path="quotes" element={<NpQuotes />} />
-            <Route path="compliance" element={<ComplianceHub />} />
-            <Route path="compliance/setup" element={<ComplianceHub />} />
+            {/* NP lane is self-service only. The tenant ComplianceHub
+                (Monitoring roster + Set up admin) is a tenant-staff surface
+                whose backend now rejects NP callers (TenantStaffOrAdminNoNp);
+                redirect any NP who reaches these URLs to their own documents
+                so the page can't render the tenant aggregate (Steve security
+                log Issues 1 & 3). Only My Documents stays live for NP. */}
+            <Route path="compliance" element={<Navigate to="/compliance/my-documents" replace />} />
+            <Route path="compliance/setup" element={<Navigate to="/compliance/my-documents" replace />} />
             <Route path="compliance/my-documents" element={<MyComplianceDocuments />} />
-            <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
-            <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
+            <Route path="compliance-profiles" element={<Navigate to="/compliance/my-documents" replace />} />
+            <Route path="driver-approval" element={<Navigate to="/compliance/my-documents" replace />} />
             <Route path="recruitment" element={<RecruitmentPipeline />} />
             <Route path="recruitment/:id" element={<ApplicantDetail />} />
             <Route path="recruitment/portal-url" element={<PortalUrl />} />
             <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} />} />
-            <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
+            {/* Document-type config is tenant-admin (TenantStaffOrAdminNoNp) — not for NP. */}
+            <Route path="settings/document-types" element={<Navigate to="/compliance/my-documents" replace />} />
             <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />
             <Route path="settings/contracts" element={<ContractSettings />} />
             <Route path="settings/recruitment-ads" element={<RecruitmentAdvertising />} />

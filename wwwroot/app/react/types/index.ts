@@ -527,6 +527,24 @@ export interface ComplianceDashboard {
   fleetCompliancePercent: number;
   breakdownByType: ComplianceBreakdownByType[];
   urgentAlerts: ComplianceAlert[];
+  // One row per active courier — drives the Compliance Risk roster.
+  couriers: ComplianceCourierRow[];
+}
+
+export interface ComplianceCourierRow {
+  courierId: number;
+  code?: string;
+  name: string;
+  role?: string;            // Independent | Master | Sub | Gig
+  phone?: string;
+  email?: string;
+  vehicle?: string;
+  networkPartner: string;   // NP name, or "Direct"
+  required: number;
+  current: number;
+  expiring: number;
+  expired: number;
+  missing: number;
 }
 
 export interface ComplianceBreakdownByType {

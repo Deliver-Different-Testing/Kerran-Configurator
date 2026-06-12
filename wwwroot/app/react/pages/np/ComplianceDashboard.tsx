@@ -1,11 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useComplianceDashboard, useComplianceAlerts } from '@/hooks/useCompliance';
-import { complianceProfileService } from '@/services/np_complianceProfileService';
-import { quizService } from '@/services/np_quizService';
+import { useComplianceDashboard } from '@/hooks/useCompliance';
 import StatCard from '@/components/common/StatCard';
 import { DriverApproval } from '@/pages/tenant/DriverApproval';
-import type { ComplianceAlertFilter, ComplianceProfile } from '@/types';
 
 // Monitoring › Drivers/Contractors sub-tabs (Steve refinement 2026-06-11):
 // the Fleet Compliance Overview stays above; the lower area splits into the
@@ -23,21 +20,6 @@ type DrilldownFilter = {
   docType?: string;
   label?: string;
 };
-
-const statusBadgeClasses: Record<string, string> = {
-  Expired: 'bg-red-100 text-red-800',
-  Expiring: 'bg-amber-100 text-amber-800',
-  Missing: 'bg-purple-100 text-purple-800',
-  Current: 'bg-green-100 text-green-800',
-};
-
-function AlertStatusBadge({ status }: { status: string }) {
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadgeClasses[status] || 'bg-gray-100 text-gray-800'}`}>
-      {status}
-    </span>
-  );
-}
 
 function DonutChart({
   compliant, warnings, nonCompliant, missing,
@@ -131,57 +113,20 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
 
   const [drilldown, setDrilldown] = useState<DrilldownFilter | null>(null);
   const [searchText, setSearchText] = useState('');
-  const [notifying, setNotifying] = useState<number | null>(null);
-  const [sortAsc, setSortAsc] = useState(true);
-  const [profiles, setProfiles] = useState<ComplianceProfile[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const [driverTab, setDriverTab] = useState<DriverMonitorTab>(initialTab);
 
-  useEffect(() => {
-    complianceProfileService.getAll().then(ps => setProfiles(ps.filter(p => p.active)));
-  }, []);
+  // Missing count from the per-type breakdown (drives the donut + Missing tile).
+  const missingCount = useMemo(() => {
+    if (!dashboard) return 0;
+    return dashboard.breakdownByType.reduce((sum, b) => sum + b.missing, 0);
+  }, [dashboard]);
 
-  // Build alert filters from drilldown
-  const activeFilters = useMemo<ComplianceAlertFilter>(() => {
-    const f: ComplianceAlertFilter = {};
-    if (drilldown?.status) f.status = drilldown.status;
-    if (drilldown?.docType) f.docType = drilldown.docType;
-    if (searchText) f.courierName = searchText;
-    return f;
-  }, [drilldown, searchText]);
-
-  // Always fetch the full alert set (one row per courier × tracked doc type,
-  // all statuses incl. Current) — the Compliance Risk roster below groups it by
-  // courier client-side, and card/donut drill-downs filter the rows in memory.
-  const { alerts, loading: alertsLoading } = useComplianceAlerts({});
-
-  // Compliance Risk roster (Steve 2026-06-12): the "Breakdown by Document Type"
-  // reshaped to one row PER COURIER + the courier identity columns. Required =
-  // tracked docs for the courier; Current/Expiring/Expired/Missing = that
-  // courier's per-status document counts.
+  // Compliance Risk roster — one row per courier, taken straight from the
+  // dashboard (built server-side from the courier list, so couriers appear even
+  // when the tenant has no tracked doc types). Card/donut drill-downs + the
+  // search box filter the rows.
   const courierRows = useMemo(() => {
-    const byCourier = new Map<number, {
-      courierId: number; code?: string; name: string; role?: string;
-      phone?: string; email?: string; vehicle?: string; networkPartner: string;
-      required: number; current: number; expiring: number; expired: number; missing: number;
-    }>();
-    for (const a of alerts) {
-      let row = byCourier.get(a.courierId);
-      if (!row) {
-        row = {
-          courierId: a.courierId, code: a.code, name: a.courierName, role: a.role,
-          phone: a.phone, email: a.email, vehicle: a.vehicle, networkPartner: a.networkPartner || 'Direct',
-          required: 0, current: 0, expiring: 0, expired: 0, missing: 0,
-        };
-        byCourier.set(a.courierId, row);
-      }
-      row.required += 1;
-      if (a.alertStatus === 'Current') row.current += 1;
-      else if (a.alertStatus === 'Expiring') row.expiring += 1;
-      else if (a.alertStatus === 'Expired') row.expired += 1;
-      else if (a.alertStatus === 'Missing') row.missing += 1;
-    }
-    let rows = [...byCourier.values()];
+    let rows = dashboard?.couriers ?? [];
     if (searchText) {
       const q = searchText.toLowerCase();
       rows = rows.filter(r => r.name.toLowerCase().includes(q) || (r.code ?? '').toLowerCase().includes(q));
@@ -194,55 +139,8 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
         s === 'Expired' ? r.expired > 0 :
         s === 'Missing' ? r.missing > 0 : true);
     }
-    return rows.sort((a, b) => a.name.localeCompare(b.name));
-  }, [alerts, searchText, drilldown]);
-
-  // Compute missing count from dashboard
-  const missingCount = useMemo(() => {
-    if (!dashboard) return 0;
-    return dashboard.breakdownByType.reduce((sum, b) => sum + b.missing, 0);
-  }, [dashboard]);
-
-  const selectedProfile = profiles.find(p => p.id === selectedProfileId);
-  const profileDocTypes = selectedProfile?.requirements.map(r => r.documentTypeName) || null;
-
-  // Build breakdown rows that include profile doc types even if not in dashboard data
-  const filteredBreakdown = useMemo(() => {
-    if (!dashboard) return [];
-    if (!selectedProfile || !profileDocTypes) return dashboard.breakdownByType;
-
-    return profileDocTypes.map(docName => {
-      const existing = dashboard.breakdownByType.find(b => b.documentTypeName === docName);
-      if (existing) return existing;
-      // Doc type exists in profile but not in dashboard — all couriers are missing it
-      return {
-        documentTypeId: 0,
-        documentTypeName: docName,
-        category: 'Other',
-        totalRequired: dashboard.totalActiveCouriers,
-        current: 0,
-        expiring: 0,
-        expired: 0,
-        missing: dashboard.totalActiveCouriers,
-      };
-    });
-  }, [dashboard, selectedProfile, profileDocTypes]);
-
-  const sortedAlerts = useMemo(() => {
-    let filtered = [...alerts];
-    // Filter by compliance profile's required doc types
-    if (profileDocTypes) {
-      filtered = filtered.filter(a => profileDocTypes.includes(a.documentType));
-    }
-    filtered.sort((a, b) => {
-      // nulls (missing) go last when ascending, first when descending
-      if (a.daysUntilExpiry === null && b.daysUntilExpiry === null) return 0;
-      if (a.daysUntilExpiry === null) return sortAsc ? 1 : -1;
-      if (b.daysUntilExpiry === null) return sortAsc ? -1 : 1;
-      return sortAsc ? a.daysUntilExpiry - b.daysUntilExpiry : b.daysUntilExpiry - a.daysUntilExpiry;
-    });
-    return filtered;
-  }, [alerts, sortAsc, profileDocTypes]);
+    return rows;
+  }, [dashboard, searchText, drilldown]);
 
   const handleCardClick = useCallback((status: string, label: string) => {
     if (drilldown?.status === status && !drilldown?.docType) {
@@ -264,26 +162,6 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
     handleCardClick(status, labelMap[status] || status);
   }, [handleCardClick]);
 
-  const handleBreakdownClick = useCallback((docType: string, status: string, count: number) => {
-    if (count === 0) return;
-    const statusLabel: Record<string, string> = {
-      current: 'Current', expiring: 'Expiring', expired: 'Expired', missing: 'Missing',
-    };
-    setDrilldown({
-      status: statusLabel[status] || status,
-      docType,
-      label: `${docType} — ${statusLabel[status] || status}`,
-    });
-    setSearchText('');
-    setDriverTab('risk'); // surface the risk list when drilling in from the breakdown
-  }, []);
-
-  const handleSendReminder = async (courierId: number) => {
-    setNotifying(courierId);
-    await new Promise(r => setTimeout(r, 800));
-    setNotifying(null);
-  };
-
   if (dashLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -300,37 +178,6 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
           button removed per Steve's markup — this view is already labelled by
           the Monitoring › Drivers/Contractors › Compliance Risk tabs above, and
           doc-type config lives under Compliance › Set up. */}
-
-      {/* Compliance Profile Filter */}
-      {profiles.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-text-secondary font-medium">Filter by Profile:</span>
-          <button
-            onClick={() => setSelectedProfileId(null)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-              !selectedProfileId
-                ? 'bg-[#0d0c2c] text-white border-[#0d0c2c]'
-                : 'bg-white text-text-secondary border-border hover:border-[#3bc7f4]/40'
-            }`}
-          >
-            All Profiles
-          </button>
-          {profiles.map(p => (
-            <button
-              key={p.id}
-              onClick={() => setSelectedProfileId(p.id === selectedProfileId ? null : p.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                selectedProfileId === p.id
-                  ? 'bg-[#0d0c2c] text-white border-[#0d0c2c]'
-                  : 'bg-white text-text-secondary border-border hover:border-[#3bc7f4]/40'
-              }`}
-            >
-              {p.name}
-              <span className="ml-1 text-[10px] opacity-60">({p.requirements.length})</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Fleet Compliance Overview (donut) sits to the LEFT of the summary
           tiles (Steve 2026-06-12 — moved up out of the old charts row). */}
@@ -454,11 +301,7 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
             </div>
           </div>
 
-          {alertsLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-cyan" />
-            </div>
-          ) : courierRows.length === 0 ? (
+          {courierRows.length === 0 ? (
             <div className="text-center py-8 text-text-secondary">
               <div className="text-4xl mb-2">📋</div>
               <p>No couriers match this filter.</p>

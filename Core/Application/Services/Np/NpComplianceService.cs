@@ -310,10 +310,17 @@ public class NpComplianceService(
                 TotalRequired = m.Couriers.Count,
             });
 
+        // Per-courier roster (drives the Compliance Risk table). Built here from
+        // the courier list so every active courier appears even when the tenant
+        // has no tracked doc types (Required=0) — the alert list can't, since a
+        // courier with no doc-type rows produces no alerts.
+        var roster = new List<NpComplianceRosterRowDto>(m.Couriers.Count);
+
         foreach (var courier in m.Couriers)
         {
             bool hasExpiredOrMissing = false;
             bool hasExpiring = false;
+            int required = 0, cur = 0, exp = 0, expd = 0, miss = 0;
 
             foreach (var dt in m.DocTypes)
             {
@@ -321,17 +328,41 @@ public class NpComplianceService(
                 var b = breakdown[dt.Id];
                 switch (status)
                 {
-                    case "Current":  b.Current++;  break;
-                    case "Expiring": b.Expiring++; hasExpiring = true; break;
-                    case "Expired":  b.Expired++;  hasExpiredOrMissing = true; break;
-                    case "Missing":  b.Missing++;  if (dt.Mandatory) hasExpiredOrMissing = true; break;
+                    case "Current":  b.Current++;  cur++;  required++; break;
+                    case "Expiring": b.Expiring++; hasExpiring = true; exp++; required++; break;
+                    case "Expired":  b.Expired++;  hasExpiredOrMissing = true; expd++; required++; break;
+                    // Non-mandatory missing isn't a requirement violation — counted
+                    // in the per-type breakdown but excluded from the courier's
+                    // required/missing tally (matches the alert grain).
+                    case "Missing":  b.Missing++;  if (dt.Mandatory) { hasExpiredOrMissing = true; miss++; required++; } break;
                 }
             }
 
             if (hasExpiredOrMissing) dto.TotalNonCompliant++;
             else if (hasExpiring)    dto.TotalWarnings++;
             else                     dto.TotalCompliant++;
+
+            roster.Add(new NpComplianceRosterRowDto
+            {
+                CourierId = courier.Id,
+                Code = courier.Code,
+                Name = courier.Name,
+                Role = MapCourierRole(courier.CourierTypeId),
+                Phone = courier.Phone,
+                Email = courier.Email,
+                Vehicle = courier.Vehicle,
+                NetworkPartner = courier.NpAgentId is int npId && m.AgentNames.TryGetValue(npId, out var apName) && !string.IsNullOrWhiteSpace(apName)
+                    ? apName
+                    : "Direct",
+                Required = required,
+                Current = cur,
+                Expiring = exp,
+                Expired = expd,
+                Missing = miss,
+            });
         }
+
+        dto.Couriers = roster.OrderBy(r => r.Name).ToList();
 
         dto.BreakdownByType = breakdown.Values
             .OrderBy(b => b.DocumentTypeName)

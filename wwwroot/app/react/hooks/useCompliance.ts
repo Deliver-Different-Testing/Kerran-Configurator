@@ -94,6 +94,8 @@ function generateMockDashboard(): ComplianceDashboard {
       const order: Record<string, number> = { Expired: 0, Missing: 1, Expiring: 2 };
       return (order[a.alertStatus] ?? 3) - (order[b.alertStatus] ?? 3);
     }).slice(0, 10),
+    // Emergency-fallback mock only — the live API supplies the real roster.
+    couriers: [],
   };
 }
 

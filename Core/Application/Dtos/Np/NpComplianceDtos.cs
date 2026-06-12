@@ -23,6 +23,29 @@ public class NpComplianceDashboardDto
     public decimal FleetCompliancePercent { get; set; }
     public List<NpComplianceBreakdownDto> BreakdownByType { get; set; } = new();
     public List<NpComplianceAlertDto> UrgentAlerts { get; set; } = new();
+
+    // One row per active in-scope courier (drives the Compliance Risk roster).
+    // Built from the courier list directly — independent of whether any doc
+    // types are tracked — so couriers still appear (with Required=0) on tenants
+    // that have no ActiveCourier/Both DocumentTypes seeded.
+    public List<NpComplianceRosterRowDto> Couriers { get; set; } = new();
+}
+
+public class NpComplianceRosterRowDto
+{
+    public int CourierId { get; set; }
+    public string? Code { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Role { get; set; }              // Independent | Master | Sub | Gig
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public string? Vehicle { get; set; }
+    public string NetworkPartner { get; set; } = "Direct";
+    public int Required { get; set; }
+    public int Current { get; set; }
+    public int Expiring { get; set; }
+    public int Expired { get; set; }
+    public int Missing { get; set; }
 }
 
 public class NpComplianceBreakdownDto

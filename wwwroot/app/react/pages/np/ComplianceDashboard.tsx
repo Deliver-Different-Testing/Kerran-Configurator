@@ -253,20 +253,10 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Compliance Dashboard</h1>
-          <p className="text-sm text-text-secondary mt-1">Monitor fleet-wide document compliance and take action on expiring or missing documents.</p>
-        </div>
-        <button
-          onClick={() => navigate('/settings/document-types')}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-brand-cyan text-brand-dark hover:shadow-cyan-glow transition-all shrink-0"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
-          Configure Document Types
-        </button>
-      </div>
+      {/* Header (title + explanatory subtitle) and the Configure Document Types
+          button removed per Steve's markup — this view is already labelled by
+          the Monitoring › Drivers/Contractors › Compliance Risk tabs above, and
+          doc-type config lives under Compliance › Set up. */}
 
       {/* Compliance Profile Filter */}
       {profiles.length > 0 && (
@@ -509,8 +499,13 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
+                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Code</th>
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Courier</th>
-                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Fleet</th>
+                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Role</th>
+                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Phone</th>
+                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Email</th>
+                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Vehicle</th>
+                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Network Partner</th>
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Document Type</th>
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Status</th>
                     <th
@@ -526,8 +521,13 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
                 <tbody>
                   {sortedAlerts.map((alert, i) => (
                     <tr key={`${alert.courierId}-${alert.documentType}-${i}`} className="border-b border-border last:border-b-0 hover:bg-gray-50">
+                      <td className="py-2.5 pr-4 text-text-secondary">{alert.code || '—'}</td>
                       <td className="py-2.5 pr-4 font-medium text-text-primary">{alert.courierName}</td>
-                      <td className="py-2.5 pr-4 text-text-secondary">{alert.fleet || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{alert.role || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{alert.phone || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{alert.email || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{alert.vehicle || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{alert.networkPartner || 'Direct'}</td>
                       <td className="py-2.5 pr-4 text-text-primary">
                         {alert.documentType}
                         {(() => {

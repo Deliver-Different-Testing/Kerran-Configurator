@@ -229,12 +229,17 @@ public class NpComplianceService(
             courierQuery = courierQuery.Where(c => c.NpAgentId == scope.NpAgentId);
 
         var couriers = await courierQuery
-            .Select(c => new CourierSnapshot(c.UccrId, ((c.UccrName ?? string.Empty) + " " + (c.UccrSurname ?? string.Empty)).Trim(), c.NpAgentId))
+            .Select(c => new CourierSnapshot(
+                c.UccrId,
+                ((c.UccrName ?? string.Empty) + " " + (c.UccrSurname ?? string.Empty)).Trim(),
+                c.NpAgentId,
+                c.Code, c.CourierTypeId, c.UccrEmail, c.UccrVehicle, c.UccrMobile ?? c.UccrTel))
             .ToListAsync(ct);
 
         if (couriers.Count == 0)
-            return new ComplianceMatrix(couriers, await LoadTrackedDocTypesAsync(ct), new Dictionary<(int, int), DocSnapshot>());
+            return new ComplianceMatrix(couriers, await LoadTrackedDocTypesAsync(ct), new Dictionary<(int, int), DocSnapshot>(), new Dictionary<int, string>());
 
+        var agentNames = await LoadAgentNamesAsync(couriers, ct);
         var docTypes = await LoadTrackedDocTypesAsync(ct);
 
         // All courier docs for the in-scope courier set (active, not Rejected).
@@ -256,7 +261,20 @@ public class NpComplianceService(
             if (!latest.ContainsKey(key)) latest[key] = d;    // rawDocs is already ordered desc → first wins
         }
 
-        return new ComplianceMatrix(couriers, docTypes, latest);
+        return new ComplianceMatrix(couriers, docTypes, latest, agentNames);
+    }
+
+    // Network-partner names for the in-scope couriers' NpAgentIds (for the
+    // Compliance Risk "Network Partner" column; couriers with no NpAgentId
+    // render "Direct" at compose time).
+    private async Task<Dictionary<int, string>> LoadAgentNamesAsync(List<CourierSnapshot> couriers, CancellationToken ct)
+    {
+        var agentIds = couriers.Where(c => c.NpAgentId.HasValue)
+            .Select(c => c.NpAgentId!.Value).Distinct().ToList();
+        if (agentIds.Count == 0) return new Dictionary<int, string>();
+        return await Context.TucAgents.AsNoTracking()
+            .Where(a => agentIds.Contains(a.UcagId))
+            .ToDictionaryAsync(a => a.UcagId, a => a.UcagName ?? string.Empty, ct);
     }
 
     private async Task<List<DocTypeSnapshot>> LoadTrackedDocTypesAsync(CancellationToken ct)
@@ -362,6 +380,14 @@ public class NpComplianceService(
                     AlertStatus = status,
                     Fleet = null,                    // master-courier resolution deferred
                     DaysUntilExpiry = days,
+                    Code = courier.Code,
+                    Role = MapCourierRole(courier.CourierTypeId),
+                    Phone = courier.Phone,
+                    Email = courier.Email,
+                    Vehicle = courier.Vehicle,
+                    NetworkPartner = courier.NpAgentId is int npId && m.AgentNames.TryGetValue(npId, out var apName) && !string.IsNullOrWhiteSpace(apName)
+                        ? apName
+                        : "Direct",
                 });
             }
         }
@@ -437,7 +463,19 @@ public class NpComplianceService(
 
     // ─── Internal records ────────────────────────────────────────────────
 
-    private sealed record CourierSnapshot(int Id, string Name, int? NpAgentId);
+    private sealed record CourierSnapshot(
+        int Id, string Name, int? NpAgentId,
+        string? Code, int CourierTypeId, string? Email, string? Vehicle, string? Phone);
+
+    // tucCourier.CourierTypeId: 1 Independent, 2 Master, 3 Sub, 4 Gig (NpFleetDtos).
+    private static string MapCourierRole(int courierTypeId) => courierTypeId switch
+    {
+        1 => "Independent",
+        2 => "Master",
+        3 => "Sub",
+        4 => "Gig",
+        _ => "—",
+    };
 
     // Per-agent courier-compliance tally (public — consumed by NpAgentComplianceService).
     public sealed class CourierComplianceRollup
@@ -452,5 +490,6 @@ public class NpComplianceService(
     private sealed record ComplianceMatrix(
         List<CourierSnapshot> Couriers,
         List<DocTypeSnapshot> DocTypes,
-        Dictionary<(int CourierId, int DocTypeId), DocSnapshot> Latest);
+        Dictionary<(int CourierId, int DocTypeId), DocSnapshot> Latest,
+        Dictionary<int, string> AgentNames);   // NpAgentId → agent name (for the Network Partner column)
 }

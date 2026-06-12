@@ -47,6 +47,17 @@ public class NpComplianceAlertDto
     public string AlertStatus { get; set; } = "Current";   // Expired | Expiring | Missing | Current
     public string? Fleet { get; set; }                     // null for now — master-courier resolution deferred
     public int? DaysUntilExpiry { get; set; }
+
+    // Courier operator context (Steve 2026-06-12 — Compliance Risk columns).
+    // Repeats across a courier's per-document rows; sourced live from TucCourier
+    // (+ TucAgent for the network-partner name; "Direct" when the courier has
+    // no NpAgentId).
+    public string? Code { get; set; }
+    public string? Role { get; set; }                      // Independent | Master | Sub | Gig
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public string? Vehicle { get; set; }
+    public string NetworkPartner { get; set; } = "Direct";
 }
 
 public class NpCourierComplianceScoreDto

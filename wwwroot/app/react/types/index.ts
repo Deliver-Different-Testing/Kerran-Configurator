@@ -549,6 +549,13 @@ export interface ComplianceAlert {
   alertStatus: 'Expired' | 'Expiring' | 'Missing' | 'Current';
   fleet?: string;
   daysUntilExpiry: number | null;
+  // Courier operator context — live from the API (absent on the mock fallback).
+  code?: string;
+  role?: string;            // Independent | Master | Sub | Gig
+  phone?: string;
+  email?: string;
+  vehicle?: string;
+  networkPartner?: string;  // NP name, or "Direct"
 }
 
 export interface CourierComplianceScore {

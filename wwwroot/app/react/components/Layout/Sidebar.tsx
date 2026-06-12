@@ -17,6 +17,11 @@ interface NavItem {
   disabled?: boolean;
   locked?: boolean;
   children?: NavItem[];
+  // Phase 5+31 R2 §2 — optional ITEM-level feature gate (Steve 2026-06-12).
+  // Same semantics as NavSection.featureKey but per child route, so a section
+  // shared by Tenant + NP can hide individual items per ClientType. A section
+  // is hidden when all its items filter out. Absent = always show.
+  featureKey?: string;
 }
 
 interface NavSection {
@@ -163,6 +168,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
   const sections: NavSection[] = [
     {
       id: 'dashboard', label: 'Dashboard', icon: icons.dashboard,
+      featureKey: 'cfg-dashboard',
       items: [{ id: '/', label: 'Dashboard', implemented: true }],
     },
   ];
@@ -170,6 +176,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
   if (cfg.directCouriersEnabled) {
     sections.push({
       id: 'my-couriers', label: 'My Couriers', icon: icons.couriers,
+      featureKey: 'cfg-fleet',
       items: [
         { id: '/fleet', label: 'Courier List', implemented: true },
         { id: '/fleet/add', label: 'Add Courier', implemented: true },
@@ -220,6 +227,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
   if (cfg.schedulingEnabled) {
     sections.push({
       id: 'scheduling', label: 'Scheduling', icon: icons.scheduling,
+      featureKey: 'cfg-scheduling',
       items: [{ id: '/scheduling', label: 'Scheduling', implemented: true }],
     });
   }
@@ -229,15 +237,17 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
   // default to Active=0 and the feature is inert until staff opt in.
   sections.push({
     id: 'operations', label: 'Operations', icon: icons.settings,
+    featureKey: 'cfg-operations',
     items: [
       { id: '/operations', label: 'Operations', implemented: true },
-      { id: '/operations/recurring-routes', label: 'Recurring Routes', implemented: true },
+      { id: '/operations/recurring-routes', label: 'Recurring Routes', featureKey: 'cfg-operations-recurring-routes', implemented: true },
     ],
   });
 
   if (cfg.quotesEnabled) {
     sections.push({
       id: 'quotes', label: 'Quotes', icon: icons.quotes,
+      featureKey: 'cfg-quotes',
       items: [{ id: '/quotes', label: 'Quote Requests', implemented: true }],
     });
   }
@@ -246,6 +256,7 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
   // Rate Schedule is the first slice; the section is shaped to grow.
   sections.push({
     id: 'client-reporting', label: 'Client Reporting', icon: icons.reports,
+    featureKey: 'reports',
     items: [
       { id: '/reporting/rate-schedule', label: 'Rate Schedule', implemented: true },
       { id: '/reporting/client-monthly', label: 'Client Monthly Report', implemented: true },
@@ -260,10 +271,12 @@ function buildNpSections(): NavSection[] {
   return [
     {
       id: 'dashboard', label: 'Dashboard', icon: icons.dashboard,
+      featureKey: 'cfg-dashboard',
       items: [{ id: '/', label: 'Dashboard', implemented: true }],
     },
     {
       id: 'my-drivers', label: 'My Drivers', icon: icons.fleet,
+      featureKey: 'cfg-fleet',
       items: [
         { id: '/fleet', label: 'Driver List', implemented: true },
         { id: '/fleet/add', label: 'Add Driver', implemented: true },
@@ -273,6 +286,7 @@ function buildNpSections(): NavSection[] {
     },
     {
       id: 'quotes', label: 'Quote Invites', icon: icons.quotes,
+      featureKey: 'cfg-quotes',
       items: [{ id: '/quotes', label: 'Quote Invites', implemented: true }],
     },
     {
@@ -287,35 +301,37 @@ function buildNpSections(): NavSection[] {
       ],
     },
     {
-      // NO featureKey: My Documents must NOT be gated by the tenant's
-      // 'courier-compliance' Feature Matrix toggle. That toggle is meant to
-      // hide the tenant-staff compliance surfaces — but binding it here also
-      // hid the NP's own self-upload page, i.e. the only way to block the
-      // leak (Issue 1) was to break the NP's ability to comply (Steve
-      // security log Issue 2). My Documents is always operationally required
-      // for an NP, so it is shown unconditionally.
+      // Section is NOT gated by the tenant-staff 'courier-compliance' key —
+      // the NP's only compliance surface is self-upload. My Documents is gated
+      // on the cross-lane document-upload capability key (Steve 2026-06-12 #2:
+      // doc upload spans Tenant/NP/Courier), which seeds ON for NP + Tenant. If
+      // that key is ever toggled off, the item filters out and this section
+      // hides (empty-section rule) rather than the whole compliance group.
       id: 'compliance', label: 'Compliance', icon: icons.compliance,
       items: [
         // NP lane is self-service only: Monitoring (tenant roster of all
         // agents) + Set up (TenantStaffOrAdmin doc-type/profile config) are
         // staff surfaces — Set up 403s and Monitoring's "Open workspace" links
         // 404 in the NP lane. NPs get just their own document compliance.
-        { id: '/compliance/my-documents', label: 'My Documents', implemented: true },
+        { id: '/compliance/my-documents', label: 'My Documents', featureKey: 'cfg-my-documents', implemented: true },
       ],
     },
     {
       id: 'users-section', label: 'My Team', icon: icons.users,
+      featureKey: 'cfg-my-team',
       items: [{ id: '/users', label: 'My Team', implemented: true }],
     },
     {
       id: 'scheduling', label: 'Scheduling', icon: icons.scheduling,
+      featureKey: 'cfg-scheduling',
       items: [{ id: '/scheduling', label: 'Scheduling', implemented: true }],
     },
     {
       id: 'operations', label: 'Operations', icon: icons.settings,
+      featureKey: 'cfg-operations',
       items: [
         { id: '/operations', label: 'Operations', implemented: true },
-        { id: '/operations/recurring-routes', label: 'Recurring Routes', implemented: true },
+        { id: '/operations/recurring-routes', label: 'Recurring Routes', featureKey: 'cfg-operations-recurring-routes', implemented: true },
       ],
     },
     {
@@ -494,14 +510,34 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
       built = buildTenantSections(config);
     }
 
-    // Phase 5+31 R2 §2 — filter sections by the ClientType × Feature matrix.
-    // Sections without a featureKey always pass (core nav). A gated section
-    // shows ONLY when the matrix is ready and grants its key — fail closed on
-    // loading/error so a failed fetch can't leak gated surfaces.
-    built = built.filter(section =>
-      !section.featureKey ||
-      (featuresStatus === 'ready' && !!visibleFeatures && visibleFeatures.has(section.featureKey))
-    );
+    // Phase 5+31 R2 §2 — filter sections AND items by the ClientType × Feature
+    // matrix (item-level gating, Steve 2026-06-12). A surface without a
+    // featureKey always passes (core nav). For gated surfaces:
+    //   - 'error'   → FAIL CLOSED (hidden). A failed fetch (cookie/auth/stale
+    //                 session/API down) must not leak gated surfaces — this is
+    //                 the security fix Steve asked for.
+    //   - 'loading' → optimistic (shown). The fetch is transient and resolves
+    //                 in one round-trip; hiding everything gated here would
+    //                 flash a near-empty sidebar now that most sections gate.
+    //                 The backend still enforces access regardless of nav.
+    //   - 'ready'   → gate by the resolved key set.
+    // A section is hidden when its own key is denied OR all its items filter
+    // out; upsell/upgrade-prompt sections (no items) are always kept.
+    const featureAllowed = (key?: string) => {
+      if (!key) return true;
+      if (featuresStatus === 'error') return false;
+      if (featuresStatus === 'loading') return true;
+      return !!visibleFeatures && visibleFeatures.has(key);
+    };
+
+    built = built
+      .filter(section => featureAllowed(section.featureKey))
+      .map(section =>
+        section.items.length === 0
+          ? section
+          : { ...section, items: section.items.filter(item => featureAllowed(item.featureKey)) }
+      )
+      .filter(section => section.upgradePrompt || section.items.length > 0);
     return built;
   }, [config, isDfAdmin, role, visibleFeatures, featuresStatus]);
 

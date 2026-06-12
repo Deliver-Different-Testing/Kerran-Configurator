@@ -426,12 +426,14 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
   // the role permission matrix). DF Admin sees it regardless.
   const settingsVisible = role !== 'np' || npRole === 'NpAdmin';
   const { config } = useTenantConfig();
-  // Phase 5+31 R2 §2 — ClientType × Feature matrix gates nav sections via
-  // each NavSection's optional `featureKey`. While the fetch is in flight
-  // (visibleFeatures === null) we default-allow so the sidebar doesn't
-  // flash empty on first paint. DF Admin's resolver bypass returns the
-  // union of every visible key, so admins see all feature-gated sections.
-  const { visibleFeatures } = useVisibleFeatures();
+  // Phase 5+31 R2 §2 — ClientType × Feature matrix gates nav sections via each
+  // NavSection's optional `featureKey`. FAIL-CLOSED (Steve 2026-06-11): a gated
+  // section renders only once the matrix has loaded (status === 'ready') and
+  // explicitly grants its key — a loading/errored fetch no longer default-opens
+  // visibility. Un-gated sections always show, so the sidebar never flashes
+  // empty. DF Admin's resolver bypass returns the union of every visible key,
+  // so admins see all feature-gated sections once ready.
+  const { visibleFeatures, status: featuresStatus } = useVisibleFeatures();
   const location = useLocation();
   const navigate = useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -493,15 +495,15 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
     }
 
     // Phase 5+31 R2 §2 — filter sections by the ClientType × Feature matrix.
-    // Default-allow during loading (visibleFeatures === null) so the sidebar
-    // doesn't flash empty. Sections without a featureKey always pass.
-    if (visibleFeatures !== null) {
-      built = built.filter(section =>
-        !section.featureKey || visibleFeatures.has(section.featureKey)
-      );
-    }
+    // Sections without a featureKey always pass (core nav). A gated section
+    // shows ONLY when the matrix is ready and grants its key — fail closed on
+    // loading/error so a failed fetch can't leak gated surfaces.
+    built = built.filter(section =>
+      !section.featureKey ||
+      (featuresStatus === 'ready' && !!visibleFeatures && visibleFeatures.has(section.featureKey))
+    );
     return built;
-  }, [config, isDfAdmin, role, visibleFeatures]);
+  }, [config, isDfAdmin, role, visibleFeatures, featuresStatus]);
 
   const importOptions = role === 'tenant' || isDfAdmin ? tenantImportOptions : role === 'id' ? idImportOptions : npImportOptions;
   const branding = getRoleBranding(role || 'tenant');

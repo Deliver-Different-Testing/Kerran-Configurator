@@ -150,9 +150,52 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
     return f;
   }, [drilldown, searchText]);
 
-  const { alerts, loading: alertsLoading } = useComplianceAlerts(
-    drilldown ? activeFilters : {} // no drilldown = show all
-  );
+  // Always fetch the full alert set (one row per courier × tracked doc type,
+  // all statuses incl. Current) — the Compliance Risk roster below groups it by
+  // courier client-side, and card/donut drill-downs filter the rows in memory.
+  const { alerts, loading: alertsLoading } = useComplianceAlerts({});
+
+  // Compliance Risk roster (Steve 2026-06-12): the "Breakdown by Document Type"
+  // reshaped to one row PER COURIER + the courier identity columns. Required =
+  // tracked docs for the courier; Current/Expiring/Expired/Missing = that
+  // courier's per-status document counts.
+  const courierRows = useMemo(() => {
+    const byCourier = new Map<number, {
+      courierId: number; code?: string; name: string; role?: string;
+      phone?: string; email?: string; vehicle?: string; networkPartner: string;
+      required: number; current: number; expiring: number; expired: number; missing: number;
+    }>();
+    for (const a of alerts) {
+      let row = byCourier.get(a.courierId);
+      if (!row) {
+        row = {
+          courierId: a.courierId, code: a.code, name: a.courierName, role: a.role,
+          phone: a.phone, email: a.email, vehicle: a.vehicle, networkPartner: a.networkPartner || 'Direct',
+          required: 0, current: 0, expiring: 0, expired: 0, missing: 0,
+        };
+        byCourier.set(a.courierId, row);
+      }
+      row.required += 1;
+      if (a.alertStatus === 'Current') row.current += 1;
+      else if (a.alertStatus === 'Expiring') row.expiring += 1;
+      else if (a.alertStatus === 'Expired') row.expired += 1;
+      else if (a.alertStatus === 'Missing') row.missing += 1;
+    }
+    let rows = [...byCourier.values()];
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      rows = rows.filter(r => r.name.toLowerCase().includes(q) || (r.code ?? '').toLowerCase().includes(q));
+    }
+    if (drilldown?.status) {
+      const s = drilldown.status;
+      rows = rows.filter(r =>
+        s === 'Current' ? r.current > 0 :
+        s === 'Expiring' ? r.expiring > 0 :
+        s === 'Expired' ? r.expired > 0 :
+        s === 'Missing' ? r.missing > 0 : true);
+    }
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  }, [alerts, searchText, drilldown]);
 
   // Compute missing count from dashboard
   const missingCount = useMemo(() => {
@@ -289,8 +332,23 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
+      {/* Fleet Compliance Overview (donut) sits to the LEFT of the summary
+          tiles (Steve 2026-06-12 — moved up out of the old charts row). */}
+      <div className="flex flex-col xl:flex-row gap-4 items-start">
+        <div className="bg-white border border-border rounded-lg p-5 shadow-sm shrink-0">
+          <h3 className="font-bold text-text-primary mb-4">Fleet Compliance Overview</h3>
+          <DonutChart
+            compliant={dashboard.totalCompliant}
+            warnings={dashboard.totalWarnings}
+            nonCompliant={dashboard.totalNonCompliant}
+            missing={missingCount}
+            onSegmentClick={handleDonutClick}
+            activeSegment={drilldown?.status && !drilldown?.docType ? drilldown.status : undefined}
+          />
+        </div>
+
+        {/* Summary tiles */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 flex-1 content-start">
         <StatCard label="Total Couriers" value={dashboard.totalActiveCouriers} />
         <div
           className={`bg-white border rounded-lg p-5 shadow-sm cursor-pointer hover:shadow-lg transition-all ${
@@ -339,95 +397,6 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
           <div className="text-sm text-text-secondary mb-1">Fleet Score</div>
           <ComplianceScoreRing percent={dashboard.fleetCompliancePercent} />
         </div>
-      </div>
-
-      {/* Charts and Breakdown Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Donut Chart */}
-        <div className="bg-white border border-border rounded-lg p-5 shadow-sm">
-          <h3 className="font-bold text-text-primary mb-4">Fleet Compliance Overview</h3>
-          <DonutChart
-            compliant={dashboard.totalCompliant}
-            warnings={dashboard.totalWarnings}
-            nonCompliant={dashboard.totalNonCompliant}
-            missing={missingCount}
-            onSegmentClick={handleDonutClick}
-            activeSegment={drilldown?.status && !drilldown?.docType ? drilldown.status : undefined}
-          />
-        </div>
-
-        {/* Breakdown by Document Type */}
-        <div className="bg-white border border-border rounded-lg p-5 shadow-sm">
-          <h3 className="font-bold text-text-primary mb-4">
-            Breakdown by Document Type
-            {selectedProfile && <span className="text-sm font-normal text-[#3bc7f4] ml-2">— {selectedProfile.name}</span>}
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 pr-4 text-text-secondary font-medium">Document Type</th>
-                  <th className="text-center py-2 px-2 text-text-secondary font-medium">Required</th>
-                  <th className="text-center py-2 px-2 text-text-secondary font-medium">Current</th>
-                  <th className="text-center py-2 px-2 text-text-secondary font-medium">Expiring</th>
-                  <th className="text-center py-2 px-2 text-text-secondary font-medium">Expired</th>
-                  <th className="text-center py-2 px-2 text-text-secondary font-medium">Missing</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredBreakdown.map((b) => (
-                  <tr key={b.documentTypeId} className="border-b border-border last:border-b-0 hover:bg-gray-50 transition-colors">
-                    <td className="py-2.5 pr-4 font-medium text-text-primary">{b.documentTypeName}</td>
-                    <td className="text-center py-2.5 px-2">{b.totalRequired}</td>
-                    <td className="text-center py-2.5 px-2">
-                      <button
-                        onClick={() => handleBreakdownClick(b.documentTypeName, 'current', b.current)}
-                        className={`${b.current > 0 ? 'text-green-600 font-medium hover:underline cursor-pointer' : 'cursor-default'} ${
-                          drilldown?.docType === b.documentTypeName && drilldown?.status === 'Current' ? 'underline ring-1 ring-green-300 rounded px-1' : ''
-                        }`}
-                        disabled={b.current === 0}
-                      >
-                        {b.current}
-                      </button>
-                    </td>
-                    <td className="text-center py-2.5 px-2">
-                      <button
-                        onClick={() => handleBreakdownClick(b.documentTypeName, 'expiring', b.expiring)}
-                        className={`${b.expiring > 0 ? 'text-amber-600 font-medium hover:underline cursor-pointer' : 'cursor-default'} ${
-                          drilldown?.docType === b.documentTypeName && drilldown?.status === 'Expiring' ? 'underline ring-1 ring-amber-300 rounded px-1' : ''
-                        }`}
-                        disabled={b.expiring === 0}
-                      >
-                        {b.expiring}
-                      </button>
-                    </td>
-                    <td className="text-center py-2.5 px-2">
-                      <button
-                        onClick={() => handleBreakdownClick(b.documentTypeName, 'expired', b.expired)}
-                        className={`${b.expired > 0 ? 'text-red-600 font-medium hover:underline cursor-pointer' : 'cursor-default'} ${
-                          drilldown?.docType === b.documentTypeName && drilldown?.status === 'Expired' ? 'underline ring-1 ring-red-300 rounded px-1' : ''
-                        }`}
-                        disabled={b.expired === 0}
-                      >
-                        {b.expired}
-                      </button>
-                    </td>
-                    <td className="text-center py-2.5 px-2">
-                      <button
-                        onClick={() => handleBreakdownClick(b.documentTypeName, 'missing', b.missing)}
-                        className={`${b.missing > 0 ? 'text-purple-600 font-medium hover:underline cursor-pointer' : 'cursor-default'} ${
-                          drilldown?.docType === b.documentTypeName && drilldown?.status === 'Missing' ? 'underline ring-1 ring-purple-300 rounded px-1' : ''
-                        }`}
-                        disabled={b.missing === 0}
-                      >
-                        {b.missing}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
 
@@ -460,9 +429,9 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
         <div className="bg-white border border-border rounded-lg p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <h3 className="font-bold text-text-primary">{drilldown ? 'Filtered Couriers' : 'All Documents'}</h3>
+              <h3 className="font-bold text-text-primary">{drilldown ? drilldown.label : 'Compliance Risk'}</h3>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan">
-                Showing: {sortedAlerts.length} {drilldown?.label || 'All'} document{sortedAlerts.length !== 1 ? 's' : ''}
+                {courierRows.length} courier{courierRows.length !== 1 ? 's' : ''}
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -489,10 +458,10 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-cyan" />
             </div>
-          ) : sortedAlerts.length === 0 ? (
+          ) : courierRows.length === 0 ? (
             <div className="text-center py-8 text-text-secondary">
               <div className="text-4xl mb-2">📋</div>
-              <p>No documents match this filter.</p>
+              <p>No couriers match this filter.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -500,108 +469,48 @@ export default function ComplianceDashboard({ initialTab = 'risk' }: ComplianceD
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Code</th>
-                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Courier</th>
+                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Name</th>
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Role</th>
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Phone</th>
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Email</th>
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Vehicle</th>
                     <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Network Partner</th>
-                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Document Type</th>
-                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Status</th>
-                    <th
-                      className="text-left py-2.5 pr-4 text-text-secondary font-medium cursor-pointer hover:text-text-primary select-none"
-                      onClick={() => setSortAsc(v => !v)}
-                    >
-                      Expiry Date {sortAsc ? '↑' : '↓'}
-                    </th>
-                    <th className="text-left py-2.5 pr-4 text-text-secondary font-medium">Days</th>
+                    <th className="text-center py-2.5 px-2 text-text-secondary font-medium">Required</th>
+                    <th className="text-center py-2.5 px-2 text-text-secondary font-medium">Current</th>
+                    <th className="text-center py-2.5 px-2 text-text-secondary font-medium">Expiring</th>
+                    <th className="text-center py-2.5 px-2 text-text-secondary font-medium">Expired</th>
+                    <th className="text-center py-2.5 px-2 text-text-secondary font-medium">Missing</th>
                     <th className="text-left py-2.5 text-text-secondary font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedAlerts.map((alert, i) => (
-                    <tr key={`${alert.courierId}-${alert.documentType}-${i}`} className="border-b border-border last:border-b-0 hover:bg-gray-50">
-                      <td className="py-2.5 pr-4 text-text-secondary">{alert.code || '—'}</td>
-                      <td className="py-2.5 pr-4 font-medium text-text-primary">{alert.courierName}</td>
-                      <td className="py-2.5 pr-4 text-text-secondary">{alert.role || '—'}</td>
-                      <td className="py-2.5 pr-4 text-text-secondary">{alert.phone || '—'}</td>
-                      <td className="py-2.5 pr-4 text-text-secondary">{alert.email || '—'}</td>
-                      <td className="py-2.5 pr-4 text-text-secondary">{alert.vehicle || '—'}</td>
-                      <td className="py-2.5 pr-4 text-text-secondary">{alert.networkPartner || 'Direct'}</td>
-                      <td className="py-2.5 pr-4 text-text-primary">
-                        {alert.documentType}
-                        {(() => {
-                          // Check if this doc type has a quiz requirement
-                          const allProfiles = profiles;
-                          const hasQuizReq = allProfiles.some(p => p.requirements.some(r => r.documentTypeName === alert.documentType && r.purpose === 'Training'));
-                          if (!hasQuizReq) return null;
-                          // Find quiz for this doc type
-                          const docTypeReq = allProfiles.flatMap(p => p.requirements).find(r => r.documentTypeName === alert.documentType);
-                          if (!docTypeReq) return null;
-                          const quiz = quizService.getQuizForDocType(docTypeReq.documentTypeId);
-                          if (!quiz) return null;
-                          const passed = quizService.hasPassedQuiz(quiz.id, alert.courierId);
-                          const attempts = quizService.getAttemptCount(quiz.id, alert.courierId);
-                          return (
-                            <div className="text-xs mt-0.5">
-                              {passed ? (
-                                <span className="text-green-600">Quiz: Passed</span>
-                              ) : attempts > 0 ? (
-                                <span className="text-red-500">Quiz: Failed ({attempts} attempt{attempts !== 1 ? 's' : ''})</span>
-                              ) : (
-                                <span className="text-gray-400">Quiz: Not Attempted</span>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        <AlertStatusBadge status={alert.alertStatus} />
-                      </td>
-                      <td className="py-2.5 pr-4 text-text-secondary">
-                        {alert.expiryDate
-                          ? new Date(alert.expiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                          : '—'}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        {alert.daysUntilExpiry !== null ? (
-                          <span className={alert.daysUntilExpiry < 0 ? 'text-red-600 font-medium' : alert.daysUntilExpiry < 14 ? 'text-amber-600 font-medium' : 'text-text-secondary'}>
-                            {alert.daysUntilExpiry < 0 ? `${Math.abs(alert.daysUntilExpiry)}d overdue` : `${alert.daysUntilExpiry}d left`}
-                          </span>
-                        ) : (
-                          <span className="text-purple-600 font-medium">Not uploaded</span>
-                        )}
-                      </td>
+                  {courierRows.map((r) => (
+                    <tr key={r.courierId} className="border-b border-border last:border-b-0 hover:bg-gray-50">
+                      <td className="py-2.5 pr-4 text-text-secondary">{r.code || '—'}</td>
+                      <td className="py-2.5 pr-4 font-medium text-text-primary">{r.name}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{r.role || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{r.phone || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{r.email || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{r.vehicle || '—'}</td>
+                      <td className="py-2.5 pr-4 text-text-secondary">{r.networkPartner || 'Direct'}</td>
+                      <td className="text-center py-2.5 px-2 text-text-secondary">{r.required}</td>
+                      <td className="text-center py-2.5 px-2"><span className={r.current > 0 ? 'text-green-600 font-medium' : 'text-text-secondary'}>{r.current}</span></td>
+                      <td className="text-center py-2.5 px-2"><span className={r.expiring > 0 ? 'text-amber-600 font-medium' : 'text-text-secondary'}>{r.expiring}</span></td>
+                      <td className="text-center py-2.5 px-2"><span className={r.expired > 0 ? 'text-red-600 font-medium' : 'text-text-secondary'}>{r.expired}</span></td>
+                      <td className="text-center py-2.5 px-2"><span className={r.missing > 0 ? 'text-purple-600 font-medium' : 'text-text-secondary'}>{r.missing}</span></td>
                       <td className="py-2.5">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleSendReminder(alert.courierId)}
-                            disabled={notifying === alert.courierId}
-                            title="Send Reminder"
-                            className="p-1.5 rounded-md bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/20 transition-colors disabled:opacity-50"
-                          >
-                            {notifying === alert.courierId ? (
-                              <div className="w-4 h-4 animate-spin rounded-full border-2 border-brand-cyan border-t-transparent" />
-                            ) : (
-                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                                <polyline points="22,6 12,13 2,6" />
-                              </svg>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => navigate(`/courier/${alert.courierId}?tab=documents`)}
-                            title="View Documents"
-                            className="p-1.5 rounded-md bg-gray-100 text-text-secondary hover:bg-gray-200 transition-colors"
-                          >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                              <polyline points="14 2 14 8 20 8" />
-                              <line x1="16" y1="13" x2="8" y2="13" />
-                              <line x1="16" y1="17" x2="8" y2="17" />
-                            </svg>
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => navigate(`/courier/${r.courierId}?tab=documents`)}
+                          title="View Documents"
+                          className="p-1.5 rounded-md bg-gray-100 text-text-secondary hover:bg-gray-200 transition-colors"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                          </svg>
+                        </button>
                       </td>
                     </tr>
                   ))}

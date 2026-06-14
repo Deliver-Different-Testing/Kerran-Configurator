@@ -219,8 +219,14 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     badge: 3, // e.g. 2 expiring docs + 1 pending approval
     alertDot: true, // Red dot: agents have expired/out-of-compliance docs
     items: [
-      { id: '/compliance', label: 'Monitoring', implemented: true },
-      { id: '/compliance/setup', label: 'Set up', implemented: true },
+      // Item-level matrix gating (GARRY-COMPLIANCE-CHILD-FEATURES-2026-06-13):
+      // Monitoring + Set up each carry their own child featureKey so the
+      // ClientType × Feature matrix can grant them independently. Seeded ON
+      // for Tenant(4) by 20260613040000_SeedComplianceChildFeatures, so the
+      // default tenant view is unchanged. NP keeps Garry's restricted
+      // self-upload-only version (buildNpSections) — not these items.
+      { id: '/compliance', label: 'Monitoring', featureKey: 'courier-compliance-monitoring', implemented: true },
+      { id: '/compliance/setup', label: 'Set up', featureKey: 'courier-compliance-setup', implemented: true },
     ],
   });
 

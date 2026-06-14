@@ -103,6 +103,7 @@ export default function Users() {
       {editing !== null && (
         <ContactModal
           contactId={editing}
+          fallbackClientName={users[0]?.clientName ?? null}
           onClose={(msg) => { setEditing(null); if (msg) setToast(msg); refresh(); }}
         />
       )}
@@ -119,7 +120,7 @@ const emptyDraft: NpUserSavePayload & { clientName: string } = {
   notes: '', relationshipTypeId: null, roleIds: [], status: 'active', clientName: '',
 };
 
-function ContactModal({ contactId, onClose }: { contactId: number | 'new'; onClose: (toast?: string) => void }) {
+function ContactModal({ contactId, fallbackClientName, onClose }: { contactId: number | 'new'; fallbackClientName: string | null; onClose: (toast?: string) => void }) {
   const isNew = contactId === 'new';
   const [tab, setTab] = useState<Tab>('profile');
   const [draft, setDraft] = useState<NpUserSavePayload & { clientName: string }>({ ...emptyDraft });
@@ -204,7 +205,7 @@ function ContactModal({ contactId, onClose }: { contactId: number | 'new'; onClo
           {error && <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">⚠️ {error}</div>}
           {loading ? <p className="text-sm text-text-muted">Loading…</p>
             : tab === 'profile' ? (
-              <ProfileTab draft={draft} set={set} roles={roles} relTypes={relTypes} toggleRole={toggleRole} isNew={isNew} />
+              <ProfileTab draft={draft} set={set} roles={roles} relTypes={relTypes} toggleRole={toggleRole} isNew={isNew} fallbackClientName={fallbackClientName} />
             ) : tab === 'permissions' ? (
               <PermissionsTab contactId={contactId} />
             ) : (
@@ -223,11 +224,11 @@ function ContactModal({ contactId, onClose }: { contactId: number | 'new'; onClo
   );
 }
 
-function ProfileTab({ draft, set, roles, relTypes, toggleRole, isNew }: {
+function ProfileTab({ draft, set, roles, relTypes, toggleRole, isNew, fallbackClientName }: {
   draft: NpUserSavePayload & { clientName: string };
   set: (patch: Partial<NpUserSavePayload & { clientName: string }>) => void;
   roles: NpRoleOption[]; relTypes: NpRelationshipType[];
-  toggleRole: (id: number) => void; isNew: boolean;
+  toggleRole: (id: number) => void; isNew: boolean; fallbackClientName: string | null;
 }) {
   const Field = (label: string, value: string, onChange: (v: string) => void, type = 'text') => (
     <div className="flex flex-col gap-1">
@@ -235,8 +236,20 @@ function ProfileTab({ draft, set, roles, relTypes, toggleRole, isNew }: {
       <input type={type} value={value} onChange={e => onChange(e.target.value)} />
     </div>
   );
+  // CLIENT / NP is read-only on the NP portal — server stamps the FK from the
+  // auth context. On Edit use the loaded clientName; on Add fall back to the
+  // list's shared client name, then a placeholder for a brand-new empty NP.
+  const clientDisplay = isNew
+    ? (fallbackClientName ?? 'Your NP (set on save)')
+    : (draft.clientName || '—');
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-text-secondary uppercase tracking-wide">Client / NP</label>
+        <input type="text" value={clientDisplay} readOnly className="opacity-80 cursor-not-allowed" />
+        <span className="text-xs text-text-muted">Set automatically — you can only add users to your own NP.</span>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         {Field('First Name', draft.firstName, v => set({ firstName: v }))}
         {Field('Last Name', draft.lastName, v => set({ lastName: v }))}
@@ -272,18 +285,12 @@ function ProfileTab({ draft, set, roles, relTypes, toggleRole, isNew }: {
         <span className="text-xs text-text-muted">Select one or more — the user gets the most permissive access across all assigned roles.</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-text-secondary uppercase tracking-wide">Status</label>
-          <select value={draft.status} onChange={e => set({ status: e.target.value as 'active' | 'inactive' })}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-text-secondary uppercase tracking-wide">Client</label>
-          <input type="text" value={isNew ? 'Your NP (set on save)' : (draft.clientName || '—')} readOnly className="opacity-80 cursor-not-allowed" />
-        </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-text-secondary uppercase tracking-wide">Status</label>
+        <select value={draft.status} onChange={e => set({ status: e.target.value as 'active' | 'inactive' })}>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
       </div>
 
       <div className="flex flex-col gap-1">

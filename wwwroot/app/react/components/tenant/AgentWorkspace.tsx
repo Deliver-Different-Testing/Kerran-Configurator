@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AssociationBadge } from '@/components/common/AssociationBadge';
 import { TierBadge } from '@/components/tenant/TierBadge';
 import type { BusinessComplianceDocument, TenantCourier } from '@/types';
@@ -21,6 +21,7 @@ import {
   type AgentComplianceProfiles,
   type AgentDocument,
 } from '@/services/np_agentComplianceService';
+import { AgentDocumentPreviewModal } from './AgentDocumentPreviewModal';
 
 type WorkspaceTab = 'overview' | 'agent-np-compliance' | 'drivers' | 'driver-compliance';
 
@@ -373,6 +374,9 @@ function ComplianceTab({ agentId, detail, onChanged }: {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [rejectFor, setRejectFor] = useState<AgentDocument | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  // STEVE-AGENT-DOCUMENT-PREVIEW-MODAL-2026-06-13 — preview/AI/Verify-Reject
+  // in one modal. Opens from the File column's "View" affordance below.
+  const [previewDoc, setPreviewDoc] = useState<AgentDocument | null>(null);
 
   const loadDocs = useCallback(async () => {
     try { setDocs(await staffAgentDocsApi.list(agentId)); } catch { /* surfaced via empty state */ }
@@ -458,7 +462,22 @@ function ComplianceTab({ agentId, detail, onChanged }: {
                   </td>
                   <td className="px-3 py-3">
                     {doc ? (
-                      <a href={staffAgentDocsApi.downloadUrl(agentId, doc.id)} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand-cyan hover:underline">Download</a>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setPreviewDoc(doc)}
+                          className="text-sm font-medium text-brand-cyan hover:underline"
+                        >
+                          View
+                        </button>
+                        <a
+                          href={staffAgentDocsApi.downloadUrl(agentId, doc.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-text-muted hover:text-text-secondary"
+                        >
+                          Download
+                        </a>
+                      </div>
                     ) : <span className="text-xs text-text-muted">—</span>}
                   </td>
                   <td className="px-3 py-3">
@@ -491,6 +510,14 @@ function ComplianceTab({ agentId, detail, onChanged }: {
           <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} placeholder="Reason for rejection…" className="w-full rounded-lg border border-border px-3 py-2 text-sm" />
         </Modal>
       )}
+
+      <AgentDocumentPreviewModal
+        isOpen={previewDoc !== null}
+        agentId={agentId}
+        document={previewDoc}
+        onClose={() => setPreviewDoc(null)}
+        onChanged={after}
+      />
     </div>
   );
 }
@@ -597,7 +624,17 @@ export function AgentWorkspace({
   variant: 'inline' | 'page';
 }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
+  // STEVE-COMPLIANCE-MONITORING-REDESIGN-2026-06-13 — accept `?tab=` deep-link
+  // so the new Compliance Monitoring page can jump straight to Agent / NP
+  // Compliance instead of forcing staff through Overview first.
+  const [searchParams] = useSearchParams();
+  const initialFromUrl = (searchParams.get('tab') ?? '') as WorkspaceTab | '';
+  const initialTab: WorkspaceTab =
+    initialFromUrl === 'agent-np-compliance' || initialFromUrl === 'drivers' ||
+    initialFromUrl === 'driver-compliance' || initialFromUrl === 'overview'
+      ? initialFromUrl
+      : 'overview';
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab);
   const drivers = useMemo(() => getDriversForAgent(agent.id), [agent.id]);
   const { detail, refresh: refreshDetail } = useAgentComplianceDetail(agent.id);
   const summary = detail?.summary;

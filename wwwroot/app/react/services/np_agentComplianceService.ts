@@ -120,6 +120,32 @@ export const myAgentDocsApi = {
   },
 };
 
+// STEVE-COMPLIANCE-MONITORING-REDESIGN-2026-06-13 — pending document item shape.
+// Superset of AgentDocument with the subject context (name + city + state) so
+// the action queue can render rows without a follow-up agents lookup. Extends
+// AgentDocument so the existing AgentDocumentPreviewModal accepts it directly.
+export interface PendingDocumentItem extends AgentDocument {
+  subjectType: 'Agent' | 'Driver';
+  subjectId: number;
+  subjectName: string;
+  subjectCity?: string | null;
+  subjectState?: string | null;
+}
+
+// Aggregate pending-document queue across the calling tenant's agent roster.
+// Backed by /api/v1/np/compliance/pending-documents (TenantStaffOrAdminNoNp).
+export const pendingDocsApi = {
+  async list(): Promise<PendingDocumentItem[]> {
+    const { data } = await api.get<PendingDocumentItem[]>('/compliance/pending-documents');
+    return data ?? [];
+  },
+  // Same proxy-download URL as the per-agent route; the modal already builds
+  // it from agentId + doc id, so callers don't need this directly.
+  downloadUrl(agentId: number, id: number): string {
+    return `/api/v1/np/agents/${agentId}/documents/${id}/download`;
+  },
+};
+
 // Tenant-staff / DF-admin document review (Phase 1 controller +
 // Phase 3a AI suggestion). agentId is in the URL; staff can verify/reject.
 // Backed by /api/v1/np/agents/{agentId}/documents.

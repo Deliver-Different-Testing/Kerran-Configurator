@@ -21,6 +21,7 @@ import UserImport from './pages/np/UserImport';
 import Reports from './pages/np/Reports';
 import ComplianceHub from './pages/np/ComplianceHub';
 import MyComplianceDocuments from './pages/np/MyComplianceDocuments';
+import MyComplianceDashboard from './pages/np/MyComplianceDashboard';
 import RecruitmentPipeline from './pages/np/RecruitmentPipeline';
 import ApplicantDetail from './pages/np/ApplicantDetail';
 import RecruitmentStageSettings from './pages/np/RecruitmentStageSettings';
@@ -174,9 +175,19 @@ export default function App() {
                 whose backend now rejects NP callers (TenantStaffOrAdminNoNp);
                 redirect any NP who reaches these URLs to their own documents
                 so the page can't render the tenant aggregate (Steve security
-                log Issues 1 & 3). Only My Documents stays live for NP. */}
-            <Route path="compliance" element={<Navigate to="/compliance/my-documents" replace />} />
-            <Route path="compliance/setup" element={<Navigate to="/compliance/my-documents" replace />} />
+                log Issues 1 & 3). Only My Documents stays live for NP.
+                The matrix rows added 2026-06-13 (courier-compliance-monitoring
+                / courier-compliance-setup) take effect on the Tenant route
+                tree; flipping them ON for NP is a no-op until a NP-scoped
+                Monitoring backend ships. */}
+            {/* STEVE-NP-COMPLIANCE-DASHBOARD-2026-06-13: /compliance now renders
+                the cut-down NP-safe dashboard (own docs + own couriers only —
+                no tenant aggregate) instead of redirecting to my-documents.
+                /compliance/setup stays redirected because the Set up surface
+                (Document Types / Compliance Profiles / Quizzes) is staff-only
+                under TenantStaffOrAdminNoNp. */}
+            <Route path="compliance" element={<MyComplianceDashboard />} />
+            <Route path="compliance/setup" element={<Navigate to="/compliance" replace />} />
             <Route path="compliance/my-documents" element={<MyComplianceDocuments />} />
             <Route path="compliance-profiles" element={<Navigate to="/compliance/my-documents" replace />} />
             <Route path="driver-approval" element={<Navigate to="/compliance/my-documents" replace />} />

@@ -57,6 +57,68 @@ public class AgentDocumentService(
         return new AgentDocumentsResponse(messageId) { Success = true, Documents = rows };
     }
 
+    // STEVE-COMPLIANCE-MONITORING-REDESIGN-2026-06-13 — flat list of every
+    // pending document across the calling tenant's agent roster, paired with
+    // the subject's name + city + state so the new Compliance Monitoring
+    // action queue can render each row without a separate agents lookup.
+    //
+    // Controller-side authorisation already excludes NP callers (the new
+    // CompliancePendingDocumentsController uses TenantStaffOrAdminNoNp); this
+    // method tolerates the NP case by returning an empty list rather than
+    // throwing, in case the route is ever reused under a different policy.
+    public async Task<PendingDocumentsResponse> ListPendingAsync(Guid messageId, CancellationToken ct = default)
+    {
+        var scope = await scopeResolver.ResolveAsync();
+
+        // Staff/admin scope = whole tenant; NP scope = limited to own agent.
+        var npAgentId = scope.IsAdmin ? (int?)null : scope.NpAgentId;
+
+        var items = await Context.TucAgentDocuments
+            .AsNoTracking()
+            .Where(d => d.IsActive && d.VerifyStatus == "Pending")
+            .Where(d => npAgentId == null || d.AgentId == npAgentId)
+            .Join(
+                Context.TucAgents.AsNoTracking(),
+                d => d.AgentId,
+                a => a.UcagId,
+                (d, a) => new { d, a })
+            .OrderByDescending(x => x.d.AiSuggestedDecision == "accept")
+            .ThenBy(x => x.d.UploadedDate)
+            .Select(x => new PendingDocumentItemDto
+            {
+                Id = x.d.UcadId,
+                AgentId = x.d.AgentId,
+                DocumentTypeId = x.d.DocumentTypeId,
+                DocumentTypeName = x.d.DocumentType != null ? (x.d.DocumentType.Name ?? string.Empty) : string.Empty,
+                FileName = x.d.FileName ?? string.Empty,
+                ContentType = x.d.ContentType ?? string.Empty,
+                Length = x.d.Length,
+                UploadedDate = x.d.UploadedDate,
+                UploadedBy = x.d.UploadedBy ?? string.Empty,
+                VerifyStatus = x.d.VerifyStatus ?? "Pending",
+                VerifiedDate = x.d.VerifiedDate,
+                VerifiedBy = x.d.VerifiedBy ?? string.Empty,
+                RejectReason = x.d.RejectReason ?? string.Empty,
+                ExpiryDate = x.d.ExpiryDate,
+                AiSuggestedDecision = x.d.AiSuggestedDecision,
+                AiSuggestedExpiry = x.d.AiSuggestedExpiry,
+                AiRationale = x.d.AiRationale,
+                IsActive = x.d.IsActive,
+                SubjectType = "Agent",
+                SubjectId = x.a.UcagId,
+                SubjectName = x.a.UcagName ?? string.Empty,
+                // Match TenantAgentService.AgentDtoProjection (lines 640–641):
+                // city is on the linked tucSuburb; state lives in AddressLine6.
+                SubjectCity = x.a.UcagSuburb != null
+                    ? (x.a.UcagSuburb.City ?? x.a.UcagSuburb.UcsuName)
+                    : null,
+                SubjectState = x.a.AddressLine6,
+            })
+            .ToListAsync(ct);
+
+        return new PendingDocumentsResponse(messageId) { Success = true, Items = items };
+    }
+
     // ─── UPLOAD ──────────────────────────────────────────────────────────
 
     public async Task<AgentDocumentResponse> CreateAsync(

@@ -21,6 +21,9 @@ interface NavItem {
   // Same semantics as NavSection.featureKey but per child route, so a section
   // shared by Tenant + NP can hide individual items per ClientType. A section
   // is hidden when all its items filter out. Absent = always show.
+  // Used by the Compliance children — `courier-compliance-monitoring` and
+  // `courier-compliance-setup` — so a tenant can be granted Monitoring
+  // without Set up (and vice versa) from the matrix UI.
   featureKey?: string;
 }
 
@@ -219,14 +222,15 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     badge: 3, // e.g. 2 expiring docs + 1 pending approval
     alertDot: true, // Red dot: agents have expired/out-of-compliance docs
     items: [
-      // Item-level matrix gating (GARRY-COMPLIANCE-CHILD-FEATURES-2026-06-13):
-      // Monitoring + Set up each carry their own child featureKey so the
-      // ClientType × Feature matrix can grant them independently. Seeded ON
-      // for Tenant(4) by 20260613040000_SeedComplianceChildFeatures, so the
-      // default tenant view is unchanged. NP keeps Garry's restricted
-      // self-upload-only version (buildNpSections) — not these items.
-      { id: '/compliance', label: 'Monitoring', featureKey: 'courier-compliance-monitoring', implemented: true },
-      { id: '/compliance/setup', label: 'Set up', featureKey: 'courier-compliance-setup', implemented: true },
+      // GARRY-COMPLIANCE-CHILD-FEATURES-2026-06-13 — Monitoring vs Set up get
+      // their own matrix toggles so a tenant can keep Monitoring without
+      // Set up (or vice versa). For NP we deliberately do NOT surface these
+      // sub-items in buildNpSections; Garry's security fixes (2026-06-12
+      // Issues 1–3) confine the NP Compliance section to My Documents until
+      // a NP-scoped Monitoring backend exists. The matrix rows + Tenant
+      // sidebar gating are still live and useful in the meantime.
+      { id: '/compliance', label: 'Monitoring', implemented: true, featureKey: 'courier-compliance-monitoring' },
+      { id: '/compliance/setup', label: 'Set up', implemented: true, featureKey: 'courier-compliance-setup' },
     ],
   });
 
@@ -315,10 +319,13 @@ function buildNpSections(): NavSection[] {
       // hides (empty-section rule) rather than the whole compliance group.
       id: 'compliance', label: 'Compliance', icon: icons.compliance,
       items: [
-        // NP lane is self-service only: Monitoring (tenant roster of all
-        // agents) + Set up (TenantStaffOrAdmin doc-type/profile config) are
-        // staff surfaces — Set up 403s and Monitoring's "Open workspace" links
-        // 404 in the NP lane. NPs get just their own document compliance.
+        // STEVE-NP-COMPLIANCE-DASHBOARD-2026-06-13: /compliance now renders
+        // an NP-safe dashboard (MyComplianceDashboard) — own docs + own
+        // couriers only, no tenant aggregate. The staff-only Monitoring /
+        // Set up surfaces (courier-compliance-monitoring / -setup) remain
+        // hidden from NP per the original lockdown; this Overview item is
+        // the NP-scoped replacement.
+        { id: '/compliance', label: 'Overview', implemented: true },
         { id: '/compliance/my-documents', label: 'My Documents', featureKey: 'cfg-my-documents', implemented: true },
       ],
     },

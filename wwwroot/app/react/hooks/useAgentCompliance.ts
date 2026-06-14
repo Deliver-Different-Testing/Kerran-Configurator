@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   agentComplianceApi,
+  pendingDocsApi,
   type AgentComplianceDashboard,
   type AgentComplianceRosterItem,
   type AgentComplianceDetail,
+  type PendingDocumentItem,
 } from '@/services/np_agentComplianceService';
 
 // Live hooks for Agent/NP business-document compliance (Phase 1). Sibling to
@@ -80,4 +82,31 @@ export function useAgentComplianceDetail(agentId: number | null | undefined) {
 
   useEffect(() => { refresh(); }, [refresh]);
   return { detail, loading, error, refresh };
+}
+
+// STEVE-COMPLIANCE-MONITORING-REDESIGN-2026-06-13 — tenant-wide pending docs.
+// Drives the redesigned Compliance Monitoring "Documents waiting on your
+// review" card. Tenant-staff / DF-admin only; NP callers receive an empty
+// list (the route policy is TenantStaffOrAdminNoNp).
+export function usePendingDocuments() {
+  const [items, setItems] = useState<PendingDocumentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setItems(await pendingDocsApi.list());
+    } catch (err: any) {
+      setError(err.message || 'Failed to load pending documents');
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { items, loading, error, refresh };
 }

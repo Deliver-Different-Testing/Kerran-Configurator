@@ -192,7 +192,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
         <h2 className="text-xl font-bold">Driver Management</h2>
         <div className="flex gap-2">
           <button onClick={() => navigate('/fleet/add?mode=quick')} className="bg-blue-600 text-white border-none font-medium px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors">
-            + Add Agent Manually
+            + Add Driver Manually
           </button>
           <button onClick={() => navigate('/fleet/add')} className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow">
             + Full Recruitment

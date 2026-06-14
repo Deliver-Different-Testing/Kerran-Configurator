@@ -17,7 +17,12 @@ export interface Courier {
   npAgentId?: number | null;
   npAgentName?: string;
   // Payment / invoice channel (Kerran): 'Direct' | 'Invoice' | 'None'.
+  // Lives on the Courier detail Financial tab (Payment Channel card).
   paymentMethod?: string;
+  // Fleet assignment — maps to TucCourier.CourierFleetId server-side.
+  // null = unassigned. courierFleetName is the display label for the picker.
+  courierFleetId?: number | null;
+  courierFleetName?: string | null;
   gender: string;
   dob: string;
   startDate: string;

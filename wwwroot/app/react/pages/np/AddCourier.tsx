@@ -334,12 +334,12 @@ export default function AddCourier() {
       <>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-xl font-bold">Add Agent</h2>
-            <p className="text-sm text-text-secondary mt-1">How would you like to add this agent?</p>
+            <h2 className="text-xl font-bold">Add Driver</h2>
+            <p className="text-sm text-text-secondary mt-1">How would you like to add this driver?</p>
           </div>
           <button onClick={() => setMode('quick')}
             className="bg-blue-600 text-white font-medium px-5 py-2.5 rounded-md text-sm hover:bg-blue-700 transition-colors">
-            + Add Agent Manually
+            + Add Driver Manually
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -347,7 +347,7 @@ export default function AddCourier() {
             className="bg-white border border-border rounded-xl p-6 text-left hover:border-blue-500 hover:shadow-md transition-all group">
             <div className="text-3xl mb-3">🔍</div>
             <h3 className="font-bold text-lg mb-1 group-hover:text-blue-600">Self-Found Lead</h3>
-            <p className="text-sm text-text-secondary">You've found this agent yourself. Enter their basic details — they'll complete compliance later.</p>
+            <p className="text-sm text-text-secondary">You've found this driver yourself. Enter their basic details — they'll complete compliance later.</p>
           </button>
           <button onClick={() => setMode('pipeline')}
             className="bg-white border border-border rounded-xl p-6 text-left hover:border-brand-cyan hover:shadow-md transition-all group">

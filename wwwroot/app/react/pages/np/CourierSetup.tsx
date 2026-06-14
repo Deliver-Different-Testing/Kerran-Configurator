@@ -19,6 +19,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { courierService } from '@/services/np_courierService';
 import { lookupService, LookupItem } from '@/services/np_lookupService';
+import { fleetService, type Fleet } from '@/services/np_fleetService';
 import FormField from '@/components/common/FormField';
 import PasswordInput from '@/components/common/PasswordInput';
 import DocumentUpload from '@/components/common/DocumentUpload';
@@ -79,6 +80,7 @@ export default function CourierSetup({ onSelectCourier }: Props) {
   const [vehicleMakes, setVehicleMakes] = useState<LookupItem[]>([]);
   const [insuranceCompanies, setInsuranceCompanies] = useState<LookupItem[]>([]);
   const [networkPartners, setNetworkPartners] = useState<LookupItem[]>([]);
+  const [fleets, setFleets] = useState<Fleet[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -105,6 +107,13 @@ export default function CourierSetup({ onSelectCourier }: Props) {
   useEffect(() => {
     let alive = true;
     courierService.getMasters().then(m => { if (alive) setMasters(m); });
+    // Fleet picker source. Wrapped in Promise.resolve so the call site
+    // survives the eventual async conversion of fleetService.getAll()
+    // (see NP-FLEET-WIRING §3.3). On failure the picker shows only the
+    // saved-value fallback + "— Unassigned —".
+    Promise.resolve(fleetService.getAll())
+      .then(f => { if (alive) setFleets(f); })
+      .catch(() => { /* stub/endpoint unreachable — picker falls back to current value only */ });
     lookupService.getVehicleMakes().then(v => { if (alive) setVehicleMakes(v); });
     lookupService.getInsuranceCompanies().then(i => { if (alive) setInsuranceCompanies(i); });
     if (canEditNpPartner) {
@@ -364,17 +373,32 @@ export default function CourierSetup({ onSelectCourier }: Props) {
             </div>
           )}
 
-          {/* Payment Method — Kerran's tucCourier.PaymentMethod, now live on
-              the courier API. Enum {Direct,Invoice,None}; the server validates.
-              Whether an Invoice routes to Openforce / Xero is decided downstream
-              by OpenForceNumber / XeroId / tenant OpenforceDefault, not here. */}
-          <FormField
-            label="Payment Method"
-            type="select"
-            value={c.paymentMethod || 'Direct'}
-            options={['Direct', 'Invoice', 'None']}
-            onChange={(val) => setDraft(d => d ? { ...d, paymentMethod: val as string } : d)}
-          />
+          {/* Fleet — maps to TucCourier.CourierFleetId. Sourced from the
+              (currently stub) fleetService; NP-scoped once the backend lands.
+              "— Unassigned —" is the first option and represents NULL. */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary uppercase tracking-wide">Fleet</label>
+            <select
+              value={c.courierFleetId ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const newId = raw === '' ? null : Number(raw);
+                const newName = newId == null ? null : (fleets.find(f => f.id === newId)?.name ?? c.courierFleetName ?? null);
+                setDraft(d => d ? { ...d, courierFleetId: newId, courierFleetName: newName } : d);
+              }}
+            >
+              <option value="">— Unassigned —</option>
+              {fleets.map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+              {/* Fallback: render the current selection even if not in the loaded
+                  list (NP scope mismatch, archived fleet, fetch failure). Keeps
+                  the dropdown showing the saved value instead of blanking it. */}
+              {c.courierFleetId != null && !fleets.some(f => f.id === c.courierFleetId) && (
+                <option value={c.courierFleetId}>{c.courierFleetName || 'Current Fleet'}</option>
+              )}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -605,6 +629,24 @@ export default function CourierSetup({ onSelectCourier }: Props) {
         <div className="space-y-5">
           <div className="bg-sky-50 border border-sky-200 text-sky-700 rounded-lg px-4 py-3 text-sm">
             💡 These are your rates to this courier. Your customers cannot see them.
+          </div>
+
+          {/* Payment Channel — Kerran's tucCourier.PaymentMethod. Enum
+              {Direct,Invoice,None}; the server validates. Whether an Invoice
+              routes to Openforce / Xero is decided downstream by OpenForceNumber
+              / XeroId / tenant OpenforceDefault, not here. Moved off the
+              Relationship & Commercial header (NP-FLEET-WIRING §2.1). */}
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Payment Channel</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                label="Payment Method"
+                type="select"
+                value={c.paymentMethod || 'Direct'}
+                options={['Direct', 'Invoice', 'None']}
+                onChange={(val) => setDraft(d => d ? { ...d, paymentMethod: val as string } : d)}
+              />
+            </div>
           </div>
 
           <div className="bg-white border border-border rounded-lg p-5">

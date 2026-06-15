@@ -71,6 +71,8 @@ import CourierLogin from './pages/courier/CourierLogin';
 import CourierDashboard from './pages/courier/CourierDashboard';
 import CourierSettings from './pages/courier/CourierSettings';
 import CourierSchedule from './pages/courier/CourierSchedule';
+import CourierRuns from './pages/courier/CourierRuns';
+import CourierRunDetail from './pages/courier/CourierRunDetail';
 
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder).
 import RateScheduleReport from './pages/reporting/RateSchedule';
@@ -134,7 +136,8 @@ export default function App() {
         <Route path="/drive/:tenantSlug" element={<CourierPortalShell />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<CourierDashboard />} />
-          <Route path="runs" element={<CourierComingSoon title="My Runs" />} />
+          <Route path="runs" element={<CourierRuns />} />
+          <Route path="runs/detail" element={<CourierRunDetail />} />
           <Route path="schedule" element={<CourierSchedule />} />
           <Route path="documents" element={<CourierComingSoon title="Documents" />} />
           <Route path="profile" element={<CourierSettings />} />

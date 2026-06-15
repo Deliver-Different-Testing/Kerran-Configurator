@@ -297,6 +297,13 @@ builder.Services.AddAuthorization(options =>
                 && !string.Equals(isCourier, "True", StringComparison.OrdinalIgnoreCase);
         }));
 
+    // Phase 2 courier portal — gates the /api/v1/courier/* self-service surface
+    // to logged-in couriers (IsCourier claim from the Hub cookie). The current
+    // courier's TucCourier row is then resolved by ICourierScopeResolver.
+    options.AddPolicy("CourierOnly", policy =>
+        policy.RequireAssertion(context =>
+            string.Equals(context.User.FindFirst("IsCourier")?.Value, "True", StringComparison.OrdinalIgnoreCase)));
+
     // Phase 5+31 R3 retired the 9 hardcoded Np* policies that were
     // registered here (NpManageUsers / NpEditSettings / NpViewFinancials /
     // NpAssignCouriers / NpManageCouriers / NpManageFleet / NpViewDispatch /
@@ -398,6 +405,12 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalSessionTokenService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalApplicantService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.API.Filters.PortalRequestFilter>();
+
+// Phase 2 courier portal — courier self-service (cookie-authed, CourierOnly).
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Courier.ICourierScopeResolver,
+    DfrntDriveConfigurator.Core.Application.Services.Courier.CourierScopeResolver>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Courier.CourierProfileService>();
 
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder)
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.ReportingLookupService>();

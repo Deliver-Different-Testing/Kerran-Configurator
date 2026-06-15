@@ -12,8 +12,13 @@ namespace DfrntDriveConfigurator.Controllers;
 // right bootstrap, never redirecting:
 //
 //   /apply/*    -> null bootstrap (applicants are always anonymous in Phase 1)
-//   /courier/*  -> authenticated courier gets the real bootstrap (App.tsx shows
+//   /drive/*    -> authenticated courier gets the real bootstrap (App.tsx shows
 //                  CourierPortalShell); anonymous gets null (shows CourierLogin)
+//
+// NOTE: the courier portal lives at /drive/* (matching the "DFRNT Drive" brand),
+// NOT /courier/* — the latter is a long-standing STAFF route (/courier/:id ->
+// CourierSetup) in the DF Admin / NP / Tenant trees, so reusing it shadowed
+// those pages with the courier login.
 //
 // Both 404 when the portal is not configured for this deployment, so the shared
 // multi-tenant configurator is unaffected.
@@ -28,8 +33,8 @@ public class PortalController(AppSettings appSettings) : Controller
         return View("~/Views/Home/Index.cshtml", (AppUserBootstrap?)null);
     }
 
-    [Route("courier/{*path}")]
-    public IActionResult Courier()
+    [Route("drive/{*path}")]
+    public IActionResult Drive()
     {
         if (!appSettings.PortalEnabled) return NotFound();
 

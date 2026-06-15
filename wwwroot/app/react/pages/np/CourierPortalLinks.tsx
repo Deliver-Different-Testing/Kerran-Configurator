@@ -27,7 +27,7 @@ export default function CourierPortalLinks() {
   const regenerate = (id: number) => {
     setLinks(prev => prev.map(l =>
       l.courierId === id
-        ? { ...l, url: `https://portal.dfrnt.com/courier/${l.code.toLowerCase()}/${Math.random().toString(36).substr(2, 12)}` }
+        ? { ...l, url: `https://portal.dfrnt.com/drive/${l.code.toLowerCase()}/${Math.random().toString(36).substr(2, 12)}` }
         : l
     ));
   };

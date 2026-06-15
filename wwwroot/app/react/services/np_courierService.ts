@@ -454,7 +454,7 @@ export const courierService = {
         courierId: c.id,
         code: c.code,
         name: `${c.firstName} ${c.surName}`,
-        url: `https://portal.dfrnt.com/courier/${c.code.toLowerCase()}`,
+        url: `https://portal.dfrnt.com/drive/${c.code.toLowerCase()}`,
       }));
   },
 

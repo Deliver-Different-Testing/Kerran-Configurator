@@ -114,22 +114,23 @@ export default function App() {
     );
   }
 
-  // Courier Portal — courier shell. Anonymous (or non-courier) visitors get the
-  // themed login; an authenticated courier gets the shell + dashboard. Gated on
-  // the derived role (not the raw isCourier flag) so role precedence + the
-  // internal `?devRole=courier` preview override both work.
-  if (location.pathname.startsWith('/courier/')) {
+  // Courier Portal — courier shell. Lives at /drive/* (NOT /courier/* — that's
+  // the staff CourierSetup route /courier/:id in the role trees below). Anonymous
+  // (or non-courier) visitors get the themed login; an authenticated courier gets
+  // the shell + dashboard. Gated on the derived role (not the raw isCourier flag)
+  // so role precedence + the internal `?devRole=courier` preview override both work.
+  if (location.pathname.startsWith('/drive/')) {
     if (role !== 'courier') {
       return (
         <Routes>
-          <Route path="/courier/:tenantSlug/*" element={<CourierLogin />} />
+          <Route path="/drive/:tenantSlug/*" element={<CourierLogin />} />
         </Routes>
       );
     }
     return (
       <Routes>
-        <Route path="/courier/:tenantSlug/login" element={<Navigate to=".." replace />} />
-        <Route path="/courier/:tenantSlug" element={<CourierPortalShell />}>
+        <Route path="/drive/:tenantSlug/login" element={<Navigate to=".." replace />} />
+        <Route path="/drive/:tenantSlug" element={<CourierPortalShell />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<CourierDashboard />} />
           <Route path="runs" element={<CourierComingSoon title="My Runs" />} />
@@ -335,7 +336,7 @@ export default function App() {
     const courierSlug = (user.tenantCode ?? 'portal').toLowerCase();
     return (
       <Routes>
-        <Route path="*" element={<Navigate to={`/courier/${courierSlug}/dashboard`} replace />} />
+        <Route path="*" element={<Navigate to={`/drive/${courierSlug}/dashboard`} replace />} />
       </Routes>
     );
   }

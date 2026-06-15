@@ -59,6 +59,17 @@ import TeamUsersPage from './pages/settings/TeamUsers';
 // Public (anonymous) routes — slice 2b external-carrier flow.
 import QuoteResponse from './pages/public/QuoteResponse';
 
+// Courier Portal (Phase 1) — applicant onboarding + courier shell. Both are
+// served by PortalController (/apply/*, /courier/*) so they render even for
+// anonymous visitors; App.tsx short-circuits these paths before the role tree.
+import ApplicantShell from './pages/applicant/ApplicantShell';
+import ApplicantEntry from './pages/applicant/ApplicantEntry';
+import ApplicantVerify from './pages/applicant/ApplicantVerify';
+import ApplicantWizard from './pages/applicant/ApplicantWizard';
+import CourierPortalShell, { CourierComingSoon } from './pages/courier/CourierPortalShell';
+import CourierLogin from './pages/courier/CourierLogin';
+import CourierDashboard from './pages/courier/CourierDashboard';
+
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder).
 import RateScheduleReport from './pages/reporting/RateSchedule';
 import ClientMonthlyReport from './pages/reporting/ClientMonthlyReport';
@@ -70,7 +81,7 @@ export default function App() {
   // ANONYMOUS when window.__APP_USER__ is null, but we just ignore the role
   // for the public branch below.
   const location = useLocation();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState<number | null>(null);
 
@@ -82,6 +93,50 @@ export default function App() {
       <Routes>
         <Route path="/p/quote/:token" element={<QuoteResponse />} />
         <Route path="/p/*" element={<Navigate to="/p/" replace />} />
+      </Routes>
+    );
+  }
+
+  // Courier Portal — applicant onboarding (always anonymous in Phase 1). Served
+  // by PortalController with a null bootstrap; the ApplicantShell owns its own
+  // session via the signed X-Portal-Token.
+  if (location.pathname.startsWith('/apply/')) {
+    return (
+      <Routes>
+        <Route path="/apply/:tenantSlug" element={<ApplicantShell />}>
+          <Route index element={<ApplicantEntry />} />
+          <Route path="verify" element={<ApplicantVerify />} />
+          <Route path="apply" element={<ApplicantWizard />} />
+          <Route path="*" element={<Navigate to="." replace />} />
+        </Route>
+      </Routes>
+    );
+  }
+
+  // Courier Portal — courier shell. Anonymous (or non-courier) visitors get the
+  // themed login; an authenticated courier gets the shell + dashboard. Gated on
+  // the derived role (not the raw isCourier flag) so role precedence + the
+  // internal `?devRole=courier` preview override both work.
+  if (location.pathname.startsWith('/courier/')) {
+    if (role !== 'courier') {
+      return (
+        <Routes>
+          <Route path="/courier/:tenantSlug/*" element={<CourierLogin />} />
+        </Routes>
+      );
+    }
+    return (
+      <Routes>
+        <Route path="/courier/:tenantSlug/login" element={<Navigate to=".." replace />} />
+        <Route path="/courier/:tenantSlug" element={<CourierPortalShell />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<CourierDashboard />} />
+          <Route path="runs" element={<CourierComingSoon title="My Runs" />} />
+          <Route path="schedule" element={<CourierComingSoon title="Schedule" />} />
+          <Route path="documents" element={<CourierComingSoon title="Documents" />} />
+          <Route path="profile" element={<CourierComingSoon title="Profile" />} />
+          <Route path="*" element={<Navigate to="dashboard" replace />} />
+        </Route>
       </Routes>
     );
   }
@@ -272,18 +327,14 @@ export default function App() {
   }
 
   if (role === 'courier') {
+    // Couriers landing at the root (e.g. straight after Hub login) are sent into
+    // the canonical branded portal path. The /courier/* short-circuit above then
+    // renders the shell. Slug is cosmetic — derive a friendly one from the
+    // tenant code, defaulting to "portal".
+    const courierSlug = (user.tenantCode ?? 'portal').toLowerCase();
     return (
       <Routes>
-        <Route
-          path="/portal/*"
-          element={
-            <RolePlaceholder
-              roleLabel="Courier Portal"
-              description="Today's runs, schedule, and documents will live here."
-            />
-          }
-        />
-        <Route path="*" element={<Navigate to="/portal" replace />} />
+        <Route path="*" element={<Navigate to={`/courier/${courierSlug}/dashboard`} replace />} />
       </Routes>
     );
   }

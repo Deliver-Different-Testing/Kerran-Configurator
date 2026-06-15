@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
 // Courier Portal (Phase 1) — dashboard stub. Renders inside CourierPortalShell.
@@ -32,6 +33,14 @@ export default function CourierDashboard() {
           </div>
         ))}
       </div>
+
+      <Link
+        to="../contractors"
+        className="block rounded-lg bg-white border border-border shadow-sm p-4 hover:border-brand-cyan"
+      >
+        <div className="text-sm font-bold text-text-primary">Subcontractors →</div>
+        <div className="text-xs text-text-muted mt-0.5">Manage your drivers' payment splits (master couriers).</div>
+      </Link>
 
       <div className="rounded-lg bg-surface-light border border-border p-4 text-sm text-text-secondary">
         This is the new courier portal. Runs, schedule, documents and profile are being rolled out —

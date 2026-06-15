@@ -737,7 +737,7 @@ export function AgentList() {
                             primaryContactRoleId: e.target.value === '' ? null : Number(e.target.value),
                           })
                         }
-                        disabled={!draft.email || npRoles.length === 0}
+                        disabled={npRoles.length === 0}
                       >
                         <option value="">— Select role —</option>
                         {npRoles.map(r => (
@@ -745,10 +745,12 @@ export function AgentList() {
                         ))}
                       </select>
                       <span className="text-xs text-text-muted">
-                        Role assigned to the first user invited for this NP. Required when Contact Email is set.
-                        {!draft.email && ' Add a Contact Email above to enable.'}
-                        {draft.email && npRoles.length === 0 && rolesLoadError && (
-                          <span className="text-red-600"> Roles failed to load: {rolesLoadError}. Cannot create NP — retry or check tenant role seed.</span>
+                        Role for the first user invited for this NP. Required when a Contact Email is set.
+                        {npRoles.length === 0 && !rolesLoadError && (
+                          <span className="text-amber-600"> No assignable roles for this Client Type — pick a NetworkPartner type, or check the tenant role seed (tblContactRole.IsActive + tblRoleClientType).</span>
+                        )}
+                        {rolesLoadError && (
+                          <span className="text-red-600"> Roles failed to load: {rolesLoadError}.</span>
                         )}
                       </span>
                     </>

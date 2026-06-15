@@ -563,11 +563,23 @@ app.Use(async (context, next) =>
 {
     var headers = context.Response.Headers;
 
+    // Compliance document-download endpoints are framed by our own preview
+    // modal (AgentDocumentPreviewModal / MyAgentDocumentPreviewModal) via an
+    // <iframe> for native PDF rendering. Those responses — and only those —
+    // are exempted from the blanket DENY framing policy and allowed to be
+    // framed same-origin. Everything else stays locked (DENY / frame-* 'none').
+    var reqPath = context.Request.Path.Value ?? string.Empty;
+    var isFrameableDoc = reqPath.EndsWith("/download", StringComparison.OrdinalIgnoreCase)
+        && (reqPath.Contains("/documents/", StringComparison.OrdinalIgnoreCase)
+            || reqPath.Contains("/my-documents/", StringComparison.OrdinalIgnoreCase));
+
     // Prevent MIME type sniffing
     headers.XContentTypeOptions = "nosniff";
 
-    // Prevent clickjacking
-    headers.XFrameOptions = "DENY";
+    // Prevent clickjacking. Same-origin framing is allowed ONLY for the
+    // document-download endpoints above so the staff/NP preview modal can
+    // render PDFs inline; every other response stays DENY.
+    headers.XFrameOptions = isFrameableDoc ? "SAMEORIGIN" : "DENY";
 
     // Control referrer information
     headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
@@ -587,8 +599,8 @@ app.Use(async (context, next) =>
         "font-src 'self' https://fonts.gstatic.com data:; " +
         "connect-src 'self' wss: ws:" + (app.Environment.IsDevelopment() ? " http://localhost:*" : "") + "; " +
         "worker-src 'self' blob:; " +
-        "frame-ancestors 'none'; " +
-        "frame-src 'none'; " +
+        (isFrameableDoc ? "frame-ancestors 'self'; " : "frame-ancestors 'none'; ") +
+        "frame-src 'self'; " +
         "object-src 'none'; " +
         "manifest-src 'self'; " +
         "base-uri 'self'; " +

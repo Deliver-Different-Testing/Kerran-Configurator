@@ -82,7 +82,7 @@ export function MyAgentDocumentPreviewModal({ isOpen, document, onClose }: Props
           <div className="bg-slate-100 border-r border-border-light min-h-0 overflow-hidden flex items-center justify-center">
             {isPdf && (
               <iframe
-                src={url}
+                src={`${url}?inline=true`}
                 title={document.fileName}
                 className="w-full h-full bg-white"
               />

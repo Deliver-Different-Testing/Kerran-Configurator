@@ -119,7 +119,7 @@ public class MyAgentDocumentsController(
     }
 
     [HttpGet("{id:int}/download")]
-    public async Task<IActionResult> Download(int id)
+    public async Task<IActionResult> Download(int id, [FromQuery] bool inline = false)
     {
         try
         {
@@ -130,6 +130,15 @@ public class MyAgentDocumentsController(
             var result = await documentService.GetForDownloadAsync(id);
             if (result is null) return NotFound();
 
+            // inline=true serves Content-Disposition: inline so the NP preview
+            // modal can render the PDF in an <iframe> (attachment renders blank).
+            // The Download affordance omits the flag and gets attachment.
+            if (inline)
+            {
+                Response.Headers.ContentDisposition =
+                    new System.Net.Mime.ContentDisposition { Inline = true, FileName = result.FileName }.ToString();
+                return File(result.Content, result.ContentType);
+            }
             return File(result.Content, result.ContentType, result.FileName);
         }
         catch (Exception e)

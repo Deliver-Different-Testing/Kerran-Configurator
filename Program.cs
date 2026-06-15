@@ -411,6 +411,7 @@ builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Courier.ICourierScopeResolver,
     DfrntDriveConfigurator.Core.Application.Services.Courier.CourierScopeResolver>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Courier.CourierProfileService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Courier.CourierScheduleService>();
 
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder)
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.ReportingLookupService>();

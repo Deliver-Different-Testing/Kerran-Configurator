@@ -70,6 +70,7 @@ import CourierPortalShell, { CourierComingSoon } from './pages/courier/CourierPo
 import CourierLogin from './pages/courier/CourierLogin';
 import CourierDashboard from './pages/courier/CourierDashboard';
 import CourierSettings from './pages/courier/CourierSettings';
+import CourierSchedule from './pages/courier/CourierSchedule';
 
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder).
 import RateScheduleReport from './pages/reporting/RateSchedule';
@@ -134,7 +135,7 @@ export default function App() {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<CourierDashboard />} />
           <Route path="runs" element={<CourierComingSoon title="My Runs" />} />
-          <Route path="schedule" element={<CourierComingSoon title="Schedule" />} />
+          <Route path="schedule" element={<CourierSchedule />} />
           <Route path="documents" element={<CourierComingSoon title="Documents" />} />
           <Route path="profile" element={<CourierSettings />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />

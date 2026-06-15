@@ -129,6 +129,10 @@ public partial class CourierApplicant
 
     public string Notes { get; set; }
 
+    public string PasswordHash { get; set; }
+
+    public string PasswordSalt { get; set; }
+
     public virtual TucCourier Courier { get; set; }
 
     public virtual ICollection<CourierApplicantUpload> CourierApplicantUploads { get; set; } = new List<CourierApplicantUpload>();

@@ -273,6 +273,8 @@ public partial class TucCourier
 
     public string PaymentMethod { get; set; }
 
+    public string MasterSubSettlementMode { get; set; }
+
     public virtual ICollection<CourierApplicant> CourierApplicantCouriers { get; set; } = new List<CourierApplicant>();
 
     public virtual ICollection<CourierApplicant> CourierApplicantMasterCouriers { get; set; } = new List<CourierApplicant>();

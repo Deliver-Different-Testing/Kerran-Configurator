@@ -338,4 +338,6 @@ public partial class TblSetting
     public bool OpenforceIsUat { get; set; }
 
     public bool OpenforceDefault { get; set; }
+
+    public bool TenantGeneratesContractorInvoice { get; set; }
 }

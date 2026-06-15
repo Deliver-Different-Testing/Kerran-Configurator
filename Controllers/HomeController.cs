@@ -183,38 +183,10 @@ public class HomeController(
         }
     }
 
-    private static AppUserBootstrap BuildBootstrap(ClaimsPrincipal principal, AppSettings appSettings)
-    {
-        var claims = principal.Claims.ToList();
-        string? Get(string type) => claims.FirstOrDefault(c => c.Type == type)?.Value;
-
-        bool ParseBool(string? v) =>
-            !string.IsNullOrEmpty(v) && bool.TryParse(v, out var b) && b;
-
-        int? ParseInt(string? v) =>
-            int.TryParse(v, out var i) ? i : null;
-
-        // DF-admin lane is driven by ClientType == 5 (DFRNTAdmin), not the
-        // legacy UserGroupID == 1. A tenant Administrator (UserGroupID=1 on a
-        // ClientTypeId=4 client) is a Tenant in the configurator while keeping
-        // full AdminManager rights. The ClientTypeId claim is set during
-        // enrichment in Index() from the user's ClientID.
-        var isAdmin = Get("ClientTypeId") == "5";
-
-        return new AppUserBootstrap(
-            IsAdmin: isAdmin,
-            IsCourier: ParseBool(Get("IsCourier")),
-            IsNetworkPartner: ParseBool(Get("IsNetworkPartner")),
-            Internal: ParseBool(Get("Internal")),
-            CurrentTenantId: ParseInt(Get("CurrentTenantID")),
-            StaffId: ParseInt(Get("StaffID")),
-            FullName: Get("fullName"),
-            Email: Get(ClaimTypes.Name),
-            TenantCode: Get("TenantCode"),
-            NpRoleId: ParseInt(Get("NpRoleId")),
-            DespatchWebBaseUrl: string.IsNullOrEmpty(appSettings.DespatchWebBaseUrl) ? null : appSettings.DespatchWebBaseUrl,
-            RunViewerBaseUrl: string.IsNullOrEmpty(appSettings.RunViewerBaseUrl) ? null : appSettings.RunViewerBaseUrl);
-    }
+    // Bootstrap construction now lives in the shared BootstrapBuilder so the
+    // anonymous PortalController can emit the same blob for couriers.
+    private static AppUserBootstrap BuildBootstrap(ClaimsPrincipal principal, AppSettings appSettings) =>
+        BootstrapBuilder.Build(principal, appSettings);
 
     private async Task EnsureConnectionString()
     {

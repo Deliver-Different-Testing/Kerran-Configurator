@@ -142,6 +142,10 @@ var appSettings = new AppSettings
     HubAdminApiKey = builder.Configuration["HubAdminApiKey"] ?? string.Empty,
     DespatchWebBaseUrl = (builder.Configuration["DespatchWebBaseUrl"] ?? string.Empty).TrimEnd('/'),
     RunViewerBaseUrl = (builder.Configuration["RunViewerBaseUrl"] ?? string.Empty).TrimEnd('/'),
+    PortalTenantId = builder.Configuration["PortalTenantId"] ?? string.Empty,
+    PortalDespatchConnection = builder.Configuration["PortalDespatchConnection"] ?? string.Empty,
+    PortalTenantSlug = builder.Configuration["PortalTenantSlug"] ?? "portal",
+    PortalDisplayName = builder.Configuration["PortalDisplayName"] ?? "Deliver Different",
 };
 builder.Services.AddSingleton(appSettings);
 
@@ -165,6 +169,16 @@ if (string.IsNullOrEmpty(appSettings.HubBaseUrl) || string.IsNullOrEmpty(appSett
 else
 {
     Log.Information("HubBaseUrl: {Url}; HubAdminApiKey present.", appSettings.HubBaseUrl);
+}
+
+if (appSettings.PortalEnabled)
+{
+    Log.Information("Courier Portal ENABLED for tenant {TenantId} (slug '{Slug}', brand '{Brand}').",
+        appSettings.PortalTenantId, appSettings.PortalTenantSlug, appSettings.PortalDisplayName);
+}
+else
+{
+    Log.Information("Courier Portal disabled — PortalTenantId / PortalDespatchConnection not set. /apply/* and /courier/* and /api/portal/* are inactive on this deployment.");
 }
 
 if (string.IsNullOrEmpty(appSettings.DespatchWebBaseUrl))
@@ -372,6 +386,18 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tena
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantLookupService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantProspectService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantRouteService>();
+
+// Courier Portal (Phase 1) — applicant lightweight auth + courier shell.
+// PortalTenantContext + PortalSessionTokenService are stateless (deps are
+// singletons / DataProtection), but registered scoped alongside the rest for
+// simplicity. PortalRequestFilter is resolved via [ServiceFilter] so must be
+// registered. See AppSettings.Portal* for the per-deployment config.
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Portal.IPortalTenantContext,
+    DfrntDriveConfigurator.Core.Application.Services.Portal.PortalTenantContext>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalSessionTokenService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalApplicantService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.API.Filters.PortalRequestFilter>();
 
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder)
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.ReportingLookupService>();

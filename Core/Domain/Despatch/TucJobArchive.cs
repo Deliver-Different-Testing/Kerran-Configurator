@@ -513,6 +513,16 @@ public partial class TucJobArchive
 
     public int? RouteId { get; set; }
 
+    public int? AgentBctiRunId { get; set; }
+
+    public decimal? SubContractorPaymentAmount { get; set; }
+
+    public decimal? SubContractorFuelAmount { get; set; }
+
+    public decimal? SubContractorBonusAmount { get; set; }
+
+    public string MasterSubSettlementMode { get; set; }
+
     public virtual TucAgent Agent { get; set; }
 
     public virtual TucCourier MasterCourier { get; set; }

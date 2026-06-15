@@ -101,6 +101,12 @@ public partial class TucAgent
 
     public decimal? DefaultCourierPayPercent { get; set; }
 
+    public bool OptedInToBcti { get; set; }
+
+    public int? BctiScheduleId { get; set; }
+
+    public string AccountsId { get; set; }
+
     public virtual ICollection<AgentCoverageArea> AgentCoverageAreas { get; set; } = new List<AgentCoverageArea>();
 
     public virtual ICollection<DispatchRouteRoster> DispatchRouteRosters { get; set; } = new List<DispatchRouteRoster>();

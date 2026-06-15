@@ -56,4 +56,52 @@ public class AppSettings
     /// Viewer + Print Manager). Empty value leaves those links disabled.
     /// </summary>
     public string RunViewerBaseUrl { get; set; } = string.Empty;
+
+    // ---- Courier Portal (Phase 1) ----------------------------------------
+    // The configurator is absorbing the legacy `courierportal` app. The new
+    // applicant/courier portal serves anonymous public surfaces
+    // (/apply/* and /courier/*) that have no Hub cookie, so they cannot
+    // resolve the tenant DB the normal way (Hub passes the connection in a
+    // claim at login). Instead the portal is deployed ONE-PER-TENANT and
+    // reads its own tenant id + Despatch connection from config. The
+    // :tenantSlug in the URL is cosmetic/branding only.
+    //
+    // All four are empty by default — when PortalTenantId /
+    // PortalDespatchConnection are unset the portal is DISABLED (its
+    // endpoints return 503 and the Razor entry points 404), so the shared
+    // multi-tenant configurator deployment is unaffected.
+
+    /// <summary>
+    /// This deployment's tenant id (the CurrentTenantID value the Hub would
+    /// otherwise stamp). Used to seed the connection-string cache and stamp
+    /// the per-request tenant override for anonymous /api/portal/* calls.
+    /// Bound from env var PortalTenantId.
+    /// </summary>
+    public string PortalTenantId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The tenant Despatch DB connection string for this portal deployment
+    /// (without the shared SQLCredentials suffix — that is appended at seed
+    /// time, same as HomeController does for the Hub-supplied connection).
+    /// Bound from env var PortalDespatchConnection.
+    /// </summary>
+    public string PortalDespatchConnection { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Cosmetic slug used in branded portal URLs (e.g. /apply/{slug}).
+    /// Branding only — never used for backend tenant resolution. Defaults to
+    /// "portal" when unset. Bound from env var PortalTenantSlug.
+    /// </summary>
+    public string PortalTenantSlug { get; set; } = "portal";
+
+    /// <summary>
+    /// Display/brand name shown in portal emails and the themed shell
+    /// (e.g. "Acme Couriers"). Defaults to "Deliver Different" when unset.
+    /// Bound from env var PortalDisplayName.
+    /// </summary>
+    public string PortalDisplayName { get; set; } = "Deliver Different";
+
+    /// <summary>True when the portal has the minimum config to operate.</summary>
+    public bool PortalEnabled =>
+        !string.IsNullOrEmpty(PortalTenantId) && !string.IsNullOrEmpty(PortalDespatchConnection);
 }

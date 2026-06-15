@@ -11,6 +11,7 @@ using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 namespace DfrntDriveConfigurator.Core.Application.Services.Tenant;
 
@@ -68,6 +69,19 @@ public class TenantAgentService(
             && await IsContactEmailTakenAsync(dto.ContactEmail))
         {
             return Fail(messageId, $"Contact email \"{dto.ContactEmail}\" is already in use on another tucClientContact.");
+        }
+
+        // 2026-06-15 — when this save will create a primary contact (first-time
+        // NP upgrade, or an existing NP client that has no contact yet), the
+        // operator must have supplied a valid Initial User Role — no silent
+        // NpAdmin fallback. Existing NPs that already have a contact are
+        // unaffected (no contact created → no role needed).
+        var willCreatePrimaryContact = !string.IsNullOrWhiteSpace(dto.ContactEmail)
+            && (isFirstTimeNpUpgrade || agent.TucClients.Any(c => c.TucClientContacts.Count == 0));
+        if (willCreatePrimaryContact)
+        {
+            var roleError = await ValidateInitialNpRoleAsync(dto);
+            if (roleError != null) return Fail(messageId, roleError);
         }
 
         var actor = ResolveActor();
@@ -135,7 +149,7 @@ public class TenantAgentService(
                 }
                 else
                 {
-                    client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now, await ResolveNpAdminRoleIdAsync()));
+                    client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now, dto.PrimaryContactRoleId));
                     contactAddedToExistingClient = true;
                 }
             }
@@ -195,6 +209,15 @@ public class TenantAgentService(
             && await IsContactEmailTakenAsync(dto.ContactEmail))
         {
             return Fail(messageId, $"Contact email \"{dto.ContactEmail}\" is already in use on another tucClientContact.");
+        }
+
+        // 2026-06-15 — a new NP with a Contact Email will get a primary contact;
+        // the operator must have picked a valid Initial User Role. No silent
+        // NpAdmin fallback — fail loudly rather than write a role-less contact.
+        if (dto.IsNetworkPartner && !string.IsNullOrWhiteSpace(dto.ContactEmail))
+        {
+            var roleError = await ValidateInitialNpRoleAsync(dto);
+            if (roleError != null) return Fail(messageId, roleError);
         }
 
         var actor = ResolveActor();
@@ -301,7 +324,7 @@ public class TenantAgentService(
 
         if (!string.IsNullOrWhiteSpace(dto.ContactEmail))
         {
-            client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now, await ResolveNpAdminRoleIdAsync()));
+            client.TucClientContacts.Add(BuildPrimaryContact(dto, actor, now, dto.PrimaryContactRoleId));
         }
         else
         {
@@ -442,9 +465,34 @@ public class TenantAgentService(
         };
     }
 
+    // 2026-06-15 — validates the operator-selected Initial NP user role. Returns
+    // an error message (caller wraps in Fail) or null when OK. The cascade no
+    // longer falls back to ResolveNpAdminRoleIdAsync — the operator must pick a
+    // role that's actually assignable on this NP's ClientType. Uses the SAME
+    // predicate as the dropdown's source (AdminContactService.GetAssignableRolesAsync)
+    // so server-side acceptance exactly matches what the operator could pick.
+    private async Task<string?> ValidateInitialNpRoleAsync(TenantAgentUpsertDto dto)
+    {
+        if (dto.PrimaryContactRoleId is not int requestedRoleId)
+            return "Initial User Role is required when creating/upgrading a Network Partner with a Contact Email.";
+
+        var clientTypeId = dto.ClientTypeId ?? 3;
+        var assignable = await Context.TblContactRoles.AsNoTracking()
+            .AnyAsync(r => r.ContactRoleId == requestedRoleId
+                           && r.IsActive
+                           && r.TblRoleClientTypes.Any(t => t.ClientTypeId == clientTypeId));
+        if (!assignable)
+            return $"Selected role (id {requestedRoleId}) is not assignable on this NP's Client Type. Pick a role from the dropdown.";
+
+        Log.Information("[NP-invite] roleId={RoleId} email={Email}", requestedRoleId, dto.ContactEmail);
+        return null;
+    }
+
     // Resolves the real NpAdmin ContactRoleId by NAME (it is at 6/7/8 on
     // collided tenants, not 1). Null if absent — contact is then role-less
-    // (deny-by-default) rather than mis-assigned.
+    // (deny-by-default) rather than mis-assigned. NO LONGER called from the
+    // create/upgrade cascade (operator now picks the role explicitly); retained
+    // for QuoteNotificationService's routing lookup.
     private async Task<int?> ResolveNpAdminRoleIdAsync() =>
         await Context.TblContactRoles.AsNoTracking()
             .Where(r => r.Name == "NpAdmin" && r.IsActive)

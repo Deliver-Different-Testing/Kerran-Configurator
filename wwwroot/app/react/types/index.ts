@@ -264,6 +264,9 @@ export interface Agent {
   // 3 NetworkPartner, or any further seeded value). Null when no TucClient
   // is linked (non-NP agent).
   clientTypeId?: number | null;
+  // 2026-06-15 — operator-selected ContactRoleId for the first NP user invited
+  // via the Edit Agent modal. Write-only (sent on upsert; not returned on read).
+  primaryContactRoleId?: number | null;
   // Optional NP compliance documents — populated for agents with status
   // 'Pending NP' (rendered as a compliance bar in AgentList) and read by
   // AgentWorkspace's inline expansion. May be absent on regular Agent

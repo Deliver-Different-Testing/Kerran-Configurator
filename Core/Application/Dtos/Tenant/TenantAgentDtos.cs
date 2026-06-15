@@ -107,6 +107,14 @@ public class TenantAgentUpsertDto
     // Operators can override to 1 (Internal) / 2 (Customer) or any other
     // seeded ClientType when they have a reason to.
     public int? ClientTypeId { get; set; }
+
+    // 2026-06-15 — operator-selected ContactRoleId for the primary
+    // TucClientContact the NP cascade creates. The Edit Agent modal's "Initial
+    // User Role" dropdown is the SINGLE source of truth — there is no silent
+    // name-match fallback. Required (validated server-side) only when
+    // IsNetworkPartner = true AND ContactEmail is set AND a contact will be
+    // created; null in any other case.
+    public int? PrimaryContactRoleId { get; set; }
 }
 
 public class TenantAgentResponse : BaseResponse

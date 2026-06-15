@@ -8,6 +8,7 @@ import { getAgentStatusTone } from './agentComplianceService';
 import { useAgents as useLiveAgents } from '@/hooks/useAgents';
 import { agentService, tenantLookupService, LookupItem } from '@/services/tenant_agentService';
 import { prospectService, ProspectAgent } from '@/services/tenant_prospectService';
+import { contactsApi, type AdminRoleOption } from '@/services/api';
 import type { Agent, CitySuggestion } from '@/types';
 
 function AgentStatusBadge({ status }: { status: string }) {
@@ -71,6 +72,32 @@ export function AgentList() {
     return () => { alive = false; };
   }, []);
 
+  // 2026-06-15 — assignable NP roles for the "Initial User Role" picker on the
+  // Edit Agent NP reveal. Same source as the contacts role picker, parameterised
+  // by the draft's ClientType (assignable roles can differ by ClientType).
+  const [npRoles, setNpRoles] = useState<AdminRoleOption[]>([]);
+  const [rolesLoadError, setRolesLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!draft?.isNetworkPartner) { setNpRoles([]); setRolesLoadError(null); return; }
+    let alive = true;
+    setRolesLoadError(null);
+    contactsApi.roles(draft.clientTypeId ?? 3)
+      .then(rs => { if (alive) setNpRoles(rs); })
+      .catch(e => { if (alive) { setNpRoles([]); setRolesLoadError(e instanceof Error ? e.message : 'load failed'); } });
+    return () => { alive = false; };
+  }, [draft?.isNetworkPartner, draft?.clientTypeId]);
+
+  // Convenience pre-select (does NOT change validation): when roles load and no
+  // role is chosen yet, match NpAdmin by name. If none match, the field stays at
+  // "— Select role —" and Save is gated until the operator picks.
+  useEffect(() => {
+    if (!draft?.isNetworkPartner || npRoles.length === 0 || draft.primaryContactRoleId != null) return;
+    const aliases = ['npadmin', 'np admin', 'network partner admin'];
+    const match = npRoles.find(r => aliases.includes(r.name.trim().toLowerCase()));
+    if (match) setDraft(d => (d ? { ...d, primaryContactRoleId: match.id } : d));
+  }, [npRoles, draft?.isNetworkPartner, draft?.primaryContactRoleId]);
+
   // Prospect directory (the 821-row pre-seeded carrier list from migration 023).
   // Backend filters by `association` and `search`; fetch is debounced 250ms so
   // typing in the search box doesn't hammer the endpoint.
@@ -119,6 +146,10 @@ export function AgentList() {
     // server-side when IsNetworkPartner=true (no TucClient is created
     // otherwise). Operator can override via the picker.
     clientTypeId: 3,
+    // 2026-06-15 — operator must pick the Initial User Role explicitly on each
+    // NP creation; start clean (the NpAdmin name-match pre-select fills it in
+    // as a convenience once roles load, if one matches).
+    primaryContactRoleId: null,
   };
 
   function openEdit(agent: Agent) {
@@ -679,6 +710,36 @@ export function AgentList() {
                     Determines how this NP's tucClient row is classified for billing / Hub visibility. Defaults to NetworkPartner.
                   </span>
                 </div>
+                {/* 2026-06-15 — Initial User Role for the first NP user invited.
+                    Required (client + server) when a Contact Email is set; the
+                    dropdown is the single source of truth (no silent fallback). */}
+                <div className="flex flex-col gap-1 col-span-2">
+                  <label className="text-xs text-text-secondary uppercase tracking-wide">
+                    Initial User Role <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={draft.primaryContactRoleId ?? ''}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        primaryContactRoleId: e.target.value === '' ? null : Number(e.target.value),
+                      })
+                    }
+                    disabled={!draft.email || npRoles.length === 0}
+                  >
+                    <option value="">— Select role —</option>
+                    {npRoles.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-text-muted">
+                    Role assigned to the first user invited for this NP. Required when Contact Email is set.
+                    {!draft.email && ' Add a Contact Email above to enable.'}
+                    {draft.email && npRoles.length === 0 && rolesLoadError && (
+                      <span className="text-red-600"> Roles failed to load: {rolesLoadError}. Cannot create NP — retry or check tenant role seed.</span>
+                    )}
+                  </span>
+                </div>
               </>
             )}
             <div className="flex flex-col gap-1 col-span-2">
@@ -811,7 +872,12 @@ export function AgentList() {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !(draft?.name ?? '').trim()}
+            // 2026-06-15 — NP + Contact Email requires a picked Initial User Role.
+            disabled={
+              saving
+              || !(draft?.name ?? '').trim()
+              || (!!draft?.isNetworkPartner && !!draft?.email && draft?.primaryContactRoleId == null)
+            }
             className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50"
           >
             {saving ? 'Saving…' : createMode ? 'Create Agent' : 'Save Changes'}

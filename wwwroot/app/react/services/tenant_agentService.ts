@@ -146,6 +146,8 @@ function toUpsertPayload(a: Partial<Agent>) {
     // Phase 5+27.1 — operator-selectable ClientType for the linked TucClient.
     // Backend defaults to 3 (NetworkPartner) when null + IsNetworkPartner=true.
     clientTypeId: a.clientTypeId ?? null,
+    // 2026-06-15 — Initial NP user role for the cascade-created primary contact.
+    primaryContactRoleId: a.primaryContactRoleId ?? null,
   };
 }
 

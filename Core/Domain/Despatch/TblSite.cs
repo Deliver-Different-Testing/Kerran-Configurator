@@ -43,6 +43,10 @@ public partial class TblSite
 
     public virtual ICollection<CourierApplicant> CourierApplicants { get; set; } = new List<CourierApplicant>();
 
+    public virtual ICollection<CourierScheduleTimeSlot> CourierScheduleTimeSlots { get; set; } = new List<CourierScheduleTimeSlot>();
+
+    public virtual ICollection<CourierSchedule> CourierSchedules { get; set; } = new List<CourierSchedule>();
+
     public virtual TucClient DefaultDeliveryClient { get; set; }
 
     public virtual TucClient DefaultPickupClient { get; set; }

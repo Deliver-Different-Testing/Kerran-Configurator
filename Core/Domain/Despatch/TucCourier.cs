@@ -283,6 +283,8 @@ public partial class TucCourier
 
     public virtual TucCourierFleet CourierFleet { get; set; }
 
+    public virtual ICollection<CourierScheduleResponse> CourierScheduleResponses { get; set; } = new List<CourierScheduleResponse>();
+
     public virtual ICollection<DispatchRouteRoster> DispatchRouteRosters { get; set; } = new List<DispatchRouteRoster>();
 
     public virtual TucAgent NpAgent { get; set; }

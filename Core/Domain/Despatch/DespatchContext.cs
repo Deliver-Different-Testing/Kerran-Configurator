@@ -53,6 +53,12 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<CourierDocument> CourierDocuments { get; set; }
 
+    public virtual DbSet<CourierSchedule> CourierSchedules { get; set; }
+
+    public virtual DbSet<CourierScheduleResponse> CourierScheduleResponses { get; set; }
+
+    public virtual DbSet<CourierScheduleTimeSlot> CourierScheduleTimeSlots { get; set; }
+
     public virtual DbSet<DispatchRouteRoster> DispatchRouteRosters { get; set; }
 
     public virtual DbSet<DocumentType> DocumentTypes { get; set; }
@@ -726,6 +732,86 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.DocumentTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_CourierDocuments_DocumentType");
+        });
+
+        modelBuilder.Entity<CourierSchedule>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_Schedule");
+
+            entity.ToTable("CourierSchedule");
+
+            entity.HasIndex(e => e.LocationId, "IX_LocationId");
+
+            entity.HasIndex(e => e.BookDate, "NonClusteredIndex-20190719-154420-BookDate");
+
+            entity.HasIndex(e => new { e.BookDate, e.SiteId, e.Name }, "NonClusteredIndex-20190719-154513-NaturalKeys");
+
+            entity.Property(e => e.BookDate).HasPrecision(3);
+            entity.Property(e => e.Created).HasPrecision(3);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.NotificationSent).HasPrecision(3);
+
+            entity.HasOne(d => d.Site).WithMany(p => p.CourierSchedules)
+                .HasForeignKey(d => d.SiteId)
+                .HasConstraintName("FK_CourierSchedule_tblSite");
+        });
+
+        modelBuilder.Entity<CourierScheduleResponse>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_ScheduleResponse");
+
+            entity.ToTable("CourierScheduleResponse", tb =>
+                {
+                    tb.HasTrigger("TR_CourierScheduleResponse_Insert");
+                    tb.HasTrigger("TR_CourierScheduleResponse_Update");
+                });
+
+            entity.HasIndex(e => e.CourierId, "FK-CourierId-NonClusteredIndex");
+
+            entity.HasIndex(e => e.ScheduleId, "FK-ScheduleId-NonClusteredIndex").IsDescending();
+
+            entity.HasIndex(e => e.TimeSlotId, "FK-TimeslotId-NonClusteredIndex").IsDescending();
+
+            entity.Property(e => e.Created).HasPrecision(3);
+            entity.Property(e => e.NotificationSent).HasPrecision(3);
+            entity.Property(e => e.Updated).HasPrecision(3);
+
+            entity.HasOne(d => d.Courier).WithMany(p => p.CourierScheduleResponses)
+                .HasForeignKey(d => d.CourierId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_tucCourier_CourierScheduleResponse");
+
+            entity.HasOne(d => d.Schedule).WithMany(p => p.CourierScheduleResponses)
+                .HasForeignKey(d => d.ScheduleId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CourierSchedule_CourierScheduleResponse");
+
+            entity.HasOne(d => d.TimeSlot).WithMany(p => p.CourierScheduleResponses)
+                .HasForeignKey(d => d.TimeSlotId)
+                .HasConstraintName("FK_CourierScheduleResponse_CourierScheduleTimeSlot");
+        });
+
+        modelBuilder.Entity<CourierScheduleTimeSlot>(entity =>
+        {
+            entity.ToTable("CourierScheduleTimeSlot");
+
+            entity.HasIndex(e => e.BookDateTime, "BookDateTime_NonClusteredIndex").IsDescending();
+
+            entity.HasIndex(e => e.SiteId, "FK_SiteId_NonClusteredIndex");
+
+            entity.HasIndex(e => e.LocationId, "IX_LocationId");
+
+            entity.Property(e => e.BookDateTime).HasPrecision(3);
+            entity.Property(e => e.Created)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(getdate())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF__CourierSc__Creat__05AEC38C");
+
+            entity.HasOne(d => d.Site).WithMany(p => p.CourierScheduleTimeSlots)
+                .HasForeignKey(d => d.SiteId)
+                .HasConstraintName("FK_CourierScheduleTimeSlot_tblSite");
         });
 
         modelBuilder.Entity<DispatchRouteRoster>(entity =>

@@ -99,6 +99,18 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[CourierSchedule]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[CourierScheduleResponse]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[CourierScheduleTimeSlot]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[Dispatch_RouteRoster]",
          "ObjectType": 0
       },

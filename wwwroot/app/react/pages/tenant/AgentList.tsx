@@ -710,35 +710,49 @@ export function AgentList() {
                     Determines how this NP's tucClient row is classified for billing / Hub visibility. Defaults to NetworkPartner.
                   </span>
                 </div>
-                {/* 2026-06-15 — Initial User Role for the first NP user invited.
-                    Required (client + server) when a Contact Email is set; the
-                    dropdown is the single source of truth (no silent fallback). */}
+                {/* 2026-06-15 — Initial User Role for the FIRST NP user the cascade
+                    creates. Editable only when a contact will be created; once the
+                    NP has a user it's read-only (role edits live on the NP Users
+                    page — Steve's create-only design). */}
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-xs text-text-secondary uppercase tracking-wide">
-                    Initial User Role <span className="text-red-500">*</span>
+                    Initial User Role {!draft.npHasPrimaryContact && <span className="text-red-500">*</span>}
                   </label>
-                  <select
-                    value={draft.primaryContactRoleId ?? ''}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        primaryContactRoleId: e.target.value === '' ? null : Number(e.target.value),
-                      })
-                    }
-                    disabled={!draft.email || npRoles.length === 0}
-                  >
-                    <option value="">— Select role —</option>
-                    {npRoles.map(r => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </select>
-                  <span className="text-xs text-text-muted">
-                    Role assigned to the first user invited for this NP. Required when Contact Email is set.
-                    {!draft.email && ' Add a Contact Email above to enable.'}
-                    {draft.email && npRoles.length === 0 && rolesLoadError && (
-                      <span className="text-red-600"> Roles failed to load: {rolesLoadError}. Cannot create NP — retry or check tenant role seed.</span>
-                    )}
-                  </span>
+                  {draft.npHasPrimaryContact ? (
+                    <>
+                      <div className="text-sm text-text-secondary rounded-md border border-border bg-surface-light px-3 py-2">
+                        This NP already has a user.
+                      </div>
+                      <span className="text-xs text-text-muted">
+                        The initial role is set when the first user is created. To change an existing user's role, use the NP Users page.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <select
+                        value={draft.primaryContactRoleId ?? ''}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            primaryContactRoleId: e.target.value === '' ? null : Number(e.target.value),
+                          })
+                        }
+                        disabled={!draft.email || npRoles.length === 0}
+                      >
+                        <option value="">— Select role —</option>
+                        {npRoles.map(r => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                      <span className="text-xs text-text-muted">
+                        Role assigned to the first user invited for this NP. Required when Contact Email is set.
+                        {!draft.email && ' Add a Contact Email above to enable.'}
+                        {draft.email && npRoles.length === 0 && rolesLoadError && (
+                          <span className="text-red-600"> Roles failed to load: {rolesLoadError}. Cannot create NP — retry or check tenant role seed.</span>
+                        )}
+                      </span>
+                    </>
+                  )}
                 </div>
               </>
             )}
@@ -872,11 +886,12 @@ export function AgentList() {
           </button>
           <button
             onClick={handleSave}
-            // 2026-06-15 — NP + Contact Email requires a picked Initial User Role.
+            // 2026-06-15 — NP + Contact Email requires a picked Initial User Role,
+            // but only when a contact will be created (not when one already exists).
             disabled={
               saving
               || !(draft?.name ?? '').trim()
-              || (!!draft?.isNetworkPartner && !!draft?.email && draft?.primaryContactRoleId == null)
+              || (!!draft?.isNetworkPartner && !!draft?.email && !draft?.npHasPrimaryContact && draft?.primaryContactRoleId == null)
             }
             className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50"
           >

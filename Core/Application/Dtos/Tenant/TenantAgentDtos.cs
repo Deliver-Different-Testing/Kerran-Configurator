@@ -43,6 +43,13 @@ public class TenantAgentDto
     // the edit picker. Null when no TucClient is linked (non-NP agent).
     public int? ClientTypeId { get; set; }
 
+    // 2026-06-15 — true when the linked NP client already has at least one
+    // TucClientContact (i.e. a user exists). Drives the Edit Agent modal: the
+    // "Initial User Role" picker is read-only when a user already exists (role
+    // edits live on the NP Users page); editable only when a contact will be
+    // created.
+    public bool NpHasPrimaryContact { get; set; }
+
     public DateTime Created { get; set; }
     public DateTime LastModified { get; set; }
 }

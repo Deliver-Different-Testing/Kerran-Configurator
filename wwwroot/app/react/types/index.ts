@@ -267,6 +267,9 @@ export interface Agent {
   // 2026-06-15 — operator-selected ContactRoleId for the first NP user invited
   // via the Edit Agent modal. Write-only (sent on upsert; not returned on read).
   primaryContactRoleId?: number | null;
+  // 2026-06-15 — read-only: true when this NP already has a user (the Initial
+  // User Role picker becomes read-only; role edits live on the NP Users page).
+  npHasPrimaryContact?: boolean;
   // Optional NP compliance documents — populated for agents with status
   // 'Pending NP' (rendered as a compliance bar in AgentList) and read by
   // AgentWorkspace's inline expansion. May be absent on regular Agent

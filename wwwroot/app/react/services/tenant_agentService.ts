@@ -33,6 +33,9 @@ interface TenantAgentApi {
   // Phase 5+27.1 — linked TucClient.ClientTypeId surfaced for the picker.
   // Null for non-NP agents (no TucClient linkage).
   clientTypeId: number | null;
+  // 2026-06-15 — true when the NP already has a user (drives read-only Initial
+  // User Role on the Edit Agent modal).
+  npHasPrimaryContact: boolean;
   created: string;
   lastModified: string;
 }
@@ -113,6 +116,7 @@ function toAgent(dto: TenantAgentApi): Agent {
     npPortalEnabled: dto.npPortalEnabled,
     npTierByte: dto.npTier,
     clientTypeId: dto.clientTypeId ?? null,
+    npHasPrimaryContact: dto.npHasPrimaryContact,
     // ExtAgent extras (optional on the type) — empty defaults keep
     // AgentWorkspace happy until the relevant joins / tables exist.
     npDocs: [],

@@ -717,6 +717,10 @@ public class TenantAgentService(
             .OrderBy(c => c.UcclId)
             .Select(c => (int?)c.ClientTypeId)
             .FirstOrDefault(),
+        // 2026-06-15 — does a user already exist for this NP? Translates to an
+        // EXISTS subquery; drives the read-only-vs-editable Initial User Role
+        // picker on the Edit Agent modal.
+        NpHasPrimaryContact = a.TucClients.Any(c => c.TucClientContacts.Any()),
         Created = a.Created,
         LastModified = a.LastModified,
     };

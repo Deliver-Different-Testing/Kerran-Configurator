@@ -249,7 +249,9 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     id: 'operations', label: 'Operations', icon: icons.settings,
     featureKey: 'cfg-operations',
     items: [
-      { id: '/operations', label: 'Operations', implemented: true },
+      // Single child — the section header auto-routes here and only one row
+      // highlights. (Removed the redundant '/operations' child that double-lit
+      // the section on /operations/recurring-routes.)
       { id: '/operations/recurring-routes', label: 'Recurring Routes', featureKey: 'cfg-operations-recurring-routes', implemented: true },
     ],
   });
@@ -343,7 +345,7 @@ function buildNpSections(): NavSection[] {
       id: 'operations', label: 'Operations', icon: icons.settings,
       featureKey: 'cfg-operations',
       items: [
-        { id: '/operations', label: 'Operations', implemented: true },
+        // Single child — see the tenant-lane Operations note above.
         { id: '/operations/recurring-routes', label: 'Recurring Routes', featureKey: 'cfg-operations-recurring-routes', implemented: true },
       ],
     },

@@ -151,12 +151,13 @@ function RoutesTab({
             <thead className="bg-slate-50 border-b border-border">
               <tr className="text-left text-[12.5px] font-semibold text-text-secondary">
                 <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Area</th>
                 <th className="px-4 py-3">Schedule</th>
                 <th className="px-4 py-3">Default</th>
                 <th className="px-4 py-3">Zip Codes</th>
                 <th className="px-4 py-3">Roster</th>
-                <th className="px-4 py-3">Bookings</th>
+                <th className="px-4 py-3">Mapped Stops</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -167,6 +168,7 @@ function RoutesTab({
                   <td className="px-4 py-3.5">
                     <button onClick={() => setEditing(r)} className="text-[#0d0c2c] font-medium hover:text-brand-cyan">{r.name}</button>
                   </td>
+                  <td className="px-4 py-3.5"><RouteTypeChip kind="first-final" /></td>
                   <td className="px-4 py-3.5 text-text-secondary">{r.area || '—'}</td>
                   <td className="px-4 py-3.5">
                     {r.scheduleId ? (
@@ -195,9 +197,11 @@ function RoutesTab({
                     <span className="text-[#0d0c2c] font-display font-semibold">{r.rosterEntryCount}</span>
                     <span className="text-[11px] ml-1">entries</span>
                   </td>
-                  <td className="px-4 py-3.5 text-text-secondary">
+                  {/* Mapped Stops — live count from the API. cursor-pointer telegraphs
+                      the §5 drill-down (per-job list + Speed modal); inert until that ships. */}
+                  <td className="px-4 py-3.5 text-text-secondary cursor-pointer" title="Mapped stops drill-down (coming soon)">
                     <span className="text-[#0d0c2c] font-display font-semibold">{r.bookingCount}</span>
-                    <span className="text-[11px] ml-1">booking{r.bookingCount === 1 ? '' : 's'}</span>
+                    <span className="text-[11px] ml-1">stop{r.bookingCount === 1 ? '' : 's'}</span>
                   </td>
                   <td className="px-4 py-3.5">
                     {r.active
@@ -435,6 +439,15 @@ function RouteEditorModal({
             <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Area</label>
             <input value={area} onChange={(e) => setArea(e.target.value)} placeholder="e.g. Westside"
               className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
+            <p className="text-[11px] text-text-secondary mt-1">
+              Free-text description of the route's coverage area. Don't include counts — they're shown as <strong>Mapped Stops</strong> in the route table.
+            </p>
+            {/* Soft-guard (AR3): warn, don't block, if the operator re-types the stale count tail. */}
+            {/mapped recurring bookings/i.test(area) && (
+              <p className="text-[11px] text-amber-600 mt-1">
+                ⚠️ Looks like a stale stop count — the live total shows in the Mapped Stops column. Consider removing it.
+              </p>
+            )}
           </div>
 
           <ScheduleSection schedules={schedules} value={scheduleId} onChange={setScheduleId}
@@ -829,6 +842,20 @@ function TargetTypeChip({ type }: { type: AssignTargetType }) {
       ? 'bg-violet-100 text-violet-800'
       : 'bg-amber-100 text-amber-800';
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tone}`}>{label}</span>;
+}
+
+// Route-class chip: cyan First/Final Mile (Routes tab) vs purple Middle Mile
+// (Linehaul tab). Constant per tab in v1; becomes a filter if the two list
+// views ever merge to a single table.
+function RouteTypeChip({ kind }: { kind: 'first-final' | 'middle' }) {
+  const isMiddle = kind === 'middle';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+      isMiddle ? 'bg-brand-purple/15 text-brand-purple' : 'bg-brand-cyan/15 text-brand-cyan'
+    }`}>
+      {isMiddle ? 'Middle Mile' : 'First/Final Mile'}
+    </span>
+  );
 }
 
 // Collapsible read-only summary of live recurring bookings on a route. Lazy-loads

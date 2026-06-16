@@ -354,6 +354,7 @@ builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.ICourierDocumentAiReviewer,
     DfrntDriveConfigurator.Core.Application.Services.Np.CourierDocumentAiReviewer>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.CourierDocumentService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.ApplicantDocumentReviewService>();
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.IAgentDocumentAiReviewer,
     DfrntDriveConfigurator.Core.Application.Services.Np.AgentDocumentAiReviewer>();

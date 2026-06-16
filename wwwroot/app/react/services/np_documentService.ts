@@ -310,3 +310,21 @@ export const courierDocumentService = {
     throw new Error('extractOnly() not yet wired to backend');
   },
 };
+
+// P3 Slice B2 — staff/NP review of an APPLICANT's documents (the unified
+// CourierDocuments keyed by ApplicantId). Same DTO shape as courier docs, so we
+// reuse toCourierDocument; the CourierDocumentPreviewModal renders them with the
+// AI advisory + Verify/Reject.
+export const applicantDocReviewService = {
+  list: (applicantId: number): Promise<CourierDocument[]> =>
+    api.get<CourierDocumentApi[]>(`/recruitment/applicants/${applicantId}/documents`).then(r => (r.data ?? []).map(toCourierDocument)),
+
+  verify: (applicantId: number, docId: number): Promise<CourierDocument> =>
+    api.put<CourierDocumentApi>(`/recruitment/applicants/${applicantId}/documents/${docId}/verify`).then(r => toCourierDocument(r.data)),
+
+  reject: (applicantId: number, docId: number, reason: string): Promise<CourierDocument> =>
+    api.put<CourierDocumentApi>(`/recruitment/applicants/${applicantId}/documents/${docId}/reject`, { reason }).then(r => toCourierDocument(r.data)),
+
+  downloadUrl: (applicantId: number, docId: number): string =>
+    `/api/v1/np/recruitment/applicants/${applicantId}/documents/${docId}/download`,
+};

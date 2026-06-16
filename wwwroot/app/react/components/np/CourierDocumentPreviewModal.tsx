@@ -1,22 +1,24 @@
-// CourierDocumentPreviewModal — staff/NP inline preview for an uploaded courier
-// document, with a right-hand panel showing stored metadata, the advisory Claude
-// AI review (P3) and Verify / Reject actions. Ported from the agent-document
-// preview modal; reads/writes via courierDocumentService.
+// CourierDocumentPreviewModal — owner-agnostic staff/NP inline preview for an
+// uploaded document (courier OR applicant), with a right-hand panel showing
+// stored metadata, the advisory Claude AI review (P3) and Verify / Reject.
+// Ported from the agent-document modal. The parent supplies the proxy
+// downloadUrl + verify/reject callbacks so the same modal serves both the
+// CourierSetup Documents tab and the recruitment ApplicantDetail.
 //
 //   application/pdf          → <iframe ...?inline=true>
 //   image/png|jpeg|gif|webp  → <img>
 //   else                     → fallback + Download
 
 import { useEffect, useState } from 'react';
-import { courierDocumentService } from '@/services/np_documentService';
 import type { CourierDocument } from '@/types';
 
 interface Props {
   isOpen: boolean;
-  courierId: number;
   document: CourierDocument | null;
+  downloadUrl: string;                       // proxy URL without query (?inline appended for preview)
+  onVerify: () => Promise<void>;
+  onReject: (reason: string) => Promise<void>;
   onClose: () => void;
-  onChanged: () => void;
 }
 
 const PREVIEWABLE_IMAGE = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
@@ -57,7 +59,7 @@ function formatDate(s?: string | null): string {
   return isNaN(d.getTime()) ? s : d.toLocaleString();
 }
 
-export function CourierDocumentPreviewModal({ isOpen, courierId, document, onClose, onChanged }: Props) {
+export function CourierDocumentPreviewModal({ isOpen, document, downloadUrl, onVerify, onReject, onClose }: Props) {
   const [busy, setBusy] = useState<'verify' | 'reject' | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -78,18 +80,18 @@ export function CourierDocumentPreviewModal({ isOpen, courierId, document, onClo
 
   if (!isOpen || !document) return null;
 
-  const url = `/api/v1/np/couriers/${courierId}/documents/${document.id}/download`;
+  const url = downloadUrl;
   const ct = (document.contentType || document.mimeType || '').toLowerCase();
   const isImage = PREVIEWABLE_IMAGE.has(ct);
   const isPdf = ct === 'application/pdf';
   const canPreview = isImage || isPdf;
   const pending = document.verifyStatus === 'Pending';
 
-  const onVerify = async () => {
+  const handleVerify = async () => {
     try {
       setError(null); setBusy('verify');
-      await courierDocumentService.verify(courierId, document.id);
-      onChanged(); onClose();
+      await onVerify();
+      onClose();
     } catch (e: any) {
       setError(e?.message ?? 'Verify failed');
     } finally { setBusy(null); }
@@ -98,8 +100,8 @@ export function CourierDocumentPreviewModal({ isOpen, courierId, document, onClo
   const onConfirmReject = async () => {
     try {
       setError(null); setBusy('reject');
-      await courierDocumentService.reject(courierId, document.id, rejectReason.trim() || 'Rejected');
-      onChanged(); onClose();
+      await onReject(rejectReason.trim() || 'Rejected');
+      onClose();
     } catch (e: any) {
       setError(e?.message ?? 'Reject failed');
     } finally { setBusy(null); }
@@ -181,7 +183,7 @@ export function CourierDocumentPreviewModal({ isOpen, courierId, document, onClo
           <a href={url} target="_blank" rel="noreferrer" className="rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-slate-50 px-3 py-1.5 text-sm font-medium">Download</a>
           {pending && (
             <>
-              <button onClick={onVerify} disabled={busy !== null} className="rounded-lg bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-sm font-medium disabled:opacity-50">{busy === 'verify' ? 'Verifying…' : 'Verify'}</button>
+              <button onClick={handleVerify} disabled={busy !== null} className="rounded-lg bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-sm font-medium disabled:opacity-50">{busy === 'verify' ? 'Verifying…' : 'Verify'}</button>
               <button onClick={() => setRejecting(true)} disabled={busy !== null} className="rounded-lg bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 text-sm font-medium disabled:opacity-50">Reject</button>
             </>
           )}

@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useApplicant } from '@/hooks/useRecruitment';
 import { recruitmentService } from '@/services/np_recruitmentService';
+import ApplicantDocumentReview from '@/components/np/ApplicantDocumentReview';
 import type { ApplicantPipelineStage, ApplicantDocumentSummary } from '@/types';
 
 const STAGES: ApplicantPipelineStage[] = [
@@ -462,55 +463,7 @@ export default function ApplicantDetail() {
       )}
 
       {activeTab === 'documents' && (
-        <div className="space-y-4">
-          {/* Summary bar */}
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-text-secondary">
-              {verifiedCount}/{mandatoryDocs.length} required docs verified
-            </span>
-            {pendingCount > 0 && (
-              <span className="text-amber-600 font-medium">🔄 {pendingCount} pending review</span>
-            )}
-            {verifiedCount === mandatoryDocs.length && mandatoryDocs.length > 0 && (
-              <span className="text-green-600 font-medium">✅ All required docs verified — ready to advance</span>
-            )}
-          </div>
-
-          {/* Progress bar */}
-          <div className="bg-white rounded-lg border border-border p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden flex">
-                <div className="h-full bg-green-500 transition-all" style={{ width: `${mandatoryDocs.length ? (verifiedCount / mandatoryDocs.length) * 100 : 0}%` }} />
-                <div className="h-full bg-amber-400 transition-all" style={{ width: `${mandatoryDocs.length ? (mandatoryDocs.filter(d => d.status === 'uploaded').length / mandatoryDocs.length) * 100 : 0}%` }} />
-              </div>
-              <span className="text-sm font-bold text-text-primary">{mandatoryDocs.length ? Math.round((verifiedCount / mandatoryDocs.length) * 100) : 0}%</span>
-            </div>
-            <div className="flex gap-4 text-[11px] text-text-secondary">
-              <span>✅ {verifiedCount} Verified</span>
-              <span>🔄 {docs.filter(d => d.status === 'uploaded').length} Pending</span>
-              <span>⬜ {docs.filter(d => d.status === 'missing').length} Missing</span>
-              <span>❌ {docs.filter(d => d.status === 'rejected').length} Rejected</span>
-            </div>
-          </div>
-
-          {/* Document cards — pending first, then verified, then missing */}
-          <div className="space-y-3">
-            {[...docs]
-              .sort((a, b) => {
-                const order: Record<string, number> = { uploaded: 0, rejected: 1, verified: 2, expired: 3, missing: 4 };
-                return (order[a.status] ?? 5) - (order[b.status] ?? 5);
-              })
-              .map((doc, i) => (
-                <DocumentCard
-                  key={i}
-                  doc={doc}
-                  applicantName={applicantName}
-                  onVerify={() => handleVerifyDoc(doc.documentTypeName)}
-                  onReject={() => handleRejectDoc(doc.documentTypeName)}
-                />
-              ))}
-          </div>
-        </div>
+        <ApplicantDocumentReview applicantId={applicant.id} />
       )}
 
       {activeTab === 'timeline' && (

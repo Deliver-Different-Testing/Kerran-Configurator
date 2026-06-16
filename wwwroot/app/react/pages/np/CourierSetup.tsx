@@ -25,6 +25,7 @@ import PasswordInput from '@/components/common/PasswordInput';
 import DocumentUpload from '@/components/common/DocumentUpload';
 import { useDocumentTypes, useCourierDocuments, useComplianceSummary } from '@/hooks/useDocuments';
 import { CourierDocumentPreviewModal } from '@/components/np/CourierDocumentPreviewModal';
+import { courierDocumentService } from '@/services/np_documentService';
 import { useAuth } from '@/context/AuthContext';
 import type { Courier, DocumentStatus, CourierDocument } from '@/types';
 
@@ -963,10 +964,11 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
 
       <CourierDocumentPreviewModal
         isOpen={previewDoc !== null}
-        courierId={courierId}
         document={previewDoc}
+        downloadUrl={previewDoc ? `/api/v1/np/couriers/${courierId}/documents/${previewDoc.id}/download` : ''}
+        onVerify={async () => { if (previewDoc) { await courierDocumentService.verify(courierId, previewDoc.id); refresh(); } }}
+        onReject={async (reason) => { if (previewDoc) { await courierDocumentService.reject(courierId, previewDoc.id, reason); refresh(); } }}
         onClose={() => setPreviewDoc(null)}
-        onChanged={refresh}
       />
     </div>
   );

@@ -502,6 +502,14 @@ export interface CourierDocument {
   verifiedDate: string | null;
   verifiedBy: string | null;
   notes: string | null;
+  // P3 — real verify lifecycle + Claude AI advisory (from CourierDocumentDto).
+  verifyStatus: string;                 // 'Pending' | 'Verified' | 'Rejected'
+  contentType: string;
+  length: number;
+  rejectReason: string | null;
+  aiSuggestedDecision: string | null;   // accept|reject|needs_review
+  aiSuggestedExpiry: string | null;
+  aiRationale: string | null;
 }
 
 export interface ExtractedField {

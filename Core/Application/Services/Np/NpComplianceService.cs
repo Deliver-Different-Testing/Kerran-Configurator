@@ -125,7 +125,7 @@ public class NpComplianceService(
             .AsNoTracking()
             .Where(d => d.CourierId == courierId && d.IsActive && d.VerifyStatus != "Rejected")
             .OrderByDescending(d => d.UploadedDate)
-            .Select(d => new DocSnapshot(d.CourierId, d.DocumentTypeId, d.ExpiryDate))
+            .Select(d => new DocSnapshot(d.CourierId ?? 0, d.DocumentTypeId, d.ExpiryDate))
             .ToListAsync(ct);
 
         var latestByType = LatestPerDocType(courierDocs);
@@ -246,9 +246,9 @@ public class NpComplianceService(
         var courierIds = couriers.Select(c => c.Id).ToList();
         var rawDocs = await Context.CourierDocuments
             .AsNoTracking()
-            .Where(d => d.IsActive && d.VerifyStatus != "Rejected" && courierIds.Contains(d.CourierId))
+            .Where(d => d.IsActive && d.VerifyStatus != "Rejected" && d.CourierId != null && courierIds.Contains(d.CourierId.Value))
             .OrderByDescending(d => d.UploadedDate)
-            .Select(d => new DocSnapshot(d.CourierId, d.DocumentTypeId, d.ExpiryDate))
+            .Select(d => new DocSnapshot(d.CourierId ?? 0, d.DocumentTypeId, d.ExpiryDate))
             .ToListAsync(ct);
 
         // Reduce to latest doc per (courierId, docTypeId).

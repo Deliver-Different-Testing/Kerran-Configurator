@@ -346,6 +346,13 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.N
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpRecruitmentStageService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpRegistrationSiteService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpApplicantService>();
+// P3 — shared AI document review client + courier-document reviewer (mirror the agent one).
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Common.IDocumentAiReviewClient,
+    DfrntDriveConfigurator.Core.Application.Services.Common.DocumentAiReviewClient>();
+builder.Services.AddScoped<
+    DfrntDriveConfigurator.Core.Application.Services.Np.ICourierDocumentAiReviewer,
+    DfrntDriveConfigurator.Core.Application.Services.Np.CourierDocumentAiReviewer>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.CourierDocumentService>();
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.IAgentDocumentAiReviewer,

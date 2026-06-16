@@ -24,8 +24,9 @@ import FormField from '@/components/common/FormField';
 import PasswordInput from '@/components/common/PasswordInput';
 import DocumentUpload from '@/components/common/DocumentUpload';
 import { useDocumentTypes, useCourierDocuments, useComplianceSummary } from '@/hooks/useDocuments';
+import { CourierDocumentPreviewModal } from '@/components/np/CourierDocumentPreviewModal';
 import { useAuth } from '@/context/AuthContext';
-import type { Courier, DocumentStatus } from '@/types';
+import type { Courier, DocumentStatus, CourierDocument } from '@/types';
 
 type CourierTab = 'profile' | 'contact' | 'vehicle' | 'compliance' | 'financial' | 'device' | 'documents' | 'notes';
 
@@ -863,10 +864,11 @@ function StatusBadgeDoc({ status }: { status: DocumentStatus }) {
 
 function CourierDocumentsTab({ courierId }: { courierId: number }) {
   const { types } = useDocumentTypes();
-  const { documents, upload, deleteDoc, verify, getDownloadUrl } = useCourierDocuments(courierId);
+  const { documents, upload, deleteDoc, getDownloadUrl, refresh } = useCourierDocuments(courierId);
   const summary = useComplianceSummary(types, documents);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadTypeId, setUploadTypeId] = useState<number | undefined>();
+  const [previewDoc, setPreviewDoc] = useState<CourierDocument | null>(null);
 
   const activeTypes = types.filter(dt => dt.active && (dt.appliesTo === 'ActiveCourier' || dt.appliesTo === 'Both'));
 
@@ -916,12 +918,13 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
                   <span>{doc.fileName}</span>
                   <span>· Uploaded {new Date(doc.uploadedDate).toLocaleDateString()}</span>
                   {doc.expiryDate && <span>· Expires {new Date(doc.expiryDate).toLocaleDateString()}</span>}
-                  {doc.aiConfidence != null && (
-                    <span className={doc.aiConfidence >= 95 ? 'text-green-600' : doc.aiConfidence >= 70 ? 'text-amber-600' : 'text-red-500'}>
-                      AI {doc.aiConfidence.toFixed(0)}%
+                  {doc.aiSuggestedDecision && (
+                    <span className={doc.aiSuggestedDecision === 'accept' ? 'text-green-600' : doc.aiSuggestedDecision === 'reject' ? 'text-red-500' : 'text-amber-600'}>
+                      AI: {doc.aiSuggestedDecision === 'accept' ? 'Accept' : doc.aiSuggestedDecision === 'reject' ? 'Reject' : 'Needs review'}
                     </span>
                   )}
-                  {doc.humanVerified && <span className="text-green-600">✓ Verified</span>}
+                  {doc.verifyStatus === 'Verified' && <span className="text-green-600">✓ Verified</span>}
+                  {doc.verifyStatus === 'Pending' && <span className="text-amber-600">⏳ Pending review</span>}
                 </div>
               ) : (
                 <div className="text-xs text-red-400 mt-0.5">
@@ -933,10 +936,8 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
             {doc ? (
               <div className="flex items-center gap-2 shrink-0">
                 <StatusBadgeDoc status={doc.status} />
+                <button onClick={() => setPreviewDoc(doc)} className="text-xs text-brand-cyan hover:underline">Review</button>
                 <button onClick={() => handleDownload(doc.id)} className="text-xs text-brand-cyan hover:underline">Download</button>
-                {!doc.humanVerified && (
-                  <button onClick={() => verify(doc.id)} className="text-xs text-green-600 hover:underline">Verify</button>
-                )}
                 <button onClick={() => { if (confirm('Delete this document?')) deleteDoc(doc.id); }} className="text-xs text-red-500 hover:underline">Delete</button>
               </div>
             ) : (
@@ -959,6 +960,14 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
           onClose={() => setShowUpload(false)}
         />
       )}
+
+      <CourierDocumentPreviewModal
+        isOpen={previewDoc !== null}
+        courierId={courierId}
+        document={previewDoc}
+        onClose={() => setPreviewDoc(null)}
+        onChanged={refresh}
+      />
     </div>
   );
 }

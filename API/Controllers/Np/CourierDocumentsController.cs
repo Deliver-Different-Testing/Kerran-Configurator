@@ -101,6 +101,15 @@ public class CourierDocumentsController(CourierDocumentService service) : BaseCo
             var result = await service.GetForDownloadAsync(id);
             if (result is null) return NotFound();
 
+            // ?inline=true → Content-Disposition: inline so the preview modal can
+            // render PDFs/images in an <iframe>/<img>. Default is attachment.
+            var inline = string.Equals(Request.Query["inline"], "true", StringComparison.OrdinalIgnoreCase);
+            if (inline)
+            {
+                Response.Headers["Content-Disposition"] = $"inline; filename=\"{result.FileName}\"";
+                return File(result.Content, result.ContentType);
+            }
+
             return File(result.Content, result.ContentType, result.FileName);
         }
         catch (Exception e)

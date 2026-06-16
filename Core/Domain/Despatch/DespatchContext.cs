@@ -689,10 +689,15 @@ public partial class DespatchContext : DbContext
 
         modelBuilder.Entity<CourierDocument>(entity =>
         {
+            entity.HasIndex(e => e.ApplicantId, "IX_CourierDocuments_ApplicantId");
+
             entity.HasIndex(e => e.CourierId, "IX_CourierDocuments_CourierId");
 
             entity.HasIndex(e => e.DocumentTypeId, "IX_CourierDocuments_DocumentTypeId");
 
+            entity.Property(e => e.AiModel).HasMaxLength(64);
+            entity.Property(e => e.AiRationale).HasMaxLength(2000);
+            entity.Property(e => e.AiSuggestedDecision).HasMaxLength(20);
             entity.Property(e => e.ContentType)
                 .IsRequired()
                 .HasMaxLength(100);
@@ -722,6 +727,10 @@ public partial class DespatchContext : DbContext
                 .HasMaxLength(20)
                 .HasDefaultValue("Pending")
                 .HasAnnotation("Relational:DefaultConstraintName", "DF_CourierDocuments_VerifyStatus");
+
+            entity.HasOne(d => d.Applicant).WithMany()
+                .HasForeignKey(d => d.ApplicantId)
+                .HasConstraintName("FK_CourierDocuments_Applicant");
 
             entity.HasOne(d => d.Courier).WithMany(p => p.CourierDocuments)
                 .HasForeignKey(d => d.CourierId)

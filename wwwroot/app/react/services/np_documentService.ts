@@ -181,6 +181,12 @@ interface CourierDocumentApi {
   rejectReason: string;
   expiryDate: string | null;  // ISO date 'YYYY-MM-DD' (DateOnly on the wire)
   isActive: boolean;
+  // P3 AI advisory
+  aiSuggestedDecision: string | null;
+  aiSuggestedExpiry: string | null;
+  aiRationale: string | null;
+  aiModel: string | null;
+  aiReviewedDate: string | null;
 }
 
 const EXPIRY_WARNING_DAYS_DEFAULT = 30;
@@ -218,6 +224,13 @@ function toCourierDocument(d: CourierDocumentApi): CourierDocument {
     verifiedDate: d.verifiedDate,
     verifiedBy: d.verifiedBy || null,
     notes: d.rejectReason || null,
+    verifyStatus: d.verifyStatus,
+    contentType: d.contentType,
+    length: d.length,
+    rejectReason: d.rejectReason || null,
+    aiSuggestedDecision: d.aiSuggestedDecision,
+    aiSuggestedExpiry: d.aiSuggestedExpiry,
+    aiRationale: d.aiRationale,
   };
 }
 

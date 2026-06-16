@@ -29,6 +29,7 @@ public class CourierDocumentService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
     INpScopeResolver scopeResolver,
     IS3StorageService storage,
+    ICourierDocumentAiReviewer aiReviewer,
     IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
 {
     // ─── LIST ────────────────────────────────────────────────────────────
@@ -147,6 +148,13 @@ public class CourierDocumentService(
             return Fail(messageId, "Could not save document metadata.");
         }
 
+        // Advisory AI review — awaited so the upload response already carries the
+        // suggestion (decision/expiry/rationale). The reviewer swallows its own
+        // failures; the extra guard here ensures an AI problem never fails the
+        // upload. Skipped silently when ANTHROPIC_API_KEY is unset.
+        try { await aiReviewer.ReviewAsync(row.Id, ct); }
+        catch (Exception ex) { Log.Warning(ex, "AI review failed for courier document {Id}", row.Id); }
+
         return await ReadByIdAsync(row.Id, messageId, ct);
     }
 
@@ -161,6 +169,12 @@ public class CourierDocumentService(
         doc.VerifiedDate = DateTime.UtcNow;
         doc.VerifiedBy = ResolveActor();
         doc.RejectReason = null;
+        // Save the reviewer a step: if staff left ExpiryDate blank, adopt the
+        // AI-suggested expiry on verify (mirrors AgentDocumentService).
+        if (doc.ExpiryDate is null && doc.AiSuggestedExpiry is not null)
+        {
+            doc.ExpiryDate = doc.AiSuggestedExpiry;
+        }
         doc.ModifiedDate = DateTime.UtcNow;
         await Context.SaveChangesAsync(ct);
 
@@ -299,6 +313,7 @@ public class CourierDocumentService(
         {
             Id = d.Id,
             CourierId = d.CourierId,
+            ApplicantId = d.ApplicantId,
             DocumentTypeId = d.DocumentTypeId,
             DocumentTypeName = d.DocumentType != null ? (d.DocumentType.Name ?? string.Empty) : string.Empty,
             FileName = d.FileName ?? string.Empty,
@@ -312,6 +327,11 @@ public class CourierDocumentService(
             RejectReason = d.RejectReason ?? string.Empty,
             ExpiryDate = d.ExpiryDate,
             IsActive = d.IsActive,
+            AiSuggestedDecision = d.AiSuggestedDecision,
+            AiSuggestedExpiry = d.AiSuggestedExpiry,
+            AiRationale = d.AiRationale,
+            AiModel = d.AiModel,
+            AiReviewedDate = d.AiReviewedDate,
         };
 
     private string ResolveActor() =>

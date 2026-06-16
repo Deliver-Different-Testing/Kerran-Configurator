@@ -12,7 +12,10 @@ namespace DfrntDriveConfigurator.Core.Application.Dtos.Np;
 public class CourierDocumentDto
 {
     public int Id { get; set; }
-    public int CourierId { get; set; }
+    // Nullable since P3: applicant-portal uploads have ApplicantId set + CourierId
+    // null until approval carry-forward stamps the courier.
+    public int? CourierId { get; set; }
+    public int? ApplicantId { get; set; }
     public int DocumentTypeId { get; set; }
     public string DocumentTypeName { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;
@@ -31,6 +34,14 @@ public class CourierDocumentDto
     // as ISO date string ("2026-05-21") on the wire.
     public DateOnly? ExpiryDate { get; set; }
     public bool IsActive { get; set; }
+
+    // P3 — AI advisory (populated by CourierDocumentAiReviewer; null until reviewed
+    // / when ANTHROPIC_API_KEY is unset). Advisory only — staff make the final call.
+    public string? AiSuggestedDecision { get; set; }   // accept|reject|needs_review
+    public DateOnly? AiSuggestedExpiry { get; set; }
+    public string? AiRationale { get; set; }
+    public string? AiModel { get; set; }
+    public DateTime? AiReviewedDate { get; set; }
 }
 
 /// <summary>

@@ -9,7 +9,9 @@ public partial class CourierDocument
 {
     public int Id { get; set; }
 
-    public int CourierId { get; set; }
+    public int? CourierId { get; set; }
+
+    public int? ApplicantId { get; set; }
 
     public int DocumentTypeId { get; set; }
 
@@ -40,6 +42,18 @@ public partial class CourierDocument
     public DateTime CreatedDate { get; set; }
 
     public DateTime? ModifiedDate { get; set; }
+
+    public string AiSuggestedDecision { get; set; }
+
+    public DateOnly? AiSuggestedExpiry { get; set; }
+
+    public string AiRationale { get; set; }
+
+    public string AiModel { get; set; }
+
+    public DateTime? AiReviewedDate { get; set; }
+
+    public virtual CourierApplicant Applicant { get; set; }
 
     public virtual TucCourier Courier { get; set; }
 

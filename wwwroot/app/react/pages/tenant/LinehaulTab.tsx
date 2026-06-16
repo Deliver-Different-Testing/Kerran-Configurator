@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
+import { MappedStopsDrilldown } from './MappedStopsDrilldown';
 import {
   linehaulService,
   extractLinehaulError,
@@ -17,6 +18,7 @@ export function LinehaulTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TenantLinehaulRun | 'new' | null>(null);
+  const [drillRun, setDrillRun] = useState<TenantLinehaulRun | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -104,10 +106,12 @@ export function LinehaulTab() {
                     <span className="text-[#0d0c2c] font-display font-semibold">{r.usedBySchedulesCount}</span>
                     <span className="text-[11px] ml-1">schedule{r.usedBySchedulesCount === 1 ? '' : 's'}</span>
                   </td>
-                  {/* Mapped Stops — cursor-pointer telegraphs the §5 drill-down; inert until that ships. */}
-                  <td className="px-4 py-3.5 text-text-secondary cursor-pointer" title="Mapped stops drill-down (coming soon)">
-                    <span className="text-[#0d0c2c] font-display font-semibold">{r.mappedStopsCount}</span>
-                    <span className="text-[11px] ml-1">stop{r.mappedStopsCount === 1 ? '' : 's'}</span>
+                  {/* Mapped Stops — click drills into the per-job list + Speed modal (§5). */}
+                  <td className="px-4 py-3.5">
+                    <button onClick={() => setDrillRun(r)} className="text-text-secondary hover:text-brand-cyan" title="View mapped stops">
+                      <span className="text-[#0d0c2c] font-display font-semibold">{r.mappedStopsCount}</span>
+                      <span className="text-[11px] ml-1">stop{r.mappedStopsCount === 1 ? '' : 's'}</span>
+                    </button>
                   </td>
                   <td className="px-4 py-3.5">
                     {r.active
@@ -131,6 +135,13 @@ export function LinehaulTab() {
           lookups={lookups}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); refresh(); }}
+        />
+      )}
+
+      {drillRun && (
+        <MappedStopsDrilldown
+          run={{ id: drillRun.id, runName: drillRun.runName, fromDepotName: drillRun.fromDepotName, toDepotName: drillRun.toDepotName }}
+          onClose={() => setDrillRun(null)}
         />
       )}
     </div>

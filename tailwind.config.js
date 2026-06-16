@@ -10,6 +10,7 @@ export default {
           dark: '#14152D',
           cyan: '#43C7F4',
           purple: '#606DB4',
+          orange: '#F2994A',
         },
         surface: {
           white: '#ffffff',

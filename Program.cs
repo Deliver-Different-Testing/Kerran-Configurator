@@ -402,6 +402,7 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tena
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantProspectService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantRouteService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantLinehaulService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Tenant.TenantBulkJobService>();
 
 // Courier Portal (Phase 1) — applicant lightweight auth + courier shell.
 // PortalTenantContext + PortalSessionTokenService are stateless (deps are

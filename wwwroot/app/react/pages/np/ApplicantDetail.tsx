@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useApplicant } from '@/hooks/useRecruitment';
 import { recruitmentService } from '@/services/np_recruitmentService';
 import ApplicantDocumentReview from '@/components/np/ApplicantDocumentReview';
-import type { ApplicantPipelineStage, ApplicantDocumentSummary } from '@/types';
+import type { ApplicantPipelineStage } from '@/types';
 
 const STAGES: ApplicantPipelineStage[] = [
   'Registration', 'Email Verification', 'Profile', 'Documentation',
@@ -26,216 +26,6 @@ function Field({ label, value }: { label: string; value: string | number | null 
     <div>
       <div className="text-xs text-text-muted mb-0.5">{label}</div>
       <div className="text-sm text-text-primary">{value || '—'}</div>
-    </div>
-  );
-}
-
-/* ── AI Verification Result ── */
-interface AiVerification {
-  fieldName: string;
-  extractedValue: string;
-  confidence: number;
-  matchesApplication: boolean | null; // null = can't verify against application
-}
-
-function mockAiVerification(doc: ApplicantDocumentSummary, applicantName: string): AiVerification[] {
-  if (doc.documentTypeName === "Driver's License") {
-    return [
-      { fieldName: 'Full Name', extractedValue: applicantName, confidence: 98, matchesApplication: true },
-      { fieldName: 'License Number', extractedValue: 'DL-' + Math.random().toString(36).substring(2, 8).toUpperCase(), confidence: 96, matchesApplication: null },
-      { fieldName: 'Expiry Date', extractedValue: doc.expiryDate ? new Date(doc.expiryDate).toLocaleDateString() : 'Not detected', confidence: doc.expiryDate ? 94 : 0, matchesApplication: null },
-      { fieldName: 'Date of Birth', extractedValue: '1990-05-15', confidence: 92, matchesApplication: null },
-      { fieldName: 'Address', extractedValue: '450 N Clark St, Chicago, IL', confidence: 85, matchesApplication: true },
-      { fieldName: 'Document Valid', extractedValue: doc.expiryDate && new Date(doc.expiryDate) > new Date() ? 'Yes — not expired' : 'Check manually', confidence: doc.expiryDate ? 99 : 0, matchesApplication: null },
-    ];
-  }
-  if (doc.documentTypeName === 'Vehicle Registration') {
-    return [
-      { fieldName: 'Plate Number', extractedValue: 'IL-NEW001', confidence: 97, matchesApplication: true },
-      { fieldName: 'Vehicle Make/Model', extractedValue: 'Ford Transit', confidence: 93, matchesApplication: true },
-      { fieldName: 'Expiry Date', extractedValue: doc.expiryDate ? new Date(doc.expiryDate).toLocaleDateString() : 'Not detected', confidence: 91, matchesApplication: null },
-      { fieldName: 'Registered Owner', extractedValue: applicantName, confidence: 88, matchesApplication: true },
-    ];
-  }
-  if (doc.documentTypeName === 'Insurance Certificate') {
-    return [
-      { fieldName: 'Policy Number', extractedValue: 'POL-' + Math.random().toString(36).substring(2, 8).toUpperCase(), confidence: 95, matchesApplication: null },
-      { fieldName: 'Insured Name', extractedValue: applicantName, confidence: 92, matchesApplication: true },
-      { fieldName: 'Coverage Type', extractedValue: 'Commercial Vehicle — Comprehensive', confidence: 89, matchesApplication: null },
-      { fieldName: 'Expiry Date', extractedValue: doc.expiryDate ? new Date(doc.expiryDate).toLocaleDateString() : 'Not detected', confidence: 90, matchesApplication: null },
-      { fieldName: 'Liability Limit', extractedValue: '$2,000,000', confidence: 87, matchesApplication: null },
-    ];
-  }
-  if (doc.documentTypeName === 'Contract') {
-    return [
-      { fieldName: 'Signatory Name', extractedValue: applicantName, confidence: 96, matchesApplication: true },
-      { fieldName: 'Signature Present', extractedValue: 'Yes — signature detected', confidence: 94, matchesApplication: null },
-      { fieldName: 'Date Signed', extractedValue: doc.uploadedDate ? new Date(doc.uploadedDate).toLocaleDateString() : '—', confidence: 91, matchesApplication: null },
-    ];
-  }
-  if (doc.documentTypeName === 'DG Certificate') {
-    return [
-      { fieldName: 'Holder Name', extractedValue: applicantName, confidence: 94, matchesApplication: true },
-      { fieldName: 'Certificate Number', extractedValue: 'DG-' + Math.random().toString(36).substring(2, 6).toUpperCase(), confidence: 90, matchesApplication: null },
-      { fieldName: 'Expiry Date', extractedValue: doc.expiryDate ? new Date(doc.expiryDate).toLocaleDateString() : 'Not detected', confidence: 88, matchesApplication: null },
-      { fieldName: 'Classes Covered', extractedValue: 'Class 2, 3, 6, 8', confidence: 85, matchesApplication: null },
-    ];
-  }
-  return [
-    { fieldName: 'Document Type', extractedValue: doc.documentTypeName, confidence: 80, matchesApplication: null },
-  ];
-}
-
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: string }> = {
-  verified: { label: 'Verified', bg: 'bg-green-50 border-green-200', text: 'text-green-700', icon: '✅' },
-  uploaded: { label: 'Pending Review', bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', icon: '🔄' },
-  missing: { label: 'Missing', bg: 'bg-gray-50 border-gray-200', text: 'text-gray-500', icon: '⬜' },
-  rejected: { label: 'Rejected', bg: 'bg-red-50 border-red-200', text: 'text-red-700', icon: '❌' },
-  expired: { label: 'Expired', bg: 'bg-red-50 border-red-200', text: 'text-red-600', icon: '⚠️' },
-};
-
-/* ── Document Card ── */
-function DocumentCard({
-  doc,
-  applicantName,
-  onVerify,
-  onReject,
-}: {
-  doc: ApplicantDocumentSummary;
-  applicantName: string;
-  onVerify: () => void;
-  onReject: () => void;
-}) {
-  const [expanded, setExpanded] = useState(doc.status === 'uploaded'); // auto-expand pending docs
-  const config = STATUS_CONFIG[doc.status] || STATUS_CONFIG.missing;
-  const aiFields = (doc.status === 'uploaded' || doc.status === 'verified') ? mockAiVerification(doc, applicantName) : [];
-  const overallConfidence = aiFields.length > 0 ? Math.round(aiFields.reduce((s, f) => s + f.confidence, 0) / aiFields.length) : 0;
-  const allMatch = aiFields.filter(f => f.matchesApplication !== null).every(f => f.matchesApplication);
-  const hasMismatch = aiFields.some(f => f.matchesApplication === false);
-
-  return (
-    <div className={`border rounded-lg overflow-hidden ${config.bg}`}>
-      {/* Header — always visible */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.02] transition-colors"
-      >
-        <span className="text-lg">{config.icon}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-sm text-text-primary">{doc.documentTypeName}</span>
-            {doc.mandatory && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-medium">Required</span>}
-          </div>
-          <div className="text-xs text-text-secondary mt-0.5 flex items-center gap-3">
-            {doc.fileName && <span>📎 {doc.fileName}</span>}
-            {doc.uploadedDate && <span>Uploaded {new Date(doc.uploadedDate).toLocaleDateString()}</span>}
-            {doc.expiryDate && <span>Expires {new Date(doc.expiryDate).toLocaleDateString()}</span>}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* AI confidence badge */}
-          {(doc.status === 'uploaded' || doc.status === 'verified') && overallConfidence > 0 && (
-            <div className={`text-xs font-bold px-2 py-1 rounded-full ${
-              overallConfidence >= 90 ? 'bg-green-100 text-green-700' :
-              overallConfidence >= 70 ? 'bg-amber-100 text-amber-700' :
-              'bg-red-100 text-red-700'
-            }`}>
-              🤖 {overallConfidence}%
-            </div>
-          )}
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${config.bg} ${config.text}`}>
-            {config.label}
-          </span>
-          <span className="text-text-secondary text-sm">{expanded ? '▼' : '▶'}</span>
-        </div>
-      </button>
-
-      {/* Expanded: AI extraction results + actions */}
-      {expanded && (doc.status === 'uploaded' || doc.status === 'verified') && (
-        <div className="border-t border-border/50">
-          {/* AI extraction header */}
-          <div className="px-4 py-2 bg-white/60 flex items-center gap-2">
-            <img src="/auto-mate-face.png" alt="" className="w-5 h-5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            <span className="text-xs font-semibold text-brand-dark">Auto-Mate Document Analysis</span>
-            {allMatch && !hasMismatch && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700">All fields match application</span>}
-            {hasMismatch && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600">⚠️ Mismatch detected</span>}
-          </div>
-
-          {/* Extracted fields table */}
-          <div className="px-4 py-2">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-text-secondary">
-                  <th className="text-left py-1 font-medium">Field</th>
-                  <th className="text-left py-1 font-medium">Extracted Value</th>
-                  <th className="text-center py-1 font-medium">Confidence</th>
-                  <th className="text-center py-1 font-medium">Match</th>
-                </tr>
-              </thead>
-              <tbody>
-                {aiFields.map((field, i) => (
-                  <tr key={i} className={`border-t border-border/30 ${field.matchesApplication === false ? 'bg-red-50' : ''}`}>
-                    <td className="py-1.5 text-text-secondary">{field.fieldName}</td>
-                    <td className="py-1.5 font-medium text-text-primary">{field.extractedValue}</td>
-                    <td className="py-1.5 text-center">
-                      <span className={`font-bold ${field.confidence >= 90 ? 'text-green-600' : field.confidence >= 70 ? 'text-amber-600' : 'text-red-600'}`}>
-                        {field.confidence}%
-                      </span>
-                    </td>
-                    <td className="py-1.5 text-center">
-                      {field.matchesApplication === true && <span className="text-green-600">✓</span>}
-                      {field.matchesApplication === false && <span className="text-red-600 font-bold">✗</span>}
-                      {field.matchesApplication === null && <span className="text-gray-400">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Document preview placeholder */}
-          <div className="px-4 py-3 bg-white/40 border-t border-border/30">
-            <div className="h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
-              <div className="text-center text-text-secondary">
-                <div className="text-2xl mb-1">📄</div>
-                <div className="text-xs">Document preview</div>
-                <div className="text-[10px] text-text-muted">{doc.fileName || 'No file'}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          {doc.status === 'uploaded' && (
-            <div className="px-4 py-3 bg-white/60 border-t border-border/30 flex items-center gap-3">
-              <button
-                onClick={(e) => { e.stopPropagation(); onVerify(); }}
-                className="flex-1 bg-green-600 text-white py-2 rounded-md text-xs font-semibold hover:bg-green-700 transition-colors"
-              >
-                ✅ Verify Document
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onReject(); }}
-                className="flex-1 bg-white border border-red-300 text-red-600 py-2 rounded-md text-xs font-semibold hover:bg-red-50 transition-colors"
-              >
-                ❌ Reject — Request Re-upload
-              </button>
-            </div>
-          )}
-          {doc.status === 'verified' && (
-            <div className="px-4 py-2 bg-green-50/50 border-t border-border/30 text-center">
-              <span className="text-xs text-green-700 font-medium">✅ Verified and compliant</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Missing doc — upload prompt */}
-      {expanded && doc.status === 'missing' && (
-        <div className="border-t border-border/30 px-4 py-4 text-center">
-          <div className="text-sm text-text-secondary mb-2">This document has not been uploaded yet</div>
-          <div className="text-xs text-text-muted">The applicant needs to upload this via the Courier Portal</div>
-        </div>
-      )}
     </div>
   );
 }
@@ -270,8 +60,6 @@ export default function ApplicantDetail() {
   const isApproved = !!applicant.approvedAsCourierId;
   const applicantName = `${applicant.firstName} ${applicant.lastName}`;
   const docs = applicant.documents || [];
-  const mandatoryDocs = docs.filter(d => d.mandatory);
-  const verifiedCount = mandatoryDocs.filter(d => d.status === 'verified').length;
   const pendingCount = docs.filter(d => d.status === 'uploaded').length;
 
   const handleAdvance = async () => {
@@ -298,18 +86,6 @@ export default function ApplicantDetail() {
       courierFleetId: approveFleetId,
     });
     setShowApproveModal(false);
-    refresh();
-  };
-
-  const handleVerifyDoc = (docName: string) => {
-    const doc = docs.find(d => d.documentTypeName === docName);
-    if (doc) doc.status = 'verified';
-    refresh();
-  };
-
-  const handleRejectDoc = (docName: string) => {
-    const doc = docs.find(d => d.documentTypeName === docName);
-    if (doc) doc.status = 'rejected';
     refresh();
   };
 

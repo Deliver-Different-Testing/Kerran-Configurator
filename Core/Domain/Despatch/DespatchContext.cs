@@ -97,6 +97,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<TblbulkLinehaulRun> TblbulkLinehaulRuns { get; set; }
 
+    public virtual DbSet<DispatchLinehaulRunRoster> DispatchLinehaulRunRosters { get; set; }
+
     public virtual DbSet<TblContactAudit> TblContactAudits { get; set; }
 
     public virtual DbSet<TblContactRole> TblContactRoles { get; set; }
@@ -186,6 +188,14 @@ public partial class DespatchContext : DbContext
         {
             entity.HasKey(e => e.BulkRegionId);
             entity.ToTable("tblBulkRegion");
+        });
+
+        // Linehaul roster (spec §4) — new table, migration 20260617090000.
+        modelBuilder.Entity<DispatchLinehaulRunRoster>(entity =>
+        {
+            entity.HasKey(e => e.LinehaulRunRosterId);
+            entity.ToTable("Dispatch_LinehaulRunRoster");
+            entity.Property(e => e.CreatedBy).HasMaxLength(120);
         });
 
         modelBuilder.Entity<AccessorialWorkflowTask>(entity =>

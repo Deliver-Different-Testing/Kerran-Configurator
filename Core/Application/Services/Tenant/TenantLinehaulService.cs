@@ -138,6 +138,97 @@ public class TenantLinehaulService(
         return TenantLinehaulMutationResult.Ok((await EnrichAsync([copy])).Single());
     }
 
+    // ── Roster (spec §4) — Run × Day driver grid ──────────────────────────
+
+    public async Task<LinehaulRosterGridDto> GetRosterGridAsync()
+    {
+        var runs = await Context.TblbulkLinehaulRuns.AsNoTracking().OrderBy(r => r.RunName).ToListAsync();
+        var enriched = await EnrichAsync(runs);   // depot names + default-driver name
+        var runIds = runs.Select(r => r.Id).ToList();
+
+        // v1 = recurring weekly rows only (RosterDate null); date overrides are v1.1.
+        var cells = await Context.DispatchLinehaulRunRosters.AsNoTracking()
+            .Where(x => x.IsActive && x.RosterDate == null && x.DayOfWeek != null && runIds.Contains(x.LinehaulRunId))
+            .ToListAsync();
+
+        var cellCourierIds = cells.Where(c => c.CourierId.HasValue).Select(c => c.CourierId!.Value).Distinct().ToList();
+        var courierNames = await Context.TucCouriers.AsNoTracking()
+            .Where(c => cellCourierIds.Contains(c.UccrId))
+            .ToDictionaryAsync(c => c.UccrId, c => (c.UccrName + " " + c.UccrSurname).Trim());
+
+        var cellsByRun = cells
+            .GroupBy(c => c.LinehaulRunId)
+            .ToDictionary(g => g.Key, g => g.Select(c => new LinehaulRosterCellDto
+            {
+                RosterId = c.LinehaulRunRosterId,
+                DayOfWeek = c.DayOfWeek!.Value,
+                CourierId = c.CourierId,
+                CourierName = c.CourierId.HasValue ? courierNames.GetValueOrDefault(c.CourierId.Value) : null,
+            }).ToList());
+
+        var rows = enriched.Select(e => new LinehaulRosterRowDto
+        {
+            RunId = e.Id,
+            RunName = e.RunName,
+            FromDepotName = e.FromDepotName,
+            ToDepotName = e.ToDepotName,
+            DefaultCourierId = e.CourierId,
+            DefaultDriverName = e.DefaultDriverName,
+            Active = e.Active,
+            Cells = cellsByRun.GetValueOrDefault(e.Id) ?? [],
+        }).ToList();
+
+        var couriers = (await GetLookupsAsync()).Couriers;
+        return new LinehaulRosterGridDto { Rows = rows, Couriers = couriers };
+    }
+
+    // Upsert a single weekly cell. Deactivates the existing active row for the
+    // (run, day) before inserting — matches the filtered unique index and keeps
+    // the run's own default driver (tblbulkLinehaulRun.CourierId) untouched.
+    public async Task<LinehaulRosterCellDto?> UpsertRosterCellAsync(LinehaulRosterUpsertDto dto)
+    {
+        if (dto.DayOfWeek < 1 || dto.DayOfWeek > 7) return null;
+        if (dto.CourierId <= 0) return null;
+        if (!await Context.TblbulkLinehaulRuns.AnyAsync(r => r.Id == dto.LinehaulRunId)) return null;
+
+        var existing = await Context.DispatchLinehaulRunRosters
+            .Where(x => x.IsActive && x.RosterDate == null
+                        && x.LinehaulRunId == dto.LinehaulRunId && x.DayOfWeek == (byte)dto.DayOfWeek)
+            .ToListAsync();
+        foreach (var e in existing) e.IsActive = false;
+
+        var row = new DispatchLinehaulRunRoster
+        {
+            LinehaulRunId = dto.LinehaulRunId,
+            CourierId = dto.CourierId,
+            DayOfWeek = (byte)dto.DayOfWeek,
+            RosterDate = null,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "configurator",
+        };
+        Context.DispatchLinehaulRunRosters.Add(row);
+        await Context.SaveChangesAsync();
+
+        var courier = await Context.TucCouriers.AsNoTracking().FirstOrDefaultAsync(c => c.UccrId == dto.CourierId);
+        return new LinehaulRosterCellDto
+        {
+            RosterId = row.LinehaulRunRosterId,
+            DayOfWeek = dto.DayOfWeek,
+            CourierId = dto.CourierId,
+            CourierName = courier is null ? null : (courier.UccrName + " " + courier.UccrSurname).Trim(),
+        };
+    }
+
+    public async Task<bool> DeleteRosterCellAsync(int rosterId)
+    {
+        var row = await Context.DispatchLinehaulRunRosters.FirstOrDefaultAsync(x => x.LinehaulRunRosterId == rosterId);
+        if (row is null) return false;
+        row.IsActive = false;   // soft-delete
+        await Context.SaveChangesAsync();
+        return true;
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private async Task<string?> ValidateAsync(TenantLinehaulRunUpsertDto dto, int? id)

@@ -52,6 +52,37 @@ export function extractLinehaulError(e: unknown, fallback: string): string {
   return res?.data?.message ?? (e as Error)?.message ?? fallback;
 }
 
+// ── Linehaul Roster (spec §4) — Run × Day driver grid ──────────────────
+
+export interface LinehaulRosterCell {
+  rosterId: number;
+  dayOfWeek: number;            // 1 = Mon .. 7 = Sun
+  courierId: number | null;
+  courierName: string | null;
+}
+
+export interface LinehaulRosterRow {
+  runId: number;
+  runName: string;
+  fromDepotName: string;
+  toDepotName: string;
+  defaultCourierId: number | null;
+  defaultDriverName: string | null;
+  active: boolean;
+  cells: LinehaulRosterCell[];
+}
+
+export interface LinehaulRosterGrid {
+  rows: LinehaulRosterRow[];
+  couriers: LinehaulCourierLookup[];
+}
+
+export interface LinehaulRosterUpsert {
+  linehaulRunId: number;
+  dayOfWeek: number;            // 1 = Mon .. 7 = Sun
+  courierId: number;
+}
+
 export const linehaulService = {
   async list(): Promise<TenantLinehaulRun[]> {
     const { data } = await api.get<TenantLinehaulRun[]>('/linehaul-runs');
@@ -75,5 +106,18 @@ export const linehaulService = {
   async copy(id: number): Promise<TenantLinehaulRun> {
     const { data } = await api.post<TenantLinehaulRun>(`/linehaul-runs/${id}/copy`, {});
     return data;
+  },
+
+  // Roster grid
+  async rosterGrid(): Promise<LinehaulRosterGrid> {
+    const { data } = await api.get<LinehaulRosterGrid>('/linehaul-rosters');
+    return data;
+  },
+  async upsertRosterCell(payload: LinehaulRosterUpsert): Promise<LinehaulRosterCell> {
+    const { data } = await api.put<LinehaulRosterCell>('/linehaul-rosters', payload);
+    return data;
+  },
+  async deleteRosterCell(rosterId: number): Promise<void> {
+    await api.delete(`/linehaul-rosters/${rosterId}`);
   },
 };

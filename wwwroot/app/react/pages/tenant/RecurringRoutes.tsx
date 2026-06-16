@@ -15,6 +15,7 @@ import {
 import { AssignTargetPicker, AssignTargetValue } from '@/components/common/AssignTargetPicker';
 import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
 import { LinehaulTab } from './LinehaulTab';
+import { LinehaulRosterTab } from './LinehaulRosterTab';
 
 type Tab = 'routes' | 'linehaul' | 'roster' | 'linehaul-roster';
 
@@ -1009,20 +1010,6 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
       <h3 className="font-display font-semibold text-[#0d0c2c] text-sm">{title}</h3>
       {subtitle && <p className="text-[12px] text-text-secondary mt-0.5 mb-4">{subtitle}</p>}
       {children}
-    </div>
-  );
-}
-
-// ─── Linehaul Roster tab (spec §4) ────────────────────────────────────
-// Placeholder until the Run × Day driver grid (Dispatch_LinehaulRunRoster)
-// lands. Kept in the tab order from day one so the layout doesn't shift.
-function LinehaulRosterTab() {
-  return (
-    <div className="rounded-xl border border-border bg-white p-10 text-center">
-      <p className="text-sm font-medium text-[#0d0c2c]">Linehaul Roster</p>
-      <p className="text-sm text-text-secondary mt-1">
-        Driver-by-day rostering for linehaul runs is coming soon.
-      </p>
     </div>
   );
 }

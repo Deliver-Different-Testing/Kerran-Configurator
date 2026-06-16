@@ -89,7 +89,13 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<TblBulkJob> TblBulkJobs { get; set; }
 
+    public virtual DbSet<TblBulkRegion> TblBulkRegions { get; set; }
+
     public virtual DbSet<TblBulkRunSchedule> TblBulkRunSchedules { get; set; }
+
+    public virtual DbSet<TblBulkScheduleLinehaul> TblBulkScheduleLinehauls { get; set; }
+
+    public virtual DbSet<TblbulkLinehaulRun> TblbulkLinehaulRuns { get; set; }
 
     public virtual DbSet<TblContactAudit> TblContactAudits { get; set; }
 
@@ -156,6 +162,31 @@ public partial class DespatchContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.UseCollation("Latin1_General_CI_AS");
+
+        // ── Linehaul (Recurring Routes spec §3) — hand-authored lean config to
+        // match EF Power Tools regen (efpt.config.json now ticks these three
+        // existing ClientManager-domain tables). The TenantLinehaulService uses
+        // explicit LINQ joins, not navs, so regen's nav additions are additive. ──
+        modelBuilder.Entity<TblbulkLinehaulRun>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.ToTable("tblbulkLinehaulRun");
+            entity.Property(e => e.CourierId).HasColumnName("CourierID");
+            entity.Property(e => e.RunName).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<TblBulkScheduleLinehaul>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.ToTable("tblBulkScheduleLinehaul");
+            entity.Property(e => e.LinehaulRunId).HasColumnName("LinehaulRunID");
+        });
+
+        modelBuilder.Entity<TblBulkRegion>(entity =>
+        {
+            entity.HasKey(e => e.BulkRegionId);
+            entity.ToTable("tblBulkRegion");
+        });
 
         modelBuilder.Entity<AccessorialWorkflowTask>(entity =>
         {

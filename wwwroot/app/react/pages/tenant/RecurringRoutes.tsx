@@ -13,8 +13,19 @@ import {
   RouteBooking,
 } from '@/services/tenant_routeService';
 import { AssignTargetPicker, AssignTargetValue } from '@/components/common/AssignTargetPicker';
+import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
+import { LinehaulTab } from './LinehaulTab';
 
-type Tab = 'routes' | 'roster';
+type Tab = 'routes' | 'linehaul' | 'roster' | 'linehaul-roster';
+
+// Final tab order from day one (spec §3/§4) so operators don't relearn the
+// layout when Linehaul Roster fills in.
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'routes', label: 'Routes' },
+  { key: 'linehaul', label: 'Linehaul' },
+  { key: 'roster', label: 'Route Roster' },
+  { key: 'linehaul-roster', label: 'Linehaul Roster' },
+];
 
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -62,17 +73,17 @@ export function RecurringRoutes() {
       </div>
 
       <div className="flex gap-1 rounded-2xl border border-border bg-white p-1 shadow-sm w-fit">
-        {(['routes', 'roster'] as const).map((t) => (
+        {TABS.map(({ key, label }) => (
           <button
-            key={t}
-            onClick={() => setActiveTab(t)}
+            key={key}
+            onClick={() => setActiveTab(key)}
             className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
-              activeTab === t
+              activeTab === key
                 ? 'bg-[#0d0c2c] text-white shadow-sm'
                 : 'text-text-secondary hover:bg-slate-50'
             }`}
           >
-            {t === 'routes' ? 'Routes' : 'Route Roster'}
+            {label}
           </button>
         ))}
         {recurringJobsUrl && (
@@ -100,8 +111,12 @@ export function RecurringRoutes() {
         <div className="rounded-xl border border-border bg-white p-10 text-center text-sm text-text-secondary">Loading…</div>
       ) : activeTab === 'routes' ? (
         <RoutesTab routes={routes} targets={targets} schedules={schedules} onChanged={refresh} />
-      ) : (
+      ) : activeTab === 'linehaul' ? (
+        <LinehaulTab />
+      ) : activeTab === 'roster' ? (
         <RosterTab routes={routes} targets={targets} />
+      ) : (
+        <LinehaulRosterTab />
       )}
     </div>
   );
@@ -844,20 +859,6 @@ function TargetTypeChip({ type }: { type: AssignTargetType }) {
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tone}`}>{label}</span>;
 }
 
-// Route-class chip: cyan First/Final Mile (Routes tab) vs purple Middle Mile
-// (Linehaul tab). Constant per tab in v1; becomes a filter if the two list
-// views ever merge to a single table.
-function RouteTypeChip({ kind }: { kind: 'first-final' | 'middle' }) {
-  const isMiddle = kind === 'middle';
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-      isMiddle ? 'bg-brand-purple/15 text-brand-purple' : 'bg-brand-cyan/15 text-brand-cyan'
-    }`}>
-      {isMiddle ? 'Middle Mile' : 'First/Final Mile'}
-    </span>
-  );
-}
-
 // Collapsible read-only summary of live recurring bookings on a route. Lazy-loads
 // the detail on first expand (the count is already on the route). Re-assignment is
 // operator-driven in the Dispatch app / Route Viewer — this is view-only.
@@ -1008,6 +1009,20 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
       <h3 className="font-display font-semibold text-[#0d0c2c] text-sm">{title}</h3>
       {subtitle && <p className="text-[12px] text-text-secondary mt-0.5 mb-4">{subtitle}</p>}
       {children}
+    </div>
+  );
+}
+
+// ─── Linehaul Roster tab (spec §4) ────────────────────────────────────
+// Placeholder until the Run × Day driver grid (Dispatch_LinehaulRunRoster)
+// lands. Kept in the tab order from day one so the layout doesn't shift.
+function LinehaulRosterTab() {
+  return (
+    <div className="rounded-xl border border-border bg-white p-10 text-center">
+      <p className="text-sm font-medium text-[#0d0c2c]">Linehaul Roster</p>
+      <p className="text-sm text-text-secondary mt-1">
+        Driver-by-day rostering for linehaul runs is coming soon.
+      </p>
     </div>
   );
 }

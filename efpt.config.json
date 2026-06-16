@@ -175,7 +175,19 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tblBulkRegion]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tblBulkRunSchedule]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblBulkScheduleLinehaul]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblbulkLinehaulRun]",
          "ObjectType": 0
       },
       {

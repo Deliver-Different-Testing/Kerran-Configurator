@@ -1,0 +1,79 @@
+import api from './tenant_api';
+
+// Linehaul (depot-to-depot middle-mile) runs — backs the Linehaul tab on the
+// tenant Recurring Routes page (spec §3). Native configurator API at
+// /api/v1/tenant/linehaul-runs (no DespatchWeb / ClientManager hops).
+
+export interface TenantLinehaulRun {
+  id: number;
+  runName: string;
+  fromDepotId: number;
+  toDepotId: number;
+  fromDepotName: string;
+  toDepotName: string;
+  startTime: string | null;       // "HH:mm"
+  despatchTime: string | null;    // "HH:mm"
+  courierId: number | null;       // null = unbound
+  defaultDriverName: string | null;
+  mappedStopsCount: number;
+  usedBySchedulesCount: number;
+  active: boolean;                // derived: >=1 active schedule binding
+}
+
+export interface TenantLinehaulRunUpsert {
+  runName: string;
+  fromDepotId: number;
+  toDepotId: number;
+  startTime: string | null;       // "HH:mm"
+  despatchTime: string | null;    // "HH:mm"
+  courierId: number | null;       // null = unbound
+}
+
+export interface DepotLookup {
+  id: number;
+  name: string;
+}
+
+export interface LinehaulCourierLookup {
+  id: number;
+  name: string;
+  code: string;
+}
+
+export interface LinehaulLookups {
+  depots: DepotLookup[];
+  couriers: LinehaulCourierLookup[];
+}
+
+// Surfaces the API's `{ message }` body (validation 400 / blocked-delete 409)
+// so the UI can show the server's reason instead of a generic failure.
+export function extractLinehaulError(e: unknown, fallback: string): string {
+  const res = (e as { response?: { data?: { message?: string } } })?.response;
+  return res?.data?.message ?? (e as Error)?.message ?? fallback;
+}
+
+export const linehaulService = {
+  async list(): Promise<TenantLinehaulRun[]> {
+    const { data } = await api.get<TenantLinehaulRun[]>('/linehaul-runs');
+    return data;
+  },
+  async lookups(): Promise<LinehaulLookups> {
+    const { data } = await api.get<LinehaulLookups>('/linehaul-runs/lookups');
+    return data;
+  },
+  async create(payload: TenantLinehaulRunUpsert): Promise<TenantLinehaulRun> {
+    const { data } = await api.post<TenantLinehaulRun>('/linehaul-runs', payload);
+    return data;
+  },
+  async update(id: number, payload: TenantLinehaulRunUpsert): Promise<TenantLinehaulRun> {
+    const { data } = await api.put<TenantLinehaulRun>(`/linehaul-runs/${id}`, payload);
+    return data;
+  },
+  async remove(id: number): Promise<void> {
+    await api.delete(`/linehaul-runs/${id}`);
+  },
+  async copy(id: number): Promise<TenantLinehaulRun> {
+    const { data } = await api.post<TenantLinehaulRun>(`/linehaul-runs/${id}/copy`, {});
+    return data;
+  },
+};

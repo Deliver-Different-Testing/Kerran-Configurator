@@ -411,6 +411,7 @@ builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Portal.PortalTenantContext>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalSessionTokenService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalApplicantService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalApplicantDocumentService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.API.Filters.PortalRequestFilter>();
 
 // Phase 2 courier portal — courier self-service (cookie-authed, CourierOnly).

@@ -5,6 +5,7 @@ import { useCourierPortalTheme } from '@/hooks/useCourierPortalTheme';
 import { extractPortalError } from '@/services/applicant_api';
 import type { ProgressPayload } from '@/services/portal_applicantService';
 import { Card, ErrorBanner, Field, PrimaryButton, SuccessBanner } from './ui';
+import ApplicantDocuments from './ApplicantDocuments';
 
 // Phase 1 authenticated application — the applicant fills in / resumes their
 // details. Progress is saved server-side (PUT /api/portal/applicants), so a
@@ -129,10 +130,9 @@ export default function ApplicantWizard() {
           </PrimaryButton>
         </div>
 
-        <p className="text-xs text-text-muted mt-4">
-          Document upload &amp; final submission will be available in an upcoming update.
-        </p>
       </Card>
+
+      <ApplicantDocuments />
     </div>
   );
 }

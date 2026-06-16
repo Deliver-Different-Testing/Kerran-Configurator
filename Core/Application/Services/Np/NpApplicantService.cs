@@ -8,6 +8,7 @@ using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 namespace DfrntDriveConfigurator.Core.Application.Services.Np;
 
@@ -180,6 +181,27 @@ public class NpApplicantService(
         a.CourierCode = code;
         a.CourierFleetId = dto.CourierFleetId;
         a.ModifiedDate = now;
+
+        // P4 carry-forward — relink the applicant's documents to the new courier.
+        // The unified CourierDocuments rows keep their ApplicantId (lineage) and
+        // ALL metadata / AI advisory / verify status; we just stamp CourierId so
+        // they surface in the courier's accreditation set. No re-upload, no byte
+        // copy — a Verified applicant doc is a Verified courier doc; only
+        // missing/rejected/expired docs need action afterward.
+        var carried = await Context.CourierDocuments
+            .Where(d => d.ApplicantId == a.Id && d.IsActive)
+            .ToListAsync();
+        foreach (var doc in carried)
+        {
+            doc.CourierId = courier.UccrId;
+            doc.ModifiedDate = now;
+        }
+        if (carried.Count > 0)
+        {
+            Log.Information("Carried forward {Count} document(s) from applicant {ApplicantId} to courier {CourierId}.",
+                carried.Count, a.Id, courier.UccrId);
+        }
+
         await Context.SaveChangesAsync();
 
         return await GetById(id, messageId);

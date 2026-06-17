@@ -137,9 +137,13 @@ public partial class CourierApplicant
 
     public virtual ICollection<CourierApplicantUpload> CourierApplicantUploads { get; set; } = new List<CourierApplicantUpload>();
 
+    public virtual ICollection<CourierDocument> CourierDocuments { get; set; } = new List<CourierDocument>();
+
     public virtual TucCourierFleet CourierFleet { get; set; }
 
     public virtual TucCourier MasterCourier { get; set; }
+
+    public virtual TblBulkRegion Region { get; set; }
 
     public virtual TblSite Site { get; set; }
 }

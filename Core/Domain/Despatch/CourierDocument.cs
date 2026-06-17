@@ -11,8 +11,6 @@ public partial class CourierDocument
 
     public int? CourierId { get; set; }
 
-    public int? ApplicantId { get; set; }
-
     public int DocumentTypeId { get; set; }
 
     public string S3key { get; set; }
@@ -52,6 +50,8 @@ public partial class CourierDocument
     public string AiModel { get; set; }
 
     public DateTime? AiReviewedDate { get; set; }
+
+    public int? ApplicantId { get; set; }
 
     public virtual CourierApplicant Applicant { get; set; }
 

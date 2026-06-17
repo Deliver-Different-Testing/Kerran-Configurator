@@ -179,6 +179,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[TblbulkLinehaulRun]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tblBulkRegion]",
          "ObjectType": 0
       },
@@ -188,10 +192,6 @@
       },
       {
          "Name": "[dbo].[tblBulkScheduleLinehaul]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[tblbulkLinehaulRun]",
          "ObjectType": 0
       },
       {

@@ -340,4 +340,8 @@ public partial class TblSetting
     public bool OpenforceDefault { get; set; }
 
     public bool TenantGeneratesContractorInvoice { get; set; }
+
+    public bool ConsolidateOpenforceInQbo { get; set; }
+
+    public string OpenforceQboVendorId { get; set; }
 }

@@ -356,7 +356,7 @@ public partial class TucJobBooking
     public int? PickupTimeZoneId { get; set; }
 
     /// <summary>
-    /// 0 = Don&apos;t Book (default), 1 = Deliver Next Day
+    /// 0 = Don&apos;t Book (default), 1 = Deliver Next Day, 2 = Book Anyway
     /// </summary>
     public int HolidayDeliveryOption { get; set; }
 

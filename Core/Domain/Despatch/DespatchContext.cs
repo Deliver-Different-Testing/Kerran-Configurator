@@ -59,6 +59,8 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<CourierScheduleTimeSlot> CourierScheduleTimeSlots { get; set; }
 
+    public virtual DbSet<DispatchLinehaulRunRoster> DispatchLinehaulRunRosters { get; set; }
+
     public virtual DbSet<DispatchRouteRoster> DispatchRouteRosters { get; set; }
 
     public virtual DbSet<DocumentType> DocumentTypes { get; set; }
@@ -95,10 +97,6 @@ public partial class DespatchContext : DbContext
 
     public virtual DbSet<TblBulkScheduleLinehaul> TblBulkScheduleLinehauls { get; set; }
 
-    public virtual DbSet<TblbulkLinehaulRun> TblbulkLinehaulRuns { get; set; }
-
-    public virtual DbSet<DispatchLinehaulRunRoster> DispatchLinehaulRunRosters { get; set; }
-
     public virtual DbSet<TblContactAudit> TblContactAudits { get; set; }
 
     public virtual DbSet<TblContactRole> TblContactRoles { get; set; }
@@ -110,6 +108,8 @@ public partial class DespatchContext : DbContext
     public virtual DbSet<TblSite> TblSites { get; set; }
 
     public virtual DbSet<TblUser> TblUsers { get; set; }
+
+    public virtual DbSet<TblbulkLinehaulRun> TblbulkLinehaulRuns { get; set; }
 
     public virtual DbSet<TucAgent> TucAgents { get; set; }
 
@@ -164,39 +164,6 @@ public partial class DespatchContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.UseCollation("Latin1_General_CI_AS");
-
-        // ── Linehaul (Recurring Routes spec §3) — hand-authored lean config to
-        // match EF Power Tools regen (efpt.config.json now ticks these three
-        // existing ClientManager-domain tables). The TenantLinehaulService uses
-        // explicit LINQ joins, not navs, so regen's nav additions are additive. ──
-        modelBuilder.Entity<TblbulkLinehaulRun>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.ToTable("tblbulkLinehaulRun");
-            entity.Property(e => e.CourierId).HasColumnName("CourierID");
-            entity.Property(e => e.RunName).HasMaxLength(50);
-        });
-
-        modelBuilder.Entity<TblBulkScheduleLinehaul>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.ToTable("tblBulkScheduleLinehaul");
-            entity.Property(e => e.LinehaulRunId).HasColumnName("LinehaulRunID");
-        });
-
-        modelBuilder.Entity<TblBulkRegion>(entity =>
-        {
-            entity.HasKey(e => e.BulkRegionId);
-            entity.ToTable("tblBulkRegion");
-        });
-
-        // Linehaul roster (spec §4) — new table, migration 20260617090000.
-        modelBuilder.Entity<DispatchLinehaulRunRoster>(entity =>
-        {
-            entity.HasKey(e => e.LinehaulRunRosterId);
-            entity.ToTable("Dispatch_LinehaulRunRoster");
-            entity.Property(e => e.CreatedBy).HasMaxLength(120);
-        });
 
         modelBuilder.Entity<AccessorialWorkflowTask>(entity =>
         {
@@ -680,6 +647,10 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.MasterCourierId)
                 .HasConstraintName("FK_CourierApplicant_tucCourierMaster");
 
+            entity.HasOne(d => d.Region).WithMany(p => p.CourierApplicants)
+                .HasForeignKey(d => d.RegionId)
+                .HasConstraintName("FK_CourierApplicant_tblBulkRegion");
+
             entity.HasOne(d => d.Site).WithMany(p => p.CourierApplicants)
                 .HasForeignKey(d => d.SiteId)
                 .HasConstraintName("FK_CourierApplication_tblSite");
@@ -769,13 +740,12 @@ public partial class DespatchContext : DbContext
                 .HasDefaultValue("Pending")
                 .HasAnnotation("Relational:DefaultConstraintName", "DF_CourierDocuments_VerifyStatus");
 
-            entity.HasOne(d => d.Applicant).WithMany()
+            entity.HasOne(d => d.Applicant).WithMany(p => p.CourierDocuments)
                 .HasForeignKey(d => d.ApplicantId)
                 .HasConstraintName("FK_CourierDocuments_Applicant");
 
             entity.HasOne(d => d.Courier).WithMany(p => p.CourierDocuments)
                 .HasForeignKey(d => d.CourierId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_CourierDocuments_Courier");
 
             entity.HasOne(d => d.DocumentType).WithMany(p => p.CourierDocuments)
@@ -802,6 +772,10 @@ public partial class DespatchContext : DbContext
                 .IsRequired()
                 .HasMaxLength(50);
             entity.Property(e => e.NotificationSent).HasPrecision(3);
+
+            entity.HasOne(d => d.Location).WithMany(p => p.CourierSchedules)
+                .HasForeignKey(d => d.LocationId)
+                .HasConstraintName("FK_CourierSchedule_tblBulkRegion");
 
             entity.HasOne(d => d.Site).WithMany(p => p.CourierSchedules)
                 .HasForeignKey(d => d.SiteId)
@@ -859,9 +833,47 @@ public partial class DespatchContext : DbContext
                 .HasDefaultValueSql("(getdate())")
                 .HasAnnotation("Relational:DefaultConstraintName", "DF__CourierSc__Creat__05AEC38C");
 
+            entity.HasOne(d => d.Location).WithMany(p => p.CourierScheduleTimeSlots)
+                .HasForeignKey(d => d.LocationId)
+                .HasConstraintName("FK_CourierScheduleTimeSlot_tblBulkRegion");
+
             entity.HasOne(d => d.Site).WithMany(p => p.CourierScheduleTimeSlots)
                 .HasForeignKey(d => d.SiteId)
                 .HasConstraintName("FK_CourierScheduleTimeSlot_tblSite");
+        });
+
+        modelBuilder.Entity<DispatchLinehaulRunRoster>(entity =>
+        {
+            entity.HasKey(e => e.LinehaulRunRosterId).HasName("PK_LinehaulRunRoster");
+
+            entity.ToTable("Dispatch_LinehaulRunRoster");
+
+            entity.HasIndex(e => new { e.LinehaulRunId, e.DayOfWeek }, "UX_LinehaulRunRoster_Run_DOW_Active")
+                .IsUnique()
+                .HasFilter("([IsActive]=(1) AND [RosterDate] IS NULL)");
+
+            entity.HasIndex(e => new { e.LinehaulRunId, e.RosterDate }, "UX_LinehaulRunRoster_Run_Date_Active")
+                .IsUnique()
+                .HasFilter("([IsActive]=(1) AND [RosterDate] IS NOT NULL)");
+
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_LinehaulRunRoster_CreatedAt");
+            entity.Property(e => e.CreatedBy).HasMaxLength(120);
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF_LinehaulRunRoster_IsActive");
+            entity.Property(e => e.RosterDate).HasPrecision(0);
+
+            entity.HasOne(d => d.Courier).WithMany(p => p.DispatchLinehaulRunRosters)
+                .HasForeignKey(d => d.CourierId)
+                .HasConstraintName("FK_LinehaulRunRoster_Courier");
+
+            entity.HasOne(d => d.LinehaulRun).WithMany(p => p.DispatchLinehaulRunRosters)
+                .HasForeignKey(d => d.LinehaulRunId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_LinehaulRunRoster_Run");
         });
 
         modelBuilder.Entity<DispatchRouteRoster>(entity =>
@@ -1444,10 +1456,58 @@ public partial class DespatchContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_tblBulkJob_tucJobStatus");
 
+            entity.HasOne(d => d.Region).WithMany(p => p.TblBulkJobs)
+                .HasForeignKey(d => d.RegionId)
+                .HasConstraintName("FK_tblBulkJob_tblBulkRegion");
+
             entity.HasOne(d => d.SpeedNavigation).WithMany(p => p.TblBulkJobs)
                 .HasForeignKey(d => d.Speed)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_tblBulkJob_tucJobType");
+        });
+
+        modelBuilder.Entity<TblBulkRegion>(entity =>
+        {
+            entity.HasKey(e => e.BulkRegionId);
+
+            entity.ToTable("tblBulkRegion");
+
+            entity.HasIndex(e => e.AccountsCode, "IX_AccountsCode");
+
+            entity.Property(e => e.AccountsCode).HasMaxLength(50);
+            entity.Property(e => e.Active)
+                .HasDefaultValue(true)
+                .HasAnnotation("Relational:DefaultConstraintName", "DF__tblBulkRe__Activ__32816A03");
+            entity.Property(e => e.AddressLine1).HasMaxLength(255);
+            entity.Property(e => e.AddressLine2).HasMaxLength(255);
+            entity.Property(e => e.AddressLine3).HasMaxLength(255);
+            entity.Property(e => e.AddressLine4).HasMaxLength(255);
+            entity.Property(e => e.AddressLine5).HasMaxLength(255);
+            entity.Property(e => e.AddressLine6).HasMaxLength(255);
+            entity.Property(e => e.AddressLine7).HasMaxLength(255);
+            entity.Property(e => e.AddressLine8).HasMaxLength(255);
+            entity.Property(e => e.Created).HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.FromAddress)
+                .IsRequired()
+                .HasMaxLength(150);
+            entity.Property(e => e.FromCompany)
+                .IsRequired()
+                .HasMaxLength(150);
+            entity.Property(e => e.FromSuburb)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.LastModified).HasColumnType("datetime");
+            entity.Property(e => e.LastModifiedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(150);
+            entity.Property(e => e.PickupLatitude).HasColumnType("decimal(18, 9)");
+            entity.Property(e => e.PickupLongitude).HasColumnType("decimal(18, 9)");
         });
 
         modelBuilder.Entity<TblBulkRunSchedule>(entity =>
@@ -1474,9 +1534,38 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.ParentSpeedId)
                 .HasConstraintName("FK_tblBulkRunSchedule_tucJobType2");
 
+            entity.HasOne(d => d.RegionNavigation).WithMany(p => p.TblBulkRunSchedules)
+                .HasForeignKey(d => d.Region)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_tblBulkRunSchedule_tblBulkRegion");
+
             entity.HasOne(d => d.Speed).WithMany(p => p.TblBulkRunScheduleSpeeds)
                 .HasForeignKey(d => d.SpeedId)
                 .HasConstraintName("FK_tblBulkRunSchedule_tucJobType");
+        });
+
+        modelBuilder.Entity<TblBulkScheduleLinehaul>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__tblBulkS__3214EC075772F790");
+
+            entity.ToTable("tblBulkScheduleLinehaul");
+
+            entity.Property(e => e.Amount).HasColumnType("money");
+            entity.Property(e => e.AmountPercentage).HasColumnType("decimal(8, 2)");
+            entity.Property(e => e.DropOffLocationId).HasColumnName("DropOffLocationID");
+            entity.Property(e => e.LinehaulRunId).HasColumnName("LinehaulRunID");
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.WeekDay).HasMaxLength(7);
+
+            entity.HasOne(d => d.BulkRunSchedule).WithMany(p => p.TblBulkScheduleLinehauls)
+                .HasForeignKey(d => d.BulkRunScheduleId)
+                .HasConstraintName("FK__tblBulkSc__BulkR__15D01CBC");
+
+            entity.HasOne(d => d.LinehaulRun).WithMany(p => p.TblBulkScheduleLinehauls)
+                .HasForeignKey(d => d.LinehaulRunId)
+                .HasConstraintName("FK_LinehaulRun");
         });
 
         modelBuilder.Entity<TblContactAudit>(entity =>
@@ -1591,6 +1680,7 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.CompanyAddress).HasMaxLength(100);
             entity.Property(e => e.CompanyBankNumber).HasMaxLength(100);
             entity.Property(e => e.ComposerExtrasPath).HasMaxLength(500);
+            entity.Property(e => e.ConsolidateOpenforceInQbo).HasAnnotation("Relational:DefaultConstraintName", "DF_TblSettings_ConsolidateOpenforceInQbo");
             entity.Property(e => e.ContactUsEmailSubject)
                 .IsRequired()
                 .HasMaxLength(100);
@@ -1726,6 +1816,7 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.OpenforceClientGuid).HasMaxLength(50);
             entity.Property(e => e.OpenforceClientId).HasMaxLength(100);
             entity.Property(e => e.OpenforceDefault).HasAnnotation("Relational:DefaultConstraintName", "DF_TblSettings_OpenforceDefault");
+            entity.Property(e => e.OpenforceQboVendorId).HasMaxLength(50);
             entity.Property(e => e.ParentJobCourierId).HasColumnName("ParentJobCourierID");
             entity.Property(e => e.PpdAppliedDescription)
                 .IsRequired()
@@ -1908,6 +1999,31 @@ public partial class DespatchContext : DbContext
                 .HasConstraintName("FK_tblUser_tucCourier");
         });
 
+        modelBuilder.Entity<TblbulkLinehaulRun>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__TblbulkL__3214EC073EA749C6");
+
+            entity.ToTable("TblbulkLinehaulRun");
+
+            entity.Property(e => e.CourierId).HasColumnName("CourierID");
+            entity.Property(e => e.RunName).HasMaxLength(50);
+
+            entity.HasOne(d => d.Courier).WithMany(p => p.TblbulkLinehaulRuns)
+                .HasForeignKey(d => d.CourierId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__TblbulkLi__Couri__0A5E6A10");
+
+            entity.HasOne(d => d.FromDepot).WithMany(p => p.TblbulkLinehaulRunFromDepots)
+                .HasForeignKey(d => d.FromDepotId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__TblbulkLi__FromD__0B528E49");
+
+            entity.HasOne(d => d.ToDepot).WithMany(p => p.TblbulkLinehaulRunToDepots)
+                .HasForeignKey(d => d.ToDepotId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__TblbulkLi__ToDep__0C46B282");
+        });
+
         modelBuilder.Entity<TucAgent>(entity =>
         {
             entity.HasKey(e => e.UcagId)
@@ -2080,6 +2196,8 @@ public partial class DespatchContext : DbContext
 
             entity.Property(e => e.UcclId).HasColumnName("ucclID");
             entity.Property(e => e.AccountProfileId).HasColumnName("AccountProfileID");
+            entity.Property(e => e.AccountingPaymentTermQboId).HasMaxLength(32);
+            entity.Property(e => e.AccountingPaymentTermXeroType).HasMaxLength(40);
             entity.Property(e => e.AccountsContact).HasMaxLength(100);
             entity.Property(e => e.AccountsEmail).HasMaxLength(500);
             entity.Property(e => e.AccountsPhone).HasMaxLength(100);
@@ -2963,6 +3081,10 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.NpAgentId)
                 .HasConstraintName("FK_tucCourier_NpAgent");
 
+            entity.HasOne(d => d.Region).WithMany(p => p.TucCouriers)
+                .HasForeignKey(d => d.RegionId)
+                .HasConstraintName("FK_tucCourier_tblBulkRegion");
+
             entity.HasOne(d => d.UccrCarrierLiability).WithMany(p => p.TucCourierUccrCarrierLiabilities)
                 .HasForeignKey(d => d.UccrCarrierLiabilityId)
                 .HasConstraintName("FK_tucCourier_tucInsuranceCompany1");
@@ -3296,6 +3418,8 @@ public partial class DespatchContext : DbContext
             entity.HasIndex(e => e.AgentId, "IX_tucJob_AgentID");
 
             entity.HasIndex(e => new { e.UcjbStatus, e.UcjbJobDone, e.UcjbVoid }, "IX_tucJob_Archive_Status");
+
+            entity.HasIndex(e => new { e.BookingParentId, e.UcjbDate }, "IX_tucJob_BookingParentID_ucjbDate");
 
             entity.HasIndex(e => new { e.UcjbJobDone, e.UcjbVoid, e.UcjbCourierId }, "IX_tucJob_CourierClearListBuild");
 
@@ -4302,7 +4426,7 @@ public partial class DespatchContext : DbContext
             entity.Property(e => e.Gssconnote)
                 .HasMaxLength(50)
                 .HasColumnName("GSSConnote");
-            entity.Property(e => e.HolidayDeliveryOption).HasComment("0 = Don't Book (default), 1 = Deliver Next Day");
+            entity.Property(e => e.HolidayDeliveryOption).HasComment("0 = Don't Book (default), 1 = Deliver Next Day, 2 = Book Anyway");
             entity.Property(e => e.InformationParentId).HasColumnName("InformationParentID");
             entity.Property(e => e.InternalNotes).HasMaxLength(500);
             entity.Property(e => e.JobRelationshipTypeId).HasColumnName("JobRelationshipTypeID");

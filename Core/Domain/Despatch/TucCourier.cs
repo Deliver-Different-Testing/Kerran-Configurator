@@ -285,15 +285,21 @@ public partial class TucCourier
 
     public virtual ICollection<CourierScheduleResponse> CourierScheduleResponses { get; set; } = new List<CourierScheduleResponse>();
 
+    public virtual ICollection<DispatchLinehaulRunRoster> DispatchLinehaulRunRosters { get; set; } = new List<DispatchLinehaulRunRoster>();
+
     public virtual ICollection<DispatchRouteRoster> DispatchRouteRosters { get; set; } = new List<DispatchRouteRoster>();
 
     public virtual TucAgent NpAgent { get; set; }
+
+    public virtual TblBulkRegion Region { get; set; }
 
     public virtual ICollection<Route> Routes { get; set; } = new List<Route>();
 
     public virtual ICollection<TblBulkJob> TblBulkJobs { get; set; } = new List<TblBulkJob>();
 
     public virtual ICollection<TblUser> TblUsers { get; set; } = new List<TblUser>();
+
+    public virtual ICollection<TblbulkLinehaulRun> TblbulkLinehaulRuns { get; set; } = new List<TblbulkLinehaulRun>();
 
     public virtual ICollection<TucJobArchive> TucJobArchives { get; set; } = new List<TucJobArchive>();
 

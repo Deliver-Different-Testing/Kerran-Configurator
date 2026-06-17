@@ -63,5 +63,9 @@ public partial class TblBulkRunSchedule
 
     public virtual TucJobType ParentSpeed { get; set; }
 
+    public virtual TblBulkRegion RegionNavigation { get; set; }
+
     public virtual TucJobType Speed { get; set; }
+
+    public virtual ICollection<TblBulkScheduleLinehaul> TblBulkScheduleLinehauls { get; set; } = new List<TblBulkScheduleLinehaul>();
 }

@@ -249,5 +249,7 @@ public partial class TblBulkJob
 
     public virtual TucJobStatus JobStatusNavigation { get; set; }
 
+    public virtual TblBulkRegion Region { get; set; }
+
     public virtual TucJobType SpeedNavigation { get; set; }
 }

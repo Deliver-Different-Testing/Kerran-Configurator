@@ -29,5 +29,7 @@ public partial class CourierSchedule
 
     public virtual ICollection<CourierScheduleResponse> CourierScheduleResponses { get; set; } = new List<CourierScheduleResponse>();
 
+    public virtual TblBulkRegion Location { get; set; }
+
     public virtual TblSite Site { get; set; }
 }

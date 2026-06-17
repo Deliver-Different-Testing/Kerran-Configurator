@@ -88,6 +88,30 @@ public class ContactsController(AdminContactService service) : BaseController
         return Result(detail, error);
     }
 
+    // Item 7b — staff password management (Access tab). Delegates to Hub via the
+    // service. AdminOnly gates the surface; the service applies the §B ladder.
+    [HttpPost("{id:int}/set-password")]
+    public async Task<IActionResult> SetPassword(int id, [FromBody] ContactSetPasswordDto dto)
+    {
+        var (ok, error) = await service.SetPasswordAsync(id, dto?.Password ?? string.Empty);
+        if (!ok) return MapAccessError(error);
+        return Ok(new { message = "Password set. The user can sign in with the new password immediately." });
+    }
+
+    [HttpPost("{id:int}/send-reset")]
+    public async Task<IActionResult> SendReset(int id)
+    {
+        var (ok, emailSent, message) = await service.SendResetAsync(id);
+        if (!ok) return MapAccessError(message);
+        return Ok(new
+        {
+            emailSent,
+            message = emailSent
+                ? "A password-reset email has been sent to the user."
+                : (message ?? "Reset link generated, but the email did not send. Action it in Hub admin."),
+        });
+    }
+
     private IActionResult Result(NpUserDetailDto? detail, string? error)
     {
         if (error == ClientTypeLadder.ForbiddenCode)
@@ -95,4 +119,23 @@ public class ContactsController(AdminContactService service) : BaseController
         if (error is not null) return BadRequest(new { error });
         return Ok(detail);
     }
+
+    // Maps service error sentinels to HTTP status: ladder → 403, not-found/no-login
+    // → 404, everything else → 400 with the message.
+    private IActionResult MapAccessError(string? error)
+    {
+        if (error == ClientTypeLadder.ForbiddenCode)
+            return StatusCode(403, new { error = ClientTypeLadder.ForbiddenCode, message = "Your account cannot manage a contact at this ClientType." });
+        if (error == AdminContactService.NotFoundCode)
+            return NotFound(new { error = "Contact not found." });
+        if (error is not null && error.StartsWith(AdminContactService.NotFoundCode + "|", StringComparison.Ordinal))
+            return NotFound(new { error = error[(AdminContactService.NotFoundCode.Length + 1)..] });
+        return BadRequest(new { error = error ?? "Password request failed." });
+    }
+}
+
+// Body for POST {id}/set-password — mutable class per the [FromBody] convention.
+public class ContactSetPasswordDto
+{
+    public string Password { get; set; } = string.Empty;
 }

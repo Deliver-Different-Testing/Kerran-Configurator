@@ -370,6 +370,72 @@ public class AdminContactService(
         return (await GetDetailAsync(contact.UcctId), null);
     }
 
+    // ── Staff password management (Item 7b — Access tab) ────────────────────
+    // Both delegate the actual credential work to Hub via NpUserInviteService
+    // (staff creds live in Master.User, not the tenant DB). We resolve the
+    // contact's login email, ladder-guard, call Hub, then write an audit row
+    // (never the password itself). Errors map: ForbiddenCode → 403, the
+    // not-found/no-login sentinel → 404, anything else → 400 (see controller).
+
+    public const string NotFoundCode = "CONTACT_OR_LOGIN_NOT_FOUND";
+
+    public async Task<(bool ok, string? error)> SetPasswordAsync(int contactId, string password)
+    {
+        var (email, error) = await ResolveManageableStaffEmailAsync(contactId);
+        if (error is not null) return (false, error);
+
+        var result = await npUserInviteService.SetStaffPasswordAsync(email!, password);
+        if (!result.Success)
+            return (false, MapHubFailure(result.FailureMessage));
+
+        Context.TblContactAudits.Add(Audit(contactId, "Password", null, "Set by admin"));
+        await Context.SaveChangesAsync();
+        return (true, null);
+    }
+
+    public async Task<(bool ok, bool emailSent, string? message)> SendResetAsync(int contactId)
+    {
+        var (email, error) = await ResolveManageableStaffEmailAsync(contactId);
+        if (error is not null) return (false, false, error);
+
+        var result = await npUserInviteService.SendStaffResetAsync(email!);
+        if (!result.Success)
+            return (false, false, MapHubFailure(result.FailureMessage));
+
+        Context.TblContactAudits.Add(Audit(contactId, "Password Reset", null,
+            result.EmailSent ? "Reset email sent" : "Reset link generated (email not sent)"));
+        await Context.SaveChangesAsync();
+        // On partial success the FailureMessage carries the "email didn't send" note.
+        return (true, result.EmailSent, result.EmailSent ? null : result.FailureMessage);
+    }
+
+    // Resolves the staff login email for a contact, applying the §B ladder so a
+    // caller can only manage logins for contacts they out-rank. Returns a
+    // sentinel-tagged error string the controller maps to the right status.
+    private async Task<(string? email, string? error)> ResolveManageableStaffEmailAsync(int contactId)
+    {
+        var cc = await Context.TucClientContacts.AsNoTracking()
+            .Include(c => c.UcctClient)
+            .FirstOrDefaultAsync(c => c.UcctId == contactId);
+        if (cc?.UcctClient is null || !LaneAll.Contains(cc.UcctClient.ClientTypeId))
+            return (null, NotFoundCode);
+        if (!ClientTypeLadder.CanWriteClientType(CallerClientType, cc.UcctClient.ClientTypeId))
+            return (null, ClientTypeLadder.ForbiddenCode);
+
+        var email = (cc.UserName ?? cc.UcctEmail)?.Trim();
+        if (string.IsNullOrWhiteSpace(email))
+            return (null, "This contact has no email/username — add one on the Profile tab first; it's their sign-in username.");
+        return (email, null);
+    }
+
+    // Hub's "no login exists" message gets re-tagged with the NotFound sentinel
+    // so the controller returns 404; everything else stays a 400 message.
+    private static string MapHubFailure(string? message)
+    {
+        var m = message ?? "Hub password request failed.";
+        return m.Contains("No Hub login exists", StringComparison.OrdinalIgnoreCase) ? NotFoundCode + "|" + m : m;
+    }
+
     // ── Role assignment (ladder + junction diff + primary) — no audit ───────
     private async Task<(List<int> desired, string? error)> ApplyRolesAsync(TucClientContact contact, int clientTypeId, List<int>? roleIds)
     {

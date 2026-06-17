@@ -44,6 +44,25 @@ public interface INpUserInviteService
     // Defaults to true so the original NP cascade callers are unchanged.
     Task<NpInviteResult> InviteAsync(
         string email, bool isNetworkPartner = true, CancellationToken cancellationToken = default);
+
+    // Item 7b — staff password management against Hub's
+    // POST /api/admin/users/set-password and /send-reset. Used by the
+    // configurator's Team & Users → Access tab. Both identify the staff
+    // (non-courier) Master.User by email.
+    Task<HubPasswordResult> SetStaffPasswordAsync(
+        string email, string password, CancellationToken cancellationToken = default);
+
+    Task<HubPasswordResult> SendStaffResetAsync(
+        string email, CancellationToken cancellationToken = default);
+}
+
+// Outcome of a staff set-password / send-reset call. Success=false carries an
+// operator-facing FailureMessage; for send-reset, EmailSent reflects whether the
+// reset email actually dispatched (a key can be stored even if the email fails).
+public record HubPasswordResult(bool Success, bool EmailSent, string? FailureMessage)
+{
+    public static HubPasswordResult Ok(bool emailSent = false) => new(true, emailSent, null);
+    public static HubPasswordResult Fail(string message) => new(false, false, message);
 }
 
 public class NpUserInviteService(
@@ -138,8 +157,113 @@ public class NpUserInviteService(
         }
     }
 
+    public async Task<HubPasswordResult> SetStaffPasswordAsync(
+        string email, string password, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return HubPasswordResult.Fail("Email is required.");
+        if (string.IsNullOrWhiteSpace(password)) return HubPasswordResult.Fail("Password is required.");
+        if (password.Trim().Length < 8) return HubPasswordResult.Fail("Password must be at least 8 characters.");
+
+        var notConfigured = HubNotConfigured();
+        if (notConfigured is not null) return notConfigured;
+
+        return await PostPasswordAsync(
+            "/api/admin/users/set-password",
+            new HubSetPasswordRequest(email.Trim(), password.Trim()),
+            email, expectEmailSent: false, cancellationToken);
+    }
+
+    public async Task<HubPasswordResult> SendStaffResetAsync(
+        string email, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return HubPasswordResult.Fail("Email is required.");
+
+        var notConfigured = HubNotConfigured();
+        if (notConfigured is not null) return notConfigured;
+
+        return await PostPasswordAsync(
+            "/api/admin/users/send-reset",
+            new HubSendResetRequest(email.Trim()),
+            email, expectEmailSent: true, cancellationToken);
+    }
+
+    // Graceful guard so dev/local (no Hub) gives a clear message rather than a
+    // confusing connection error — mirrors InviteAsync's configuration check.
+    private HubPasswordResult? HubNotConfigured()
+    {
+        if (string.IsNullOrEmpty(appSettings.HubBaseUrl) || string.IsNullOrEmpty(appSettings.HubAdminApiKey))
+            return HubPasswordResult.Fail(
+                "Hub is not configured (HubBaseUrl / HubAdminApiKey env vars unset). Staff password management is unavailable in this environment.");
+        return null;
+    }
+
+    private async Task<HubPasswordResult> PostPasswordAsync(
+        string route, object body, string email, bool expectEmailSent, CancellationToken cancellationToken)
+    {
+        var url = $"{appSettings.HubBaseUrl}{route}";
+        var client = httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(body) };
+        request.Headers.Add("X-Api-Key", appSettings.HubAdminApiKey);
+
+        try
+        {
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                Log.Warning("Hub {Route} returned {Status} for {Email}: {Body}", route, (int)response.StatusCode, email, errBody);
+                var friendly = (int)response.StatusCode switch
+                {
+                    404 => $"No Hub login exists for \"{email}\". Provision the user (re-send their invite) before setting a password.",
+                    401 => "Hub rejected the request (HubAdminApiKey mismatch). Check configuration.",
+                    400 => $"Hub rejected the request: {errBody}",
+                    _ => $"Hub password request failed ({(int)response.StatusCode}). Try again or action it in Hub admin.",
+                };
+                return HubPasswordResult.Fail(friendly);
+            }
+
+            if (!expectEmailSent)
+            {
+                Log.Information("Hub {Route} succeeded for {Email}", route, email);
+                return HubPasswordResult.Ok();
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<HubSendResetResponse>(cancellationToken: cancellationToken);
+            var emailSent = payload?.ResetEmailSent ?? false;
+            Log.Information("Hub {Route} succeeded for {Email}; resetEmailSent={EmailSent}", route, email, emailSent);
+            return emailSent
+                ? HubPasswordResult.Ok(emailSent: true)
+                : new HubPasswordResult(true, false,
+                    "Reset link generated, but the email did not send. Hand the user the reset link from Hub, or retry.");
+        }
+        catch (TaskCanceledException tcEx)
+        {
+            Log.Error(tcEx, "Hub {Route} timed out for {Email}", route, email);
+            return HubPasswordResult.Fail("The request to Hub timed out. Check Hub before retrying.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Hub {Route} unexpected failure for {Email}", route, email);
+            return HubPasswordResult.Fail($"Hub password request failed: {ex.Message}");
+        }
+    }
+
     // Wire-shape records — kept private and mapped to NpInviteResult so
     // the public surface is independent of Hub's exact JSON.
+    private sealed record HubSetPasswordRequest(
+        [property: JsonPropertyName("email")] string Email,
+        [property: JsonPropertyName("password")] string Password);
+
+    private sealed record HubSendResetRequest(
+        [property: JsonPropertyName("email")] string Email);
+
+    private sealed record HubSendResetResponse(
+        [property: JsonPropertyName("userId")] int UserId,
+        [property: JsonPropertyName("email")] string Email,
+        [property: JsonPropertyName("resetEmailSent")] bool ResetEmailSent);
+
     private sealed record HubCreateNpUserRequest(
         [property: JsonPropertyName("email")] string Email,
         [property: JsonPropertyName("currentTenantId")] int CurrentTenantId);

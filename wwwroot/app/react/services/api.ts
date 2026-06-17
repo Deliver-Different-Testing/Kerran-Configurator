@@ -23,7 +23,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.messages?.[0]?.message || `HTTP ${res.status}`);
+    throw new Error(err?.messages?.[0]?.message || err?.error || err?.message || `HTTP ${res.status}`);
   }
   // 204 No Content (and any other body-less response) → return undefined.
   // Callers that type the response as `unknown` or `void` ignore the value;
@@ -344,4 +344,9 @@ export const contactsApi = {
   clients: (lane: string) => request<AdminClientOption[]>(`/admin/contacts/lookups/clients?lane=${encodeURIComponent(lane)}`),
   create: (body: AdminContactSave) => request<AdminContactDetail>('/admin/contacts', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: number | string, body: AdminContactSave) => request<AdminContactDetail>(`/admin/contacts/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  // Item 7b — staff password management (Access tab). Both go through Hub.
+  setPassword: (id: number | string, password: string) =>
+    request<{ message: string }>(`/admin/contacts/${id}/set-password`, { method: 'POST', body: JSON.stringify({ password }) }),
+  sendReset: (id: number | string) =>
+    request<{ emailSent: boolean; message: string }>(`/admin/contacts/${id}/send-reset`, { method: 'POST' }),
 };

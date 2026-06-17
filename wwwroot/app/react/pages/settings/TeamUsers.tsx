@@ -9,6 +9,7 @@ import {
   type AdminContactAudit, type AdminContactSave, type ResolvedDataScope,
 } from '@/services/api';
 import { ACCESS_LABEL, clampAccess, type AccessLevel } from '@/data/accessLevels';
+import PasswordInput from '@/components/common/PasswordInput';
 
 type Lane = 'all' | 'tenant' | 'np' | 'dfadmin';
 const LANES: { key: Lane; label: string }[] = [
@@ -130,7 +131,7 @@ export default function TeamUsersPage() {
 
 // ---- 3-tab modal ----------------------------------------------------------
 
-type Tab = 'profile' | 'permissions' | 'history' | 'dataScope';
+type Tab = 'profile' | 'access' | 'permissions' | 'history' | 'dataScope';
 
 function ContactModal({ contactId, lane, onClose }: { contactId: number | 'new'; lane: Lane; onClose: (toast?: string) => void }) {
   const isNew = contactId === 'new';
@@ -206,7 +207,7 @@ function ContactModal({ contactId, lane, onClose }: { contactId: number | 'new';
           <button onClick={() => onClose()} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
         </div>
         <div className="flex gap-1 px-6 pt-3 border-b border-border">
-          {([['profile', 'Profile'], ['permissions', 'Permissions'], ['history', 'History'], ['dataScope', 'Data Scope']] as [Tab, string][]).map(([t, label]) => (
+          {([['profile', 'Profile'], ['access', 'Access'], ['permissions', 'Permissions'], ['history', 'History'], ['dataScope', 'Data Scope']] as [Tab, string][]).map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === t ? 'border-[#3bc7f4] text-[#3bc7f4]' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>{label}</button>
           ))}
         </div>
@@ -265,7 +266,8 @@ function ContactModal({ contactId, lane, onClose }: { contactId: number | 'new';
                   <textarea rows={2} value={d.notes} onChange={e => set({ notes: e.target.value })} className="px-3 py-2 rounded-lg border border-border text-sm" />
                 </div>
               </div>
-            ) : tab === 'permissions' ? <PermissionsTab contactId={contactId} />
+            ) : tab === 'access' ? <AccessTab contactId={contactId} email={d.email} />
+              : tab === 'permissions' ? <PermissionsTab contactId={contactId} />
               : tab === 'history' ? <HistoryTab contactId={contactId} />
               : <DataScopeTab contactId={contactId} />}
         </div>
@@ -273,6 +275,91 @@ function ContactModal({ contactId, lane, onClose }: { contactId: number | 'new';
           <button onClick={() => onClose()} disabled={saving} className="px-4 py-2 rounded-lg border border-border text-sm text-text-secondary hover:bg-gray-50">Cancel</button>
           <button onClick={save} disabled={!canSave} className="px-4 py-2 rounded-lg bg-[#3bc7f4] text-white text-sm font-medium hover:bg-[#2bb5e2] disabled:opacity-50">
             {saving ? 'Saving…' : isNew ? 'Add Contact' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Item 7b — staff login management. Staff creds live in Hub (Master.User), so
+// both actions go through /api/admin/contacts/{id}/{set-password,send-reset}
+// which proxy to Hub. The username is the contact's email. Mirrors the courier
+// "Mobile App Login" UX, but for staff auth (not the courier hash).
+function AccessTab({ contactId, email }: { contactId: number | 'new'; email: string }) {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState<'set' | 'reset' | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (contactId === 'new') return <p className="text-sm text-text-muted">Save the contact first to manage their login.</p>;
+
+  const noEmail = !email.trim();
+  const canSet = !busy && !noEmail && password.trim().length >= 8;
+
+  const doSet = async () => {
+    setErr(null); setOk(null); setBusy('set');
+    try {
+      const r = await contactsApi.setPassword(contactId, password.trim());
+      setPassword(''); setOk(r.message);
+    } catch (e: any) { setErr(e?.message ?? 'Could not set the password.'); }
+    finally { setBusy(null); }
+  };
+
+  const doReset = async () => {
+    setErr(null); setOk(null); setBusy('reset');
+    try {
+      const r = await contactsApi.sendReset(contactId);
+      setOk(r.message);
+    } catch (e: any) { setErr(e?.message ?? 'Could not send the reset email.'); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <div className="space-y-5 max-w-xl">
+      <p className="text-sm text-text-secondary">
+        Manage this user's Hub sign-in. Their username is their <span className="font-medium">email</span>
+        {email.trim() ? <> (<span className="font-medium">{email.trim()}</span>)</> : null}. These actions apply immediately and are separate from Save.
+      </p>
+
+      {noEmail && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-xs">
+          Add an email on the Profile tab first — it's the user's sign-in username.
+        </div>
+      )}
+      {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">⚠️ {err}</div>}
+      {ok && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-xs">✅ {ok}</div>}
+
+      {/* Send reset email — the self-service path */}
+      <div className="border border-border rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-text-primary mb-1">Send password-reset email</h4>
+        <p className="text-xs text-text-secondary mb-3">Emails the user a secure link to set their own password. Use this when you don't want to handle the password yourself.</p>
+        <button
+          type="button"
+          onClick={doReset}
+          disabled={!!busy || noEmail}
+          className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-text-primary hover:border-[#3bc7f4] hover:text-[#3bc7f4] disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {busy === 'reset' ? 'Sending…' : 'Send Reset Email'}
+        </button>
+      </div>
+
+      {/* Set password directly — the operator hands it over out-of-band */}
+      <div className="border border-border rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-text-primary mb-1">Set password directly</h4>
+        <p className="text-xs text-text-secondary mb-3">Sets the password now and gives it to the user out-of-band. Minimum 8 characters.</p>
+        <div className="flex items-end gap-2">
+          <div className="flex-1 flex flex-col gap-1">
+            <label className="text-xs text-text-secondary uppercase tracking-wide">New Password</label>
+            <PasswordInput value={password} onChange={setPassword} maxLength={100} placeholder="Password to set for the user" />
+          </div>
+          <button
+            type="button"
+            onClick={doSet}
+            disabled={!canSet}
+            className="bg-[#3bc7f4] text-white font-medium px-4 py-2 rounded-lg text-sm hover:bg-[#2bb5e2] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            {busy === 'set' ? 'Setting…' : 'Set Password'}
           </button>
         </div>
       </div>

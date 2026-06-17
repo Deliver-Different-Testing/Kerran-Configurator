@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useRecruitmentSettings } from '@/hooks/useRecruitmentSettings';
 
 export default function RecruitmentStageSettings() {
@@ -62,6 +63,15 @@ export default function RecruitmentStageSettings() {
               <div className="flex-1">
                 <div className="text-sm font-medium text-text-primary">{stage.stageName}</div>
                 {stage.description && <div className="text-xs text-text-secondary">{stage.description}</div>}
+                {/* AR3.3 — point operators at the single source of truth for the
+                    documents an applicant uploads at this stage (no doc list here). */}
+                {/document/i.test(stage.stageName) && (
+                  <div className="text-[11px] text-text-secondary mt-1">
+                    Required uploads here are configured in{' '}
+                    <Link to="/compliance/documents" className="text-brand-cyan hover:underline">Compliance Documents</Link>
+                    {' '}(where <span className="font-medium">Applies To</span> includes Applicant).
+                  </div>
+                )}
               </div>
             )}
 

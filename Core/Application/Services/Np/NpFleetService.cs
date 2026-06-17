@@ -4,7 +4,9 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
+using DfrntDriveConfigurator.Core.Application.Services.Portal;
 using DfrntDriveConfigurator.Core.Application.Utilities;
+using DfrntDriveConfigurator.Infrastructure;
 using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
 using DfrntDriveConfigurator.Core.Domain.Master;
@@ -19,7 +21,8 @@ public class NpFleetService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
     INpScopeResolver scopeResolver,
     MasterContext masterContext,
-    IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
+    IHttpContextAccessor httpContextAccessor,
+    AppSettings appSettings) : BaseService(contextFactory)
 {
     public async Task<NpFleetCouriersResponse> GetAll(Guid messageId)
     {
@@ -51,6 +54,7 @@ public class NpFleetService(
             .ToListAsync();
 
         await ApplyHasMobileLogin(rows);
+        ApplyPortalLink(rows);
 
         return new NpFleetCouriersResponse(messageId)
         {
@@ -200,7 +204,7 @@ public class NpFleetService(
             .Where(c => c.UccrId == id)
             .Select(ProjectToDto)
             .FirstOrDefaultAsync();
-        if (read is not null) await ApplyHasMobileLogin(new[] { read }); // email may have changed
+        if (read is not null) { await ApplyHasMobileLogin(new[] { read }); ApplyPortalLink(new[] { read }); } // email may have changed
 
         return new NpFleetCourierResponse(messageId)
         {
@@ -378,7 +382,7 @@ public class NpFleetService(
             .Where(c => c.UccrId == courier.UccrId)
             .Select(ProjectToDto)
             .FirstOrDefaultAsync();
-        if (read is not null) read.HasMobileLogin = true; // just provisioned above
+        if (read is not null) { read.HasMobileLogin = true; ApplyPortalLink(new[] { read }); } // just provisioned above
 
         return new NpFleetCourierResponse(messageId)
         {
@@ -491,7 +495,7 @@ public class NpFleetService(
             .Where(c => c.UccrId == id)
             .Select(ProjectToDto)
             .FirstOrDefaultAsync();
-        if (read is not null) read.HasMobileLogin = true; // just provisioned above
+        if (read is not null) { read.HasMobileLogin = true; ApplyPortalLink(new[] { read }); } // just provisioned above
 
         return new NpFleetCourierResponse(messageId)
         {
@@ -499,6 +503,71 @@ public class NpFleetService(
             Courier = read,
         };
     }
+
+    // ── Courier portal magic-link (Item 8.5) ───────────────────────────────
+    // Issue (generate or regenerate) writes a fresh opaque token + IssuedAt and
+    // clears LastUsedAt — regenerate therefore invalidates the previous link.
+    // Revoke nulls all three columns. Both are scope-guarded the same way as
+    // ResetLogin (NP users limited to their own agent's couriers).
+    public async Task<NpFleetCourierResponse> IssuePortalTokenAsync(int id, Guid messageId)
+    {
+        var (courier, error) = await FindCourierForUpdateAsync(id);
+        if (courier is null) return Fail(messageId, error!);
+
+        courier.PortalAccessToken = CourierPortalLink.GenerateToken();
+        courier.PortalTokenIssuedAt = DateTime.UtcNow;
+        courier.PortalTokenLastUsedAt = null;
+        courier.LastModified = DateTime.UtcNow;
+        courier.LastModifiedBy = Actor();
+        await Context.SaveChangesAsync();
+
+        return await ReadOnePortalAsync(id, messageId);
+    }
+
+    public async Task<NpFleetCourierResponse> RevokePortalTokenAsync(int id, Guid messageId)
+    {
+        var (courier, error) = await FindCourierForUpdateAsync(id);
+        if (courier is null) return Fail(messageId, error!);
+
+        courier.PortalAccessToken = null;
+        courier.PortalTokenIssuedAt = null;
+        courier.PortalTokenLastUsedAt = null;
+        courier.LastModified = DateTime.UtcNow;
+        courier.LastModifiedBy = Actor();
+        await Context.SaveChangesAsync();
+
+        return await ReadOnePortalAsync(id, messageId);
+    }
+
+    // Scope-guarded tracked fetch shared by the portal-token mutations.
+    private async Task<(TucCourier? courier, string? error)> FindCourierForUpdateAsync(int id)
+    {
+        var scope = await scopeResolver.ResolveAsync();
+        if (!scope.IsAdmin && scope.NpAgentId is null)
+            return (null, "No NP scope configured for this user.");
+
+        var query = Context.TucCouriers.AsQueryable();
+        if (!scope.IsAdmin)
+            query = query.Where(c => c.NpAgentId == scope.NpAgentId!.Value);
+
+        var courier = await query.FirstOrDefaultAsync(c => c.UccrId == id);
+        return courier is null ? (null, "Courier not found or outside your scope.") : (courier, null);
+    }
+
+    private async Task<NpFleetCourierResponse> ReadOnePortalAsync(int id, Guid messageId)
+    {
+        var read = await Context.TucCouriers.AsNoTracking()
+            .Where(c => c.UccrId == id)
+            .Select(ProjectToDto)
+            .FirstOrDefaultAsync();
+        if (read is not null) { await ApplyHasMobileLogin(new[] { read }); ApplyPortalLink(new[] { read }); }
+        return new NpFleetCourierResponse(messageId) { Success = true, Courier = read };
+    }
+
+    private string Actor() =>
+        httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.Name)?.Value
+        ?? httpContextAccessor.HttpContext?.User.FindFirst("name")?.Value
+        ?? "system";
 
     private static NpFleetCourierResponse Fail(Guid messageId, string message) => new(messageId)
     {
@@ -748,5 +817,20 @@ public class NpFleetService(
         CreatedBy = c.CreatedBy ?? string.Empty,
         Modified = c.LastModified,
         ModifiedBy = c.LastModifiedBy ?? string.Empty,
+
+        // Portal magic-link (Item 8.5). PortalLinkUrl carries the RAW token out
+        // of the projection; ApplyPortalLink() rewrites it to the /drive path
+        // (it needs AppSettings.PortalTenantSlug, unavailable in the expression).
+        PortalLinkUrl = c.PortalAccessToken ?? string.Empty,
+        PortalTokenIssuedAt = c.PortalTokenIssuedAt,
+        PortalTokenLastUsedAt = c.PortalTokenLastUsedAt,
     };
+
+    // Converts the raw token ProjectToDto stashed in PortalLinkUrl into the
+    // relative /drive/<slug>/<token> path (empty when no token).
+    private void ApplyPortalLink(IEnumerable<NpFleetCourierDto> rows)
+    {
+        foreach (var r in rows)
+            r.PortalLinkUrl = CourierPortalLink.BuildPath(appSettings.PortalTenantSlug, r.PortalLinkUrl);
+    }
 }

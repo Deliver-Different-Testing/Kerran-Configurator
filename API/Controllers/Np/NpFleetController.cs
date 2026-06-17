@@ -96,4 +96,45 @@ public class NpFleetController(NpFleetService npFleetService) : BaseController
             throw;
         }
     }
+
+    // Courier portal magic-link (Item 8.5). Generate/regenerate issues a fresh
+    // token (invalidating any previous link); revoke clears it. Called from the
+    // Courier List Portal-Link action.
+    [HttpPost("{id:int}/portal-token")]
+    public async Task<IActionResult> IssuePortalToken(int id)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await npFleetService.IssuePortalTokenAsync(id, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Courier);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to issue portal token for courier {Id}", id);
+            throw;
+        }
+    }
+
+    [HttpDelete("{id:int}/portal-token")]
+    public async Task<IActionResult> RevokePortalToken(int id)
+    {
+        try
+        {
+            var messageId = Guid.NewGuid();
+            Log.Information("({Method} {Path}): {MessageId}", Request.Method, Request.Path, messageId);
+
+            var response = await npFleetService.RevokePortalTokenAsync(id, messageId);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response.Courier);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to revoke portal token for courier {Id}", id);
+            throw;
+        }
+    }
 }

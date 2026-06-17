@@ -128,6 +128,15 @@ public class NpFleetCourierDto
     // "couldn't determine" (e.g. master DB unreachable), so the UI only flags an
     // explicit false and never shows a misleading "no login" on a failed check.
     public bool? HasMobileLogin { get; set; }
+
+    // Courier portal magic-link (Item 8.5). PortalLinkUrl is the relative
+    // /drive/<slug>/<token> path (empty when no link issued); the UI prepends
+    // the portal origin. IssuedAt/LastUsedAt give the operator link freshness +
+    // "has the courier used it" visibility. The raw token is intentionally not
+    // surfaced separately — it's embedded in PortalLinkUrl.
+    public string PortalLinkUrl { get; set; } = string.Empty;
+    public DateTime? PortalTokenIssuedAt { get; set; }
+    public DateTime? PortalTokenLastUsedAt { get; set; }
 }
 
 public class NpFleetCouriersResponse : BaseResponse

@@ -128,13 +128,23 @@ export function LinehaulRosterTab() {
                         {isEditing ? (
                           <select
                             autoFocus
-                            defaultValue={cell?.courierId ?? row.defaultCourierId ?? 0}
+                            // Controlled to the cell's CURRENT value (not pre-set to the
+                            // run default) — a native <select> only fires onChange on a
+                            // real change, so pre-selecting the default meant "accept the
+                            // default" saved nothing. The default is offered as an explicit
+                            // marked option instead, so picking it is a genuine change.
+                            value={cell?.courierId ?? 0}
                             onChange={(e) => saveCell(row, d.dow, Number(e.target.value))}
                             onBlur={() => setEditing(null)}
                             className="w-full border border-brand-cyan rounded-md px-1.5 py-1 text-[12.5px] bg-white focus:outline-none"
                           >
                             <option value={0}>— Unassigned —</option>
-                            {grid?.couriers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {row.defaultCourierId != null && (
+                              <option value={row.defaultCourierId}>{row.defaultDriverName ?? 'Default driver'} (default)</option>
+                            )}
+                            {grid?.couriers
+                              .filter((c) => c.id !== row.defaultCourierId)
+                              .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         ) : (
                           <button

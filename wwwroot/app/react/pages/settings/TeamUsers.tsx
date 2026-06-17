@@ -93,7 +93,14 @@ export default function TeamUsersPage() {
             {loading ? <tr><td colSpan={7} className="px-4 py-6 text-center text-text-muted">Loading…</td></tr>
               : filtered.length === 0 ? <tr><td colSpan={7} className="px-4 py-6 text-center text-text-muted">No contacts.</td></tr>
               : filtered.map(r => (
-                <tr key={r.id} className="border-b border-border hover:bg-gray-50">
+                <tr
+                  key={r.id}
+                  onClick={() => setEditing(Number(r.id))}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing(Number(r.id)); } }}
+                  role="button"
+                  tabIndex={0}
+                  className="border-b border-border cursor-pointer hover:bg-surface-cream focus:bg-surface-cream focus:outline-none"
+                >
                   <td className="px-4 py-3 font-semibold text-text-primary">{r.name}</td>
                   <td className="px-4 py-3 text-text-secondary">{r.clientName || '—'}</td>
                   <td className="px-4 py-3">{r.email}</td>
@@ -107,7 +114,7 @@ export default function TeamUsersPage() {
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}`}>{r.status}</span>
                   </td>
                   <td className="px-4 py-3 text-[13px] text-text-secondary">{r.lastLogin}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => setEditing(Number(r.id))} className="text-[#3bc7f4] hover:underline text-sm font-medium">Edit</button></td>
+                  <td className="px-4 py-3 text-right"><button onClick={(e) => { e.stopPropagation(); setEditing(Number(r.id)); }} className="text-[#3bc7f4] hover:underline text-sm font-medium">Edit</button></td>
                 </tr>
               ))}
           </tbody>

@@ -185,7 +185,8 @@ export default function App() {
             <Route path="compliance/setup" element={<ComplianceHub />} />
             <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
             <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
-            <Route path="recruitment" element={<RecruitmentPipeline />} />
+            <Route path="recruitment" element={<Navigate to="/recruitment/pipeline" replace />} />
+            <Route path="recruitment/pipeline" element={<RecruitmentPipeline />} />
             <Route path="recruitment/:id" element={<ApplicantDetail />} />
             <Route path="recruitment/portal-url" element={<PortalUrl />} />
             <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} isDfAdmin />} />
@@ -254,7 +255,8 @@ export default function App() {
             <Route path="compliance/my-documents" element={<MyComplianceDocuments />} />
             <Route path="compliance-profiles" element={<Navigate to="/compliance/my-documents" replace />} />
             <Route path="driver-approval" element={<Navigate to="/compliance/my-documents" replace />} />
-            <Route path="recruitment" element={<RecruitmentPipeline />} />
+            <Route path="recruitment" element={<Navigate to="/recruitment/pipeline" replace />} />
+            <Route path="recruitment/pipeline" element={<RecruitmentPipeline />} />
             <Route path="recruitment/:id" element={<ApplicantDetail />} />
             <Route path="recruitment/portal-url" element={<PortalUrl />} />
             <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} />} />
@@ -309,7 +311,8 @@ export default function App() {
             <Route path="compliance/setup" element={<ComplianceHub />} />
             <Route path="compliance-profiles" element={<ComplianceHub initialTab="profiles" />} />
             <Route path="driver-approval" element={<ComplianceHub initialTab="approval" />} />
-            <Route path="recruitment" element={<RecruitmentPipeline />} />
+            <Route path="recruitment" element={<Navigate to="/recruitment/pipeline" replace />} />
+            <Route path="recruitment/pipeline" element={<RecruitmentPipeline />} />
             <Route path="recruitment/:id" element={<ApplicantDetail />} />
             <Route path="recruitment/portal-url" element={<PortalUrl />} />
             <Route path="quotes" element={<QuoteRequests />} />

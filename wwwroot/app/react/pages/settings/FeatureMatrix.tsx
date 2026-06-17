@@ -410,11 +410,15 @@ export default function FeatureMatrixPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto bg-white rounded-lg border border-border">
+      {/* Bounded scroll region so the sticky header pins against THIS container's
+          scroll (an overflow-x-auto box already makes overflow-y a scroll
+          container, so the page-level sticky wouldn't engage). */}
+      <div className="overflow-auto max-h-[70vh] bg-white rounded-lg border border-border">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-border">
+          <thead className="bg-gray-50 border-b border-border sticky top-0 z-20 shadow-[0_2px_4px_rgba(13,12,44,0.05)]">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-text-primary sticky left-0 bg-gray-50 z-10 min-w-[320px]">
+              {/* z-30: corner cell stays above both the sticky header row and the sticky-left body column */}
+              <th className="text-left px-4 py-3 font-medium text-text-primary sticky left-0 bg-gray-50 z-30 min-w-[320px]">
                 Feature
               </th>
               {clientTypes.map(ct => (

@@ -2,11 +2,10 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useCourierPortalTheme } from '@/hooks/useCourierPortalTheme';
 
-// Courier Portal (Phase 1) — themed shell for authenticated couriers.
-// Top brand header + a bottom-nav scaffold. Only Dashboard is wired (a stub);
-// Runs / Schedule / Documents / Profile are placeholders for later phases
-// (Phase 3 = runs/schedule/settings). Business pages can light up into this
-// shell without touching the chrome.
+// Courier Portal — themed shell (top brand header + bottom nav) for
+// authenticated couriers. Runs / Schedule / Profile + Subcontractors are live;
+// Dashboard is a stub and Documents is still a placeholder. Mobile-first: the
+// bottom nav is the primary way couriers reach the business pages.
 
 const NAV: { to: string; label: string; icon: string }[] = [
   { to: 'dashboard', label: 'Home', icon: '🏠' },
@@ -21,7 +20,11 @@ export default function CourierPortalShell() {
   const { user } = useAuth();
 
   return (
-    <div className="w-full h-screen flex flex-col bg-[#fafbfc] overflow-hidden">
+    // h-[100dvh] (dynamic viewport height) not h-screen/100vh: on mobile 100vh
+    // includes the area behind the address bar, which pushed the bottom nav off
+    // the visible viewport (couriers are phone-first → nav looked absent).
+    // h-screen stays as the fallback for browsers without dvh support.
+    <div className="w-full h-screen h-[100dvh] flex flex-col bg-[#fafbfc] overflow-hidden">
       <header className={`${theme.headerClass} py-3 px-5 flex-shrink-0`}>
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -41,7 +44,7 @@ export default function CourierPortalShell() {
         </div>
       </main>
 
-      <nav className="flex-shrink-0 border-t border-border bg-white">
+      <nav className="flex-shrink-0 border-t border-border bg-white pb-[env(safe-area-inset-bottom)]">
         <div className="max-w-3xl mx-auto grid grid-cols-5">
           {NAV.map(item => (
             <NavLink

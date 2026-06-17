@@ -28,7 +28,6 @@ import RecruitmentStageSettings from './pages/np/RecruitmentStageSettings';
 import ContractSettings from './pages/np/ContractSettings';
 import RecruitmentAdvertising from './pages/np/RecruitmentAdvertising';
 import RegistrationSettings from './pages/np/RegistrationSettings';
-import PortalUrl from './pages/np/PortalUrl';
 import FleetManagement from './pages/np/FleetManagement';
 import Scheduling from './pages/np/Scheduling';
 import Operations from './pages/np/Operations';
@@ -192,7 +191,6 @@ export default function App() {
             <Route path="recruitment" element={<Navigate to="/recruitment/pipeline" replace />} />
             <Route path="recruitment/pipeline" element={<RecruitmentPipeline />} />
             <Route path="recruitment/:id" element={<ApplicantDetail />} />
-            <Route path="recruitment/portal-url" element={<PortalUrl />} />
             <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} isDfAdmin />} />
             <Route path="settings/tenant-config" element={<TenantConfigPage />} />
             <Route path="settings/feature-matrix" element={<FeatureMatrixPage />} />
@@ -262,7 +260,6 @@ export default function App() {
             <Route path="recruitment" element={<Navigate to="/recruitment/pipeline" replace />} />
             <Route path="recruitment/pipeline" element={<RecruitmentPipeline />} />
             <Route path="recruitment/:id" element={<ApplicantDetail />} />
-            <Route path="recruitment/portal-url" element={<PortalUrl />} />
             <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} />} />
             {/* Document-type config is tenant-admin (TenantStaffOrAdminNoNp) — not for NP. */}
             <Route path="settings/document-types" element={<Navigate to="/compliance/my-documents" replace />} />
@@ -318,7 +315,6 @@ export default function App() {
             <Route path="recruitment" element={<Navigate to="/recruitment/pipeline" replace />} />
             <Route path="recruitment/pipeline" element={<RecruitmentPipeline />} />
             <Route path="recruitment/:id" element={<ApplicantDetail />} />
-            <Route path="recruitment/portal-url" element={<PortalUrl />} />
             <Route path="quotes" element={<QuoteRequests />} />
             <Route path="associations" element={<AssociationStats />} />
             <Route path="fleet-management" element={<FleetManagement />} />

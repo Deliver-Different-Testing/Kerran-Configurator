@@ -2,10 +2,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useApplicant } from '@/hooks/useRecruitment';
 import { recruitmentService } from '@/services/np_recruitmentService';
+import { recruitmentSettingsService } from '@/services/np_recruitmentSettingsService';
 import ApplicantDocumentReview from '@/components/np/ApplicantDocumentReview';
-import type { ApplicantPipelineStage } from '@/types';
+import type { ApplicantPipelineStage, RecruitmentStageConfig } from '@/types';
 
-const STAGES: ApplicantPipelineStage[] = [
+// Canonical order — used only as a fallback when the stage config hasn't
+// loaded (or hasn't been seeded). The live progress bar renders the ENABLED
+// stages from /api/v1/np/recruitment-stages instead (see stage config below).
+const FALLBACK_STAGES: ApplicantPipelineStage[] = [
   'Registration', 'Email Verification', 'Profile', 'Documentation',
   'Declaration/Contract', 'Training', 'Approval',
 ];
@@ -42,6 +46,10 @@ export default function ApplicantDetail() {
   const [approveCode, setApproveCode] = useState('');
   const [fleets, setFleets] = useState<{ id: number; name: string }[]>([]);
   useEffect(() => { recruitmentService.getCourierFleets().then(setFleets); }, []);
+  const [stageConfig, setStageConfig] = useState<RecruitmentStageConfig[] | null>(null);
+  useEffect(() => {
+    recruitmentSettingsService.getStages().then(setStageConfig).catch(() => setStageConfig(null));
+  }, []);
   const [activeTab, setActiveTab] = useState<Tab>('profile');
 
   if (!applicant) {
@@ -55,7 +63,22 @@ export default function ApplicantDetail() {
     );
   }
 
-  const stageIdx = STAGES.indexOf(applicant.pipelineStage);
+  // Build the progress bar from the configurable stages. All stages (enabled
+  // + disabled) ordered by sortOrder give the canonical position; we render
+  // only the ENABLED ones, and mark each complete if its canonical position is
+  // at or before the applicant's derived stage. Falls back to the canonical
+  // list until the config loads (or if it was never seeded).
+  const sortedAll: Pick<RecruitmentStageConfig, 'stageName' | 'sortOrder' | 'enabled'>[] =
+    stageConfig && stageConfig.length
+      ? [...stageConfig].sort((a, b) => a.sortOrder - b.sortOrder)
+      : FALLBACK_STAGES.map((stageName, i) => ({ stageName, sortOrder: i, enabled: true }));
+  const derivedPos = sortedAll.findIndex(s => s.stageName === applicant.pipelineStage);
+  const barStages = sortedAll
+    .filter(s => s.enabled)
+    .map(s => ({ name: s.stageName, completed: derivedPos >= 0 && sortedAll.indexOf(s) <= derivedPos }));
+  // The advance/activate flow is flag-based on the backend regardless of which
+  // stages are enabled, so key the final action off the derived stage directly.
+  const isFinalStage = applicant.pipelineStage === 'Approval';
   const isRejected = !!applicant.rejectedDate;
   const isApproved = !!applicant.approvedAsCourierId;
   const applicantName = `${applicant.firstName} ${applicant.lastName}`;
@@ -108,12 +131,12 @@ export default function ApplicantDetail() {
         </div>
         {!isRejected && !isApproved && (
           <div className="flex items-center gap-2">
-            {stageIdx < STAGES.length - 1 && (
+            {!isFinalStage && (
               <button onClick={handleAdvance} className="px-4 py-2 text-sm font-medium bg-brand-cyan text-white rounded-lg hover:bg-brand-cyan/90">
                 Advance Stage
               </button>
             )}
-            {stageIdx === STAGES.length - 1 && (
+            {isFinalStage && (
               <button onClick={handleApprove} className="px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700">
                 Activate as Courier
               </button>
@@ -141,17 +164,17 @@ export default function ApplicantDetail() {
       {/* Stage Progress */}
       <div className="bg-white rounded-lg border border-border p-5">
         <div className="flex items-center gap-1">
-          {STAGES.map((_, i) => (
-            <div key={i} className="flex-1 flex items-center">
-              <div className={`flex-1 h-2 rounded-full ${i <= stageIdx ? 'bg-brand-cyan' : 'bg-gray-200'}`} />
-              {i < STAGES.length - 1 && <div className="w-1" />}
+          {barStages.map((s, i) => (
+            <div key={`${s.name}-${i}`} className="flex-1 flex items-center">
+              <div className={`flex-1 h-2 rounded-full ${s.completed ? 'bg-brand-cyan' : 'bg-gray-200'}`} />
+              {i < barStages.length - 1 && <div className="w-1" />}
             </div>
           ))}
         </div>
         <div className="flex justify-between mt-2">
-          {STAGES.map((stage, i) => (
-            <span key={stage} className={`text-[10px] flex-1 text-center ${i <= stageIdx ? 'text-brand-cyan font-medium' : 'text-text-muted'}`}>
-              {stage}
+          {barStages.map((s, i) => (
+            <span key={`${s.name}-${i}`} className={`text-[10px] flex-1 text-center ${s.completed ? 'text-brand-cyan font-medium' : 'text-text-muted'}`}>
+              {s.name}
             </span>
           ))}
         </div>

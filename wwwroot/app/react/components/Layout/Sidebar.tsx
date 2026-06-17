@@ -208,9 +208,8 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
       featureKey: 'courier-recruitment',
       items: [
         { id: '/recruitment/pipeline', label: 'Pipeline', implemented: true },
-        { id: '/recruitment/portal-url', label: 'Applicant Portal', implemented: true },
         { id: '/settings/recruitment-ads', label: 'Advertising', implemented: true },
-        { id: '/settings/recruitment-stages', label: 'Stages', implemented: true },
+        { id: '/settings/recruitment-stages', label: 'Recruitment Stages', implemented: true },
         { id: '/settings/registration', label: 'Registration', implemented: true },
       ],
     });
@@ -306,9 +305,8 @@ function buildNpSections(): NavSection[] {
       featureKey: 'courier-recruitment',
       items: [
         { id: '/recruitment/pipeline', label: 'Pipeline', implemented: true },
-        { id: '/recruitment/portal-url', label: 'Applicant Portal', implemented: true },
         { id: '/settings/recruitment-ads', label: 'Advertising', implemented: true },
-        { id: '/settings/recruitment-stages', label: 'Stages', implemented: true },
+        { id: '/settings/recruitment-stages', label: 'Recruitment Stages', implemented: true },
         { id: '/settings/registration', label: 'Registration', implemented: true },
       ],
     },

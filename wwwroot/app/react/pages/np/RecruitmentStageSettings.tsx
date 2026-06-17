@@ -1,12 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useRecruitmentSettings } from '@/hooks/useRecruitmentSettings';
+import { documentTypeService } from '@/services/np_documentService';
+import type { DocumentType } from '@/types';
+
+// A document/training item is required of an applicant when it's active and its
+// Applies To includes Applicant — 'Applicant', the legacy 'Both', or 'All'.
+const APPLICANT_APPLIES_TO = new Set(['Applicant', 'Both', 'All']);
+const appliesToApplicant = (d: DocumentType) =>
+  d.active && APPLICANT_APPLIES_TO.has(d.appliesTo);
 
 export default function RecruitmentStageSettings() {
   const { stages, updateStage, deleteStage, seedDefaults } = useRecruitmentSettings();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
+
+  // The Documentation/Training stages list the actual items an applicant must
+  // provide — read live from Compliance Documents (the single source of truth).
+  const [docTypes, setDocTypes] = useState<DocumentType[]>([]);
+  useEffect(() => { documentTypeService.getAll().then(setDocTypes).catch(() => setDocTypes([])); }, []);
+  const sortByOrder = (a: DocumentType, b: DocumentType) => a.sortOrder - b.sortOrder;
+  const applicantDocs = docTypes
+    .filter(d => appliesToApplicant(d) && d.purpose === 'Compliance')
+    .sort(sortByOrder);
+  const applicantTraining = docTypes
+    .filter(d => appliesToApplicant(d) && d.purpose === 'Training')
+    .sort(sortByOrder);
 
   const startEdit = (id: number, name: string, desc: string) => {
     setEditingId(id);
@@ -63,13 +83,55 @@ export default function RecruitmentStageSettings() {
               <div className="flex-1">
                 <div className="text-sm font-medium text-text-primary">{stage.stageName}</div>
                 {stage.description && <div className="text-xs text-text-secondary">{stage.description}</div>}
-                {/* AR3.3 — point operators at the single source of truth for the
-                    documents an applicant uploads at this stage (no doc list here). */}
+
+                {/* Documentation stage — the actual documents an applicant must
+                    upload, pulled live from Compliance Documents (Applies To
+                    includes Applicant). Source of truth, edited there. */}
                 {/document/i.test(stage.stageName) && (
-                  <div className="text-[11px] text-text-secondary mt-1">
-                    Required uploads here are configured in{' '}
-                    <Link to="/compliance/documents" className="text-brand-cyan hover:underline">Compliance Documents</Link>
-                    {' '}(where <span className="font-medium">Applies To</span> includes Applicant).
+                  <div className="mt-2">
+                    {applicantDocs.length > 0 ? (
+                      <ul className="space-y-0.5">
+                        {applicantDocs.map(d => (
+                          <li key={d.id} className="text-xs text-text-secondary flex items-center gap-1.5">
+                            <span className="w-1 h-1 rounded-full bg-text-muted shrink-0" />
+                            <span className="text-text-primary">{d.name}</span>
+                            {d.mandatory && <span className="text-[10px] text-brand-cyan font-medium">Required</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-[11px] text-text-muted">No applicant documents configured yet.</div>
+                    )}
+                    <div className="text-[11px] text-text-secondary mt-1.5">
+                      Configured in{' '}
+                      <Link to="/compliance/documents" className="text-brand-cyan hover:underline">Compliance Documents</Link>
+                      {' '}(where <span className="font-medium">Applies To</span> includes Applicant).
+                    </div>
+                  </div>
+                )}
+
+                {/* Training stage — training items required of an applicant
+                    (Compliance Documents with Purpose = Training). */}
+                {/training/i.test(stage.stageName) && (
+                  <div className="mt-2">
+                    {applicantTraining.length > 0 ? (
+                      <ul className="space-y-0.5">
+                        {applicantTraining.map(d => (
+                          <li key={d.id} className="text-xs text-text-secondary flex items-center gap-1.5">
+                            <span className="w-1 h-1 rounded-full bg-text-muted shrink-0" />
+                            <span className="text-text-primary">{d.name}</span>
+                            {d.mandatory && <span className="text-[10px] text-brand-cyan font-medium">Required</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-[11px] text-text-muted">No applicant training configured yet.</div>
+                    )}
+                    <div className="text-[11px] text-text-secondary mt-1.5">
+                      Configured in{' '}
+                      <Link to="/compliance/documents" className="text-brand-cyan hover:underline">Compliance Documents</Link>
+                      {' '}(where <span className="font-medium">Purpose</span> = Training).
+                    </div>
                   </div>
                 )}
               </div>

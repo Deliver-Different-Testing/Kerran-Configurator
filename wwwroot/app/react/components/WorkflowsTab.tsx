@@ -6,7 +6,7 @@ import { workflowApi, lookupApi, appConfigApi } from '../services/api';
 import { buildIdMaps } from '../data/taskEventTypeMap';
 import { TASK_TO_FEATURE_KEY } from '../data/featuresMeta';
 import { detailsToStagesMap, stagesMapToDetails, buildStatusIdMap, countStageTasks } from '../services/transformers';
-import type { ToastFn } from '../pages/DfDriveConfigShell';
+import type { ToastFn } from '../pages/DfDriveConfigPage';
 
 const JOB_STAGES: StageName[] = ['Enroute to Pickup', 'Pickup', 'Enroute to Delivery', 'Delivery'];
 

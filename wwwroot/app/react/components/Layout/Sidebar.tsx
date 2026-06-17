@@ -518,7 +518,12 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
         id: 'df-drive-config',
         label: 'DF Drive Config',
         icon: icons.fleet,
-        items: [{ id: '/df-drive-config', label: 'DF Drive Config', implemented: true }],
+        // Two real children (no '/df-drive-config' parent item — keeping the
+        // parent path out avoids the prefix-match double-highlight).
+        items: [
+          { id: '/df-drive-config/app-setup', label: 'App Setup', implemented: true },
+          { id: '/df-drive-config/automations', label: 'Automations', implemented: true },
+        ],
       });
       built = dfSections;
     } else {

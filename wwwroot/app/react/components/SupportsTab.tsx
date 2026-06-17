@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type { SupportType } from '../types/configurator';
 import { eventTypeApi } from '../services/api';
 import { SUPPORTS_META, SUPPORT_CATEGORIES } from '../data/supportsMeta';
-import type { ToastFn } from '../pages/DfDriveConfigShell';
+import type { ToastFn } from '../pages/DfDriveConfigPage';
 
 interface Props { showToast: ToastFn }
 

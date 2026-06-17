@@ -2,7 +2,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from './context/AuthContext';
 import { TenantConfigProvider } from './context/TenantConfigContext';
-import DfDriveConfigShell from './pages/DfDriveConfigShell';
+import { AppSetupRoute, AutomationsRoute } from './pages/DfDriveConfigPage';
 import RolePlaceholder from './pages/RolePlaceholder';
 import AppLayout from './components/Layout/AppLayout';
 import UpgradeModal from './components/common/UpgradeModal';
@@ -156,9 +156,13 @@ export default function App() {
     return (
       <TenantConfigProvider>
         <Routes>
-          <Route path="/df-drive-config" element={<DfDriveConfigShell />} />
           <Route element={<AppLayout onUpgrade={() => setUpgradeOpen(true)} selectedCourierId={selectedCourierId} />}>
             <Route index element={<NpDashboard onUpgrade={() => setUpgradeOpen(true)} />} />
+            {/* DF Drive Config (cleanup Item 4) — App Setup + Automations as real
+                routes inside the main layout; the nested second sidebar is gone. */}
+            <Route path="df-drive-config" element={<Navigate to="/df-drive-config/app-setup" replace />} />
+            <Route path="df-drive-config/app-setup" element={<AppSetupRoute />} />
+            <Route path="df-drive-config/automations" element={<AutomationsRoute />} />
             <Route path="fleet" element={<FleetOverview onSelectCourier={setSelectedCourierId} />} />
             <Route path="fleet/add" element={<AddCourier />} />
             <Route path="fleet/import" element={<CourierImport />} />

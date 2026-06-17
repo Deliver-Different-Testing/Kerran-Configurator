@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
 using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
+using DfrntDriveConfigurator.Core.Domain.Master;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -26,6 +27,7 @@ namespace DfrntDriveConfigurator.Core.Application.Services.Np;
 // longer short-circuits on a feature flag.
 public class NpApplicantService(
     IDbContextFactory<DynamicDespatchDbContext> contextFactory,
+    MasterContext masterContext,
     IHttpContextAccessor httpContextAccessor) : BaseService(contextFactory)
 {
     // The 7-stage React union. The legacy flags only pin down 5 of them —
@@ -168,6 +170,9 @@ public class NpApplicantService(
             MasterCourierId = a.MasterCourierId,
             CourierFleetId = dto.CourierFleetId,
             Active = true,
+            // Web-enable so the tenant-side MARSWS_stpIsValidLogin gate passes
+            // once we've provisioned the master-controller login below.
+            UccrWebEnabled = true,
             Created = now,
             CreatedBy = actor,
             LastModified = now,
@@ -204,7 +209,78 @@ public class NpApplicantService(
 
         await Context.SaveChangesAsync();
 
-        return await GetById(id, messageId);
+        // Provision the courier's sign-in so they can log in immediately after
+        // approval — the gap behind Steve's "No Courier Login account found".
+        // Reuses the password the applicant already set in the portal: its hash
+        // is the same marsapi scheme (CourierPasswordHasher) NpFleetService
+        // writes, so we copy the stored hash straight across (no plaintext, no
+        // re-hash). Best-effort — a master-DB hiccup / missing password leaves a
+        // warning, not a blocked approval (repairable via the courier's Mobile
+        // App Login). See [[courier-mobile-login-provisioning]].
+        var loginWarning = await ProvisionCourierLoginAsync(a, courier.UccrEmail ?? string.Empty);
+
+        var response = await GetById(id, messageId);
+        if (loginWarning is not null)
+            response.Messages.Add(new() { Message = loginWarning });
+        return response;
+    }
+
+    // Creates (or heals) the master-controller [User] login row (IsCourier = 1)
+    // for a freshly-approved courier, reusing the applicant's portal password
+    // hash. Returns null on success, or an operator-facing warning string when
+    // the login couldn't be provisioned (approval still succeeds).
+    private async Task<string?> ProvisionCourierLoginAsync(CourierApplicant a, string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Courier created, but the application had no email, so a mobile login wasn't set up.";
+
+        // Portal applicants always carry a hash; courierportal-era applicants
+        // (plaintext only) don't — they need a password set via Mobile App Login.
+        if (string.IsNullOrEmpty(a.PasswordHash) || string.IsNullOrEmpty(a.PasswordSalt))
+            return "Courier created, but no portal password was found, so a mobile login wasn't set up — set one via the courier's Mobile App Login.";
+
+        var currentTenantIdClaim = httpContextAccessor.HttpContext?.User.FindFirst("CurrentTenantID")?.Value;
+        int? currentTenantId = int.TryParse(currentTenantIdClaim, out var t) ? t : null;
+
+        try
+        {
+            var login = await masterContext.Users.FirstOrDefaultAsync(u => u.Email == email && u.IsCourier == true);
+            if (login is null)
+            {
+                // A login is keyed by email across the whole User table — don't
+                // collide with a non-courier login on the same address.
+                var nonCourierClash = await masterContext.Users.AsNoTracking()
+                    .AnyAsync(u => u.Email == email && (u.IsCourier == null || u.IsCourier == false));
+                if (nonCourierClash)
+                    return $"Courier created, but a non-courier login already exists for \"{email}\", so a courier login couldn't be created.";
+
+                masterContext.Users.Add(new User
+                {
+                    Email = email,
+                    Password = a.PasswordHash,   // already marsapi-scheme hashed at portal register
+                    Salt = a.PasswordSalt,
+                    CurrentTenantId = currentTenantId,
+                    IsCourier = true,
+                    IsLegacyHash = false,
+                });
+            }
+            else
+            {
+                // Heal an existing courier login with the applicant's credentials.
+                login.Password = a.PasswordHash;
+                login.Salt = a.PasswordSalt;
+                login.IsLegacyHash = false;
+                login.CurrentTenantId ??= currentTenantId;   // don't move an existing login to another tenant
+            }
+
+            await masterContext.SaveChangesAsync();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to provision master-controller login for approved applicant {ApplicantId} ({Email})", a.Id, email);
+            return "Courier created, but their mobile login couldn't be set up. Set it via the courier's Mobile App Login.";
+        }
     }
 
     // Auto-assigns a courier code: first-initial + surname, uppercased and

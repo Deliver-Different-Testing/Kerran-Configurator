@@ -20,12 +20,14 @@ export default function CourierPortalShell() {
   const { user } = useAuth();
 
   return (
-    // h-[100dvh] (dynamic viewport height) not h-screen/100vh: on mobile 100vh
-    // includes the area behind the address bar, which pushed the bottom nav off
-    // the visible viewport (couriers are phone-first → nav looked absent).
-    // h-screen stays as the fallback for browsers without dvh support.
-    <div className="w-full h-screen h-[100dvh] flex flex-col bg-[#fafbfc] overflow-hidden">
-      <header className={`${theme.headerClass} py-3 px-5 flex-shrink-0`}>
+    // min-h-[100dvh] + a FIXED bottom nav. The nav must be pinned to the viewport
+    // bottom rather than be the last child of a fixed-height flex column: on
+    // mobile that approach put the nav below the visible viewport (the 100vh /
+    // address-bar trap) so couriers — who are phone-first — saw no nav at all.
+    // Fixed positioning is immune to viewport-unit support, utility ordering, and
+    // any host-page height/offset quirks. main gets bottom padding to clear it.
+    <div className="w-full min-h-[100dvh] flex flex-col bg-[#fafbfc]">
+      <header className={`${theme.headerClass} py-3 px-5 sticky top-0 z-30`}>
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={theme.logoSrc} alt={theme.brandName} className="w-7 h-7 object-contain" />
@@ -38,13 +40,13 @@ export default function CourierPortalShell() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-5">
+      <main className="flex-1 p-5 pb-24">
         <div className="max-w-3xl mx-auto">
           <Outlet />
         </div>
       </main>
 
-      <nav className="flex-shrink-0 border-t border-border bg-white pb-[env(safe-area-inset-bottom)]">
+      <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-white shadow-[0_-1px_6px_rgba(0,0,0,0.04)] pb-[env(safe-area-inset-bottom)]">
         <div className="max-w-3xl mx-auto grid grid-cols-5">
           {NAV.map(item => (
             <NavLink

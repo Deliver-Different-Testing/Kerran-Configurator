@@ -59,6 +59,9 @@ export function useApplicant(id: number) {
   const [applicant, setApplicant] = useState<CourierApplicant | undefined>(undefined);
 
   const reload = useCallback(async () => {
+    // Guard against a bad route param (e.g. /recruitment/undefined → NaN) — don't
+    // fire a doomed /applicants/NaN request; render the not-found state cleanly.
+    if (!Number.isInteger(id) || id <= 0) { setApplicant(undefined); return; }
     setApplicant(await recruitmentService.getApplicantById(id));
   }, [id]);
 

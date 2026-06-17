@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
+import { TimeField } from '@/components/common/TimeField';
 import { MappedStopsDrilldown } from './MappedStopsDrilldown';
 import {
   linehaulService,
@@ -258,13 +259,11 @@ function LinehaulEditModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Start time</label>
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
+              <TimeField value={startTime} onChange={setStartTime} ariaLabel="Start time" />
             </div>
             <div>
               <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Despatch time</label>
-              <input type="time" value={despatchTime} onChange={(e) => setDespatchTime(e.target.value)}
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
+              <TimeField value={despatchTime} onChange={setDespatchTime} ariaLabel="Despatch time" />
             </div>
           </div>
           {despatchBeforeStart && <p className="text-[11px] text-amber-600">Despatch time must be at or after the start time.</p>}

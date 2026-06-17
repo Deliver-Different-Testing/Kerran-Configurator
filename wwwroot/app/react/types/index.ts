@@ -117,6 +117,10 @@ export interface Courier {
   documents: CourierDocumentLegacy[];
   /** Whether a mobile-app login exists. false = none (flagged in UI); null/undefined = unknown. */
   hasMobileLogin?: boolean | null;
+  /** Courier portal magic-link (Item 8.5): relative /drive/<slug>/<token> path (empty = none). */
+  portalLinkUrl?: string;
+  portalTokenIssuedAt?: string | null;
+  portalTokenLastUsedAt?: string | null;
 }
 
 /** Legacy shape used by mock data — will be removed when mock data is replaced by API */

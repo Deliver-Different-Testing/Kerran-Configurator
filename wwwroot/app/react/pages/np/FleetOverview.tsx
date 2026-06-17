@@ -6,6 +6,7 @@ import ComplianceBadge from '@/components/common/ComplianceBadge';
 import { complianceProfileService } from '@/services/np_complianceProfileService';
 import { driverApprovalService } from '@/services/np_driverApprovalService';
 import { fleetService } from '@/services/np_fleetService';
+import { courierService } from '@/services/np_courierService';
 import type { ComplianceProfile, Courier } from '@/types';
 
 interface Props {
@@ -41,6 +42,46 @@ function NoLoginBadge({ courier }: { courier: Courier }) {
     >
       No app login
     </span>
+  );
+}
+
+// Courier portal magic-link (Item 8.5). Compact per-row cell: Generate when no
+// link, else Copy (absolute URL) + Regenerate (invalidates the old link) +
+// Revoke. Self-manages the link state from the service response so the row
+// updates without a full list reload. Stops row-click propagation.
+function PortalLinkCell({ courier, onToast }: { courier: Courier; onToast: (m: string) => void }) {
+  const [url, setUrl] = useState(courier.portalLinkUrl ?? '');
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const abs = url ? `${window.location.origin}${url}` : '';
+
+  const generate = async () => {
+    setBusy(true);
+    try {
+      const c = await courierService.generatePortalLink(courier.id);
+      setUrl(c.portalLinkUrl ?? '');
+      onToast(url ? 'Portal link regenerated — the old link no longer works.' : 'Portal link generated.');
+    } catch (e: any) { onToast(e?.response?.data?.messages?.[0]?.message ?? e?.message ?? 'Could not update the portal link.'); }
+    finally { setBusy(false); }
+  };
+  const revoke = async () => {
+    setBusy(true);
+    try { await courierService.revokePortalLink(courier.id); setUrl(''); onToast('Portal link revoked.'); }
+    catch (e: any) { onToast(e?.response?.data?.messages?.[0]?.message ?? e?.message ?? 'Could not revoke the portal link.'); }
+    finally { setBusy(false); }
+  };
+  const copy = () => { navigator.clipboard?.writeText(abs); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+
+  const btn = 'px-2 py-1 rounded-md text-[11px] border border-border whitespace-nowrap hover:border-brand-cyan hover:text-brand-cyan disabled:opacity-50';
+  if (!url) {
+    return <button disabled={busy} onClick={generate} className={btn}>{busy ? '…' : 'Generate'}</button>;
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={copy} title={abs} className={btn}>{copied ? '✅ Copied' : '🔗 Copy'}</button>
+      <button onClick={generate} disabled={busy} title="Regenerate — invalidates the current link" className={btn}>↻</button>
+      <button onClick={revoke} disabled={busy} title="Revoke the link" className={`${btn} hover:!border-red-400 hover:!text-red-500`}>✕</button>
+    </div>
   );
 }
 
@@ -256,6 +297,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Compliance</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Qualifications</th>
               <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Role Approval</th>
+              <th className="text-left text-xs font-semibold text-text-primary uppercase tracking-wide px-3 py-2.5 border-b border-border">Portal Link</th>
             </tr>
           </thead>
           <tbody>
@@ -284,6 +326,9 @@ export default function FleetOverview({ onSelectCourier }: Props) {
                   <td className="px-3 py-2.5 text-sm border-b border-border" onClick={e => e.stopPropagation()}>
                     {renderApprovalCell(m.id)}
                   </td>
+                  <td className="px-3 py-2.5 text-sm border-b border-border" onClick={e => e.stopPropagation()}>
+                    <PortalLinkCell courier={m} onToast={setToast} />
+                  </td>
                 </tr>,
                 ...subs.map(s => {
                   const sDepot = getDepotForCourier(s.location);
@@ -304,6 +349,9 @@ export default function FleetOverview({ onSelectCourier }: Props) {
                       <td className="px-3 py-2.5 text-sm border-b border-border" onClick={e => e.stopPropagation()}>
                         {renderApprovalCell(s.id)}
                       </td>
+                      <td className="px-3 py-2.5 text-sm border-b border-border" onClick={e => e.stopPropagation()}>
+                        <PortalLinkCell courier={s} onToast={setToast} />
+                      </td>
                     </tr>
                   );
                 }),
@@ -311,7 +359,7 @@ export default function FleetOverview({ onSelectCourier }: Props) {
             })}
             {masters.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-12 text-center text-text-secondary">
+                <td colSpan={12} className="px-4 py-12 text-center text-text-secondary">
                   No drivers match the current filters
                 </td>
               </tr>

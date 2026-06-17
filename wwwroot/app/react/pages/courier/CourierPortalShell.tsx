@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useCourierPortalSession } from '@/context/CourierPortalSessionContext';
 import { useCourierPortalTheme } from '@/hooks/useCourierPortalTheme';
 
 // Courier Portal — themed shell (top brand header + bottom nav) for
@@ -18,6 +19,9 @@ const NAV: { to: string; label: string; icon: string }[] = [
 export default function CourierPortalShell() {
   const theme = useCourierPortalTheme();
   const { user } = useAuth();
+  const { courier } = useCourierPortalSession();
+  // Magic-link couriers have no Hub user — show the portal-session name instead.
+  const displayName = courier ? `${courier.firstName} ${courier.surName}`.trim() : user.fullName;
 
   return (
     // min-h-[100dvh] + a FIXED bottom nav. The nav must be pinned to the viewport
@@ -36,7 +40,7 @@ export default function CourierPortalShell() {
               <div className="text-[10px] text-white/60 uppercase tracking-wider">Courier Portal</div>
             </div>
           </div>
-          {user.fullName && <div className="text-xs text-white/80">{user.fullName}</div>}
+          {displayName && <div className="text-xs text-white/80">{displayName}</div>}
         </div>
       </header>
 

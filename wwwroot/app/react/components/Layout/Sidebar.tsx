@@ -183,7 +183,6 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
       items: [
         { id: '/fleet', label: 'Courier List', implemented: true },
         { id: '/fleet/add', label: 'Add Courier', implemented: true },
-        { id: '/fleet/links', label: 'Portal Links', implemented: true },
         { id: '/fleet-management', label: 'Vehicle Fleet', implemented: true },
       ],
     });
@@ -291,7 +290,6 @@ function buildNpSections(): NavSection[] {
       items: [
         { id: '/fleet', label: 'Driver List', implemented: true },
         { id: '/fleet/add', label: 'Add Driver', implemented: true },
-        { id: '/fleet/links', label: 'Portal Links', implemented: true },
         { id: '/fleet-management', label: 'Vehicle Fleet', implemented: true },
       ],
     },
@@ -375,7 +373,6 @@ const idSections: NavSection[] = [
     items: [
       { id: '/fleet', label: 'Fleet Overview', implemented: true },
       { id: '/fleet/add', label: 'Add Driver', implemented: true },
-      { id: '/fleet/links', label: 'Portal Links', implemented: true },
     ],
   },
   {

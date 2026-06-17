@@ -2,11 +2,11 @@ import { useCourierPortalTheme } from '@/hooks/useCourierPortalTheme';
 
 // Courier Portal (Phase 1) — themed login screen for anonymous visitors.
 //
-// Phase 1 reuses the existing auth compatibility: couriers authenticate through
-// the Hub shared-cookie SSO. Hitting any [Authorize] route ('/') triggers the
-// Hub login redirect; an IsCourier user then lands back in the courier shell.
-// Native credential / SMS 2FA login is Phase 2 (ISmsSender behind a flag).
-export default function CourierLogin() {
+// Two ways in: the Hub shared-cookie SSO (existing), or a magic link
+// (/drive/<slug>/<token>, Item 8.5) redeemed by CourierPortalSessionContext.
+// This screen is the unauthed view — it shows the Hub sign-in button and, when
+// a magic link failed to redeem, the reason.
+export default function CourierLogin({ error }: { error?: string | null } = {}) {
   const theme = useCourierPortalTheme();
 
   return (
@@ -24,6 +24,11 @@ export default function CourierLogin() {
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-md mx-auto">
           <div className="rounded-lg bg-white border border-border shadow-sm p-8 text-center">
+            {error && (
+              <div className="mb-5 rounded-lg bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 text-sm text-left">
+                ⚠️ {error}
+              </div>
+            )}
             <h1 className="text-xl font-bold text-text-primary mb-2">Welcome back</h1>
             <p className="text-sm text-text-muted mb-6">
               Sign in to view your runs, schedule and documents.

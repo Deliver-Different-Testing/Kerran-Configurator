@@ -298,11 +298,19 @@ builder.Services.AddAuthorization(options =>
         }));
 
     // Phase 2 courier portal — gates the /api/v1/courier/* self-service surface
-    // to logged-in couriers (IsCourier claim from the Hub cookie). The current
-    // courier's TucCourier row is then resolved by ICourierScopeResolver.
+    // to logged-in couriers (IsCourier claim). Dual-auth (Item 8.5): the policy
+    // accepts BOTH the Hub shared cookie ("Identity.Application", Hub-SSO
+    // couriers) AND the magic-link session scheme ("PortalCourier", passwordless
+    // couriers) — PortalCourierAuthenticationHandler stamps the same IsCourier
+    // claim, so the assertion is unchanged. The current courier's TucCourier row
+    // is resolved by ICourierScopeResolver (which honours either path).
     options.AddPolicy("CourierOnly", policy =>
+    {
+        policy.AddAuthenticationSchemes("Identity.Application",
+            DfrntDriveConfigurator.API.Authentication.PortalCourierAuthenticationHandler.SchemeName);
         policy.RequireAssertion(context =>
-            string.Equals(context.User.FindFirst("IsCourier")?.Value, "True", StringComparison.OrdinalIgnoreCase)));
+            string.Equals(context.User.FindFirst("IsCourier")?.Value, "True", StringComparison.OrdinalIgnoreCase));
+    });
 
     // Phase 5+31 R3 retired the 9 hardcoded Np* policies that were
     // registered here (NpManageUsers / NpEditSettings / NpViewFinancials /
@@ -416,6 +424,10 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Port
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalApplicantService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalApplicantDocumentService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.API.Filters.PortalRequestFilter>();
+// Item 8.5 — courier magic-link: session-token service + the /drive redemption
+// service. The auth handler (PortalCourier scheme) resolves the token service.
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalCourierSessionTokenService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalCourierService>();
 
 // Phase 2 courier portal — courier self-service (cookie-authed, CourierOnly).
 builder.Services.AddScoped<
@@ -531,7 +543,13 @@ builder.Services.AddAuthentication("Identity.Application")
         };
         options.Cookie.HttpOnly = true;
         options.Cookie.Domain = domain;
-    });
+    })
+    // Item 8.5 — passwordless courier magic-link session scheme. Reads the
+    // X-Portal-Token header; only the "CourierOnly" policy opts into it (above),
+    // so it never affects cookie-authenticated surfaces.
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,
+        DfrntDriveConfigurator.API.Authentication.PortalCourierAuthenticationHandler>(
+        DfrntDriveConfigurator.API.Authentication.PortalCourierAuthenticationHandler.SchemeName, _ => { });
 
 builder.Services.AddSession(options =>
 {

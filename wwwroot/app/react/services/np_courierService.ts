@@ -101,6 +101,12 @@ interface NpFleetCourierApi {
   // null = couldn't be determined (master DB unreachable) — UI treats only an
   // explicit false as "no login".
   hasMobileLogin: boolean | null;
+
+  // Courier portal magic-link (Item 8.5). Relative /drive/<slug>/<token> path
+  // (empty when no link issued); the UI prepends the portal origin.
+  portalLinkUrl: string;
+  portalTokenIssuedAt: string | null;
+  portalTokenLastUsedAt: string | null;
 }
 
 // Trim ISO datetime down to YYYY-MM-DD for <input type="date"> binding;
@@ -229,6 +235,9 @@ function toCourier(dto: NpFleetCourierApi): Courier {
     modified: dateOnly(dto.modified),
     modifiedBy: dto.modifiedBy,
     hasMobileLogin: dto.hasMobileLogin,
+    portalLinkUrl: dto.portalLinkUrl ?? '',
+    portalTokenIssuedAt: dto.portalTokenIssuedAt ?? null,
+    portalTokenLastUsedAt: dto.portalTokenLastUsedAt ?? null,
 
     location: '',
     compliance: 'ok',
@@ -446,16 +455,19 @@ export const courierService = {
     /* no-op stub */
   },
 
-  async getPortalLinks(): Promise<{ courierId: number; code: string; name: string; url: string }[]> {
-    const all = await fetchAll();
-    return all
-      .filter(c => c.status === 'active')
-      .map(c => ({
-        courierId: c.id,
-        code: c.code,
-        name: `${c.firstName} ${c.surName}`,
-        url: `https://portal.dfrnt.com/drive/${c.code.toLowerCase()}`,
-      }));
+  // Courier portal magic-link (Item 8.5). Generate (or regenerate — a fresh
+  // token invalidates the previous link) and revoke. Both return the updated
+  // courier with portalLinkUrl reflecting the new state.
+  async generatePortalLink(id: number): Promise<Courier> {
+    const { data } = await api.post<NpFleetCourierApi>(`/fleet/${id}/portal-token`);
+    if (!data) throw new Error('Server returned no courier');
+    return toCourier(data);
+  },
+
+  async revokePortalLink(id: number): Promise<Courier> {
+    const { data } = await api.delete<NpFleetCourierApi>(`/fleet/${id}/portal-token`);
+    if (!data) throw new Error('Server returned no courier');
+    return toCourier(data);
   },
 
   async getComplianceSummary(): Promise<Courier[]> {

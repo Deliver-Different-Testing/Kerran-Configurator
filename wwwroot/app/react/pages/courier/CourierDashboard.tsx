@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useCourierPortalSession } from '@/context/CourierPortalSessionContext';
 
 // Courier Portal (Phase 1) — dashboard stub. Renders inside CourierPortalShell.
 // Real data (today's runs, schedule, earnings, documents) lands in Phase 3+;
@@ -15,7 +16,9 @@ const TILES: { label: string; value: string; hint: string }[] = [
 
 export default function CourierDashboard() {
   const { user } = useAuth();
-  const firstName = user.fullName?.split(' ')[0] ?? 'there';
+  const { courier } = useCourierPortalSession();
+  // Magic-link couriers have no Hub user — greet them by the portal-session name.
+  const firstName = courier?.firstName || user.fullName?.split(' ')[0] || 'there';
 
   return (
     <div className="space-y-4">

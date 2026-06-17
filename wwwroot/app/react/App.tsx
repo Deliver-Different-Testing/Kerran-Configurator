@@ -14,7 +14,6 @@ import NpDashboard from './pages/np/Dashboard';
 import FleetOverview from './pages/np/FleetOverview';
 import AddCourier from './pages/np/AddCourier';
 import CourierImport from './pages/np/CourierImport';
-import CourierPortalLinks from './pages/np/CourierPortalLinks';
 import CourierSetup from './pages/np/CourierSetup';
 import Users from './pages/np/Users';
 import UserImport from './pages/np/UserImport';
@@ -65,14 +64,7 @@ import ApplicantShell from './pages/applicant/ApplicantShell';
 import ApplicantEntry from './pages/applicant/ApplicantEntry';
 import ApplicantVerify from './pages/applicant/ApplicantVerify';
 import ApplicantWizard from './pages/applicant/ApplicantWizard';
-import CourierPortalShell, { CourierComingSoon } from './pages/courier/CourierPortalShell';
-import CourierLogin from './pages/courier/CourierLogin';
-import CourierDashboard from './pages/courier/CourierDashboard';
-import CourierSettings from './pages/courier/CourierSettings';
-import CourierSchedule from './pages/courier/CourierSchedule';
-import CourierRuns from './pages/courier/CourierRuns';
-import CourierRunDetail from './pages/courier/CourierRunDetail';
-import CourierContractors from './pages/courier/CourierContractors';
+import CourierPortalRouter from './pages/courier/CourierPortalRouter';
 
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder).
 import RateScheduleReport from './pages/reporting/RateSchedule';
@@ -123,29 +115,10 @@ export default function App() {
   // the shell + dashboard. Gated on the derived role (not the raw isCourier flag)
   // so role precedence + the internal `?devRole=courier` preview override both work.
   if (location.pathname.startsWith('/drive/')) {
-    if (role !== 'courier') {
-      return (
-        <Routes>
-          <Route path="/drive/:tenantSlug/*" element={<CourierLogin />} />
-        </Routes>
-      );
-    }
-    return (
-      <Routes>
-        <Route path="/drive/:tenantSlug/login" element={<Navigate to=".." replace />} />
-        <Route path="/drive/:tenantSlug" element={<CourierPortalShell />}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<CourierDashboard />} />
-          <Route path="runs" element={<CourierRuns />} />
-          <Route path="runs/detail" element={<CourierRunDetail />} />
-          <Route path="schedule" element={<CourierSchedule />} />
-          <Route path="documents" element={<CourierComingSoon title="Documents" />} />
-          <Route path="contractors" element={<CourierContractors />} />
-          <Route path="profile" element={<CourierSettings />} />
-          <Route path="*" element={<Navigate to="dashboard" replace />} />
-        </Route>
-      </Routes>
-    );
+    // Item 8.5 — the router wraps the subtree in the magic-link session provider
+    // so both Hub-SSO couriers (role==='courier') and passwordless magic-link
+    // couriers resolve to the same shell. Login/shell gating lives inside.
+    return <CourierPortalRouter hubAuthed={role === 'courier'} />;
   }
 
   if (role === 'dfadmin') {
@@ -165,7 +138,6 @@ export default function App() {
             <Route path="fleet" element={<FleetOverview onSelectCourier={setSelectedCourierId} />} />
             <Route path="fleet/add" element={<AddCourier />} />
             <Route path="fleet/import" element={<CourierImport />} />
-            <Route path="fleet/links" element={<CourierPortalLinks />} />
             <Route path="courier/:id" element={<CourierSetup onSelectCourier={setSelectedCourierId} />} />
             <Route path="users" element={<Users />} />
             <Route path="users/import" element={<UserImport />} />
@@ -230,7 +202,6 @@ export default function App() {
             <Route path="fleet" element={<FleetOverview onSelectCourier={setSelectedCourierId} />} />
             <Route path="fleet/add" element={<AddCourier />} />
             <Route path="fleet/import" element={<CourierImport />} />
-            <Route path="fleet/links" element={<CourierPortalLinks />} />
             <Route path="courier/:id" element={<CourierSetup onSelectCourier={setSelectedCourierId} />} />
             <Route path="users" element={<Users />} />
             <Route path="users/import" element={<UserImport />} />

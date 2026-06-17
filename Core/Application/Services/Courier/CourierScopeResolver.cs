@@ -2,6 +2,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using DfrntDriveConfigurator.API.Authentication;
 using DfrntDriveConfigurator.Core.Domain;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -38,6 +39,27 @@ public class CourierScopeResolver(
 
         if (http.Items.TryGetValue(ItemsKey, out var cached))
             return cached as CourierScope;
+
+        // Magic-link (Item 8.5): PortalCourierAuthenticationHandler stamped the
+        // resolved courier id, so resolve directly by UccrId (no email needed).
+        // The DB row still gives MasterCourierId/CourierTypeId/Email, and Active
+        // is enforced so a deactivated courier's session stops working.
+        if (http.Items.TryGetValue(PortalCourierAuthenticationHandler.CourierIdItemsKey, out var cidObj)
+            && cidObj is int courierId)
+        {
+            await using var pctx = await contextFactory.CreateDbContextAsync(ct);
+            var pm = await pctx.TucCouriers
+                .Where(c => c.Active && c.UccrId == courierId)
+                .Select(c => new { c.UccrId, c.MasterCourierId, c.CourierTypeId, c.UccrEmail })
+                .FirstOrDefaultAsync(ct);
+            CourierScope? pscope = pm == null
+                ? null
+                : new CourierScope(pm.UccrId, pm.MasterCourierId, pm.CourierTypeId, pm.UccrEmail ?? string.Empty);
+            if (pscope == null)
+                Log.Warning("CourierScopeResolver: portal courier id {CourierId} has no active TucCourier.", courierId);
+            http.Items[ItemsKey] = pscope;
+            return pscope;
+        }
 
         var email = http.User.FindFirst(ClaimTypes.Name)?.Value;
         if (string.IsNullOrWhiteSpace(email))

@@ -1,10 +1,11 @@
 import axios from 'axios';
+import { courierPortalSession } from './courier_portalSession';
 
 // Phase 2 — axios for the courier self-service surface (/api/v1/courier/*).
-// Couriers are authenticated by the Hub shared cookie (withCredentials), same
-// as the NP/Tenant lanes — NOT the applicant signed-token. X-Requested-With
-// satisfies the CSRF middleware; a 401 means the Hub session lapsed, so bounce
-// to Hub sign-out (mirrors np_api).
+// Dual-auth (Item 8.5): the SAME endpoints accept either the Hub shared cookie
+// (withCredentials, SSO couriers) OR a passwordless magic-link session token
+// carried as X-Portal-Token (PortalCourierAuthenticationHandler). We attach the
+// portal token when one is stored; otherwise the cookie carries the request.
 const courierApi = axios.create({
   baseURL: '/api/v1/courier',
   withCredentials: true,
@@ -14,10 +15,25 @@ const courierApi = axios.create({
   },
 });
 
+courierApi.interceptors.request.use(cfg => {
+  const t = courierPortalSession.getToken();
+  if (t) cfg.headers.set('X-Portal-Token', t);
+  return cfg;
+});
+
 courierApi.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) window.location.href = '/Account/Logout';
+    if (err.response?.status === 401) {
+      // Magic-link couriers have no Hub cookie — clear the lapsed session and
+      // send them back to the portal login rather than to Hub sign-out.
+      if (courierPortalSession.getToken()) {
+        courierPortalSession.clear();
+        window.location.reload();
+      } else {
+        window.location.href = '/Account/Logout';
+      }
+    }
     return Promise.reject(err);
   },
 );

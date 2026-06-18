@@ -7,6 +7,7 @@ import { complianceProfileService } from '@/services/np_complianceProfileService
 import { driverApprovalService } from '@/services/np_driverApprovalService';
 import { fleetService } from '@/services/np_fleetService';
 import { courierService } from '@/services/np_courierService';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { ComplianceProfile, Courier } from '@/types';
 
 interface Props {
@@ -70,7 +71,11 @@ function PortalLinkCell({ courier, onToast }: { courier: Courier; onToast: (m: s
     catch (e: any) { onToast(e?.response?.data?.messages?.[0]?.message ?? e?.message ?? 'Could not revoke the portal link.'); }
     finally { setBusy(false); }
   };
-  const copy = () => { navigator.clipboard?.writeText(abs); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const copy = async () => {
+    const ok = await copyToClipboard(abs);
+    if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    // On failure copyToClipboard() has already shown a prompt with the link.
+  };
 
   const btn = 'px-2 py-1 rounded-md text-[11px] border border-border whitespace-nowrap hover:border-brand-cyan hover:text-brand-cyan disabled:opacity-50';
   if (!url) {

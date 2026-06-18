@@ -258,7 +258,10 @@ export default function RecruitmentAdvertising() {
   // rides on the shared link + QR for source tracking; the portal doesn't filter
   // on it yet, so it's additive/forward-looking. "All Roles" → no param.
   const roleSlug = selectedProfile ? slugify(selectedProfile.name) : '';
-  const portalUrl = `https://${domain}/apply/${tenantSlug}${roleSlug ? `?role=${roleSlug}` : ''}`;
+  // Use the current page's protocol so the link is actually reachable — the
+  // admin app is HTTP locally / HTTPS in prod, and the portal sits on the same
+  // scheme. (Hardcoding https:// made local "Open" hit a dead HTTPS listener.)
+  const portalUrl = `${window.location.protocol}//${domain}/apply/${tenantSlug}${roleSlug ? `?role=${roleSlug}` : ''}`;
 
   const baseTemplate = country === 'NZ' ? NZ_TEMPLATE : US_TEMPLATE;
   const activeTemplate = customTemplate || baseTemplate;
@@ -407,7 +410,7 @@ export default function RecruitmentAdvertising() {
             <div className="flex items-center gap-3 bg-surface-light rounded-lg p-4 border border-border">
               <code className="flex-1 text-sm font-mono text-brand-dark break-all">{portalUrl}</code>
               <a
-                href={`https://${portalUrl.replace(/^https?:\/\//, '')}`}
+                href={portalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-border text-text-primary hover:border-brand-cyan hover:text-brand-cyan transition-all whitespace-nowrap"
@@ -511,7 +514,7 @@ export default function RecruitmentAdvertising() {
               <div className="flex items-center justify-between mb-1">
                 <h3 className="font-bold">Portal Preview</h3>
                 <a
-                  href={`https://${portalUrl.replace(/^https?:\/\//, '')}`}
+                  href={portalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-brand-dark text-white hover:bg-brand-dark/90 transition-all"

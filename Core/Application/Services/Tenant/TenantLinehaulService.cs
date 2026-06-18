@@ -147,6 +147,42 @@ public class TenantLinehaulService(
         return TenantLinehaulMutationResult.Ok((await EnrichAsync([copy])).Single());
     }
 
+    // Schedules binding a run (Fixes §7 — the "Used by Schedules" drill-down).
+    // Weekday-variant binding rows (schedules are one-row-per-weekday) group into
+    // one logical schedule; rows with no BulkRunScheduleId group on their name.
+    public async Task<List<LinehaulScheduleBindingDto>> GetScheduleBindingsAsync(int runId)
+    {
+        var rows = await Context.TblBulkScheduleLinehauls.AsNoTracking()
+            .Where(s => s.LinehaulRunId == runId && s.Active == true)
+            .Select(s => new
+            {
+                s.BulkRunScheduleId,
+                BindingName = s.Name,
+                ScheduleName = s.BulkRunSchedule != null ? s.BulkRunSchedule.Name : null,
+                s.WeekDay,
+            })
+            .ToListAsync();
+
+        return rows
+            .GroupBy(r => r.BulkRunScheduleId.HasValue ? $"id:{r.BulkRunScheduleId}" : $"name:{r.BindingName}")
+            .Select(g =>
+            {
+                var first = g.First();
+                var days = g.Select(x => x.WeekDay).Where(w => !string.IsNullOrWhiteSpace(w)).Distinct().ToList();
+                return new LinehaulScheduleBindingDto
+                {
+                    ScheduleId = first.BulkRunScheduleId,
+                    Name = !string.IsNullOrWhiteSpace(first.ScheduleName) ? first.ScheduleName!
+                         : !string.IsNullOrWhiteSpace(first.BindingName) ? first.BindingName!
+                         : "(unnamed schedule)",
+                    Active = true,
+                    WeekDay = days.Count > 0 ? string.Join(", ", days) : null,
+                };
+            })
+            .OrderBy(d => d.Name)
+            .ToList();
+    }
+
     // ── Roster (spec §4 + Fixes §6) — Run × Day target grid ────────────────
 
     public async Task<LinehaulRosterGridDto> GetRosterGridAsync()

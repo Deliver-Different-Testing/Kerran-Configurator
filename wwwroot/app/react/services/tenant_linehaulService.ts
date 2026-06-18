@@ -54,6 +54,15 @@ export interface LinehaulLookups {
   couriers: LinehaulCourierLookup[];
 }
 
+// Fixes §7 — one schedule binding a run (for the "Used by Schedules" drill-down).
+// scheduleId = BulkRunScheduleId for the Open↗ deep-link (null = unlinked binding).
+export interface LinehaulScheduleBinding {
+  scheduleId: number | null;
+  name: string;
+  active: boolean;
+  weekDay: string | null;
+}
+
 // Surfaces the API's `{ message }` body (validation 400 / blocked-delete 409)
 // so the UI can show the server's reason instead of a generic failure.
 export function extractLinehaulError(e: unknown, fallback: string): string {
@@ -126,6 +135,10 @@ export const linehaulService = {
   },
   async copy(id: number): Promise<TenantLinehaulRun> {
     const { data } = await api.post<TenantLinehaulRun>(`/linehaul-runs/${id}/copy`, {});
+    return data;
+  },
+  async schedulesForRun(id: number): Promise<LinehaulScheduleBinding[]> {
+    const { data } = await api.get<LinehaulScheduleBinding[]>(`/linehaul-runs/${id}/schedules`);
     return data;
   },
 

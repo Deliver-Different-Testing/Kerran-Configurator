@@ -51,6 +51,18 @@ public class TenantDepotLookupDto
     public string Name { get; set; } = string.Empty;
 }
 
+// One schedule that binds a linehaul run (Recurring Routes Fixes §7 — the
+// "Used by Schedules" drill-down). Weekday-variant binding rows are grouped
+// into one logical schedule. ScheduleId = BulkRunScheduleId for the Open↗
+// deep-link into DespatchWeb's Recurring Jobs editor (null = unlinked binding).
+public class LinehaulScheduleBindingDto
+{
+    public int? ScheduleId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool Active { get; set; }
+    public string? WeekDay { get; set; }
+}
+
 // TenantCourierLookupDto is reused from TenantRouteDtos.cs (same {Id,Name,Code} shape).
 
 public class TenantLinehaulLookupsDto

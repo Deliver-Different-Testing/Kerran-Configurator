@@ -6,12 +6,14 @@ import { AssignTargetPicker, AssignTargetValue } from '@/components/common/Assig
 import { TimeField } from '@/components/common/TimeField';
 import { MappedStopsDrilldown } from './MappedStopsDrilldown';
 import { routeService, AssignableTargets } from '@/services/tenant_routeService';
+import { useAuth } from '@/context/AuthContext';
 import {
   linehaulService,
   extractLinehaulError,
   TenantLinehaulRun,
   TenantLinehaulRunUpsert,
   LinehaulLookups,
+  LinehaulScheduleBinding,
 } from '@/services/tenant_linehaulService';
 
 // ─── Linehaul tab (Recurring Routes spec §3) ──────────────────────────────
@@ -25,6 +27,7 @@ export function LinehaulTab() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TenantLinehaulRun | 'new' | null>(null);
   const [drillRun, setDrillRun] = useState<TenantLinehaulRun | null>(null);
+  const [schedRun, setSchedRun] = useState<TenantLinehaulRun | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -133,9 +136,18 @@ export function LinehaulTab() {
                       </div>
                     ) : <span className="text-text-secondary">— Unbound —</span>}
                   </td>
-                  <td className="px-4 py-3.5 text-text-secondary">
-                    <span className="text-[#0d0c2c] font-display font-semibold">{r.usedBySchedulesCount}</span>
-                    <span className="text-[11px] ml-1">schedule{r.usedBySchedulesCount === 1 ? '' : 's'}</span>
+                  {/* Used by Schedules — click opens the schedule-binding list (Fix 7).
+                      stopPropagation so it doesn't also open the edit panel. */}
+                  <td className="px-4 py-3.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSchedRun(r); }}
+                      disabled={r.usedBySchedulesCount === 0}
+                      className="text-text-secondary enabled:hover:text-brand-cyan disabled:cursor-default"
+                      title={r.usedBySchedulesCount === 0 ? 'Not bound to any schedule' : 'View schedules using this run'}
+                    >
+                      <span className="text-[#0d0c2c] font-display font-semibold">{r.usedBySchedulesCount}</span>
+                      <span className="text-[11px] ml-1">schedule{r.usedBySchedulesCount === 1 ? '' : 's'}</span>
+                    </button>
                   </td>
                   {/* Mapped Stops — click drills into the per-job list + Speed modal (§5).
                       stopPropagation (Fix 3) so the drill-down doesn't also open the edit panel. */}
@@ -178,6 +190,77 @@ export function LinehaulTab() {
           onClose={() => setDrillRun(null)}
         />
       )}
+
+      {schedRun && (
+        <LinehaulSchedulesDrilldown run={schedRun} onClose={() => setSchedRun(null)} />
+      )}
+    </div>
+  );
+}
+
+// ─── "Used by Schedules" drill-down (Fix 7) ────────────────────────────────
+// Reusable list of the schedules binding a run + an Open↗ deep-link into
+// DespatchWeb's Recurring Jobs (schedule) editor. Rendered both in the
+// cell-click side panel and inside the run's edit modal (AR-Fix7.2).
+function LinehaulSchedulesList({ runId }: { runId: number }) {
+  const { user } = useAuth();
+  const [rows, setRows] = useState<LinehaulScheduleBinding[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const scheduleEditorUrl = user.despatchWebBaseUrl ? `${user.despatchWebBaseUrl}/#!/recurringJobs` : null;
+
+  useEffect(() => {
+    let alive = true;
+    linehaulService.schedulesForRun(runId)
+      .then((r) => { if (alive) setRows(r); })
+      .catch((e: unknown) => { if (alive) setError(extractLinehaulError(e, 'Failed to load schedules')); });
+    return () => { alive = false; };
+  }, [runId]);
+
+  if (error) return <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>;
+  if (rows === null) return <div className="py-6 text-center text-sm text-text-secondary">Loading…</div>;
+  if (rows.length === 0) return <div className="py-6 text-center text-sm text-text-secondary">Not bound to any schedule.</div>;
+
+  return (
+    <ul className="divide-y divide-border">
+      {rows.map((s, i) => (
+        <li key={`${s.scheduleId ?? 'x'}-${i}`} className="flex items-center justify-between gap-3 py-2.5">
+          <div className="min-w-0">
+            <div className="text-sm text-[#0d0c2c] truncate">{s.name}</div>
+            {s.weekDay && <div className="text-[11px] text-text-secondary">{s.weekDay}</div>}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${s.active ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-700'}`}>
+              {s.active ? 'Active' : 'Inactive'}
+            </span>
+            {scheduleEditorUrl && (
+              <a href={scheduleEditorUrl} target="_blank" rel="noopener noreferrer"
+                className="text-[12px] text-brand-cyan hover:underline whitespace-nowrap" title="Open in DespatchWeb">
+                Open ↗
+              </a>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function LinehaulSchedulesDrilldown({ run, onClose }: { run: TenantLinehaulRun; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-white h-full shadow-xl flex flex-col">
+        <div className="px-6 py-4 border-b border-border flex items-start justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-[#0d0c2c]">Schedules using this run</h2>
+            <p className="text-[12px] text-text-secondary mt-0.5">{run.runName}</p>
+          </div>
+          <button onClick={onClose} className="text-text-secondary hover:text-[#0d0c2c] text-2xl leading-none w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">×</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-3">
+          <LinehaulSchedulesList runId={run.id} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -318,11 +401,11 @@ function LinehaulEditModal({
           {run && (
             <div>
               <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Used by schedules</label>
-              <p className="text-sm text-[#0d0c2c]">
-                {run.usedBySchedulesCount === 0
-                  ? <span className="text-text-secondary">Not bound to any schedule.</span>
-                  : `${run.usedBySchedulesCount} active schedule binding${run.usedBySchedulesCount === 1 ? '' : 's'} (managed in the Schedule editor).`}
-              </p>
+              {/* Fix 7 — the same schedule-binding list as the cell drill-down. */}
+              <div className="border border-border rounded-lg px-3">
+                <LinehaulSchedulesList runId={run.id} />
+              </div>
+              <p className="text-[11px] text-text-secondary mt-1">Bindings are managed in the Schedule editor (DespatchWeb).</p>
             </div>
           )}
         </div>

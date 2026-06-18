@@ -104,6 +104,21 @@ public class TenantLinehaulRunsController(TenantLinehaulService service) : BaseC
         }
     }
 
+    // Schedules binding this run (Fixes §7 — "Used by Schedules" drill-down).
+    [HttpGet("{id:int}/schedules")]
+    public async Task<IActionResult> GetSchedules(int id)
+    {
+        try
+        {
+            return Ok(await service.GetScheduleBindingsAsync(id));
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to load schedules for linehaul run {Id}", id);
+            throw;
+        }
+    }
+
     [HttpPost("{id:int}/copy")]
     public async Task<IActionResult> Copy(int id)
     {

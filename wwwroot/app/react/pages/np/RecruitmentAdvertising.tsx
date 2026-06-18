@@ -1,6 +1,12 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { complianceProfileService } from '@/services/np_complianceProfileService';
+import { recruitmentService } from '@/services/np_recruitmentService';
 import type { ComplianceProfile } from '@/types';
+
+// Compliance-profile name → URL-safe role slug (e.g. "Courier Driver" →
+// "courier-driver") for the per-role apply link / QR / source tracking.
+const slugify = (s: string) =>
+  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -181,21 +187,33 @@ function buildUTM(baseUrl: string, platform: string): string {
     utm_campaign: 'driver-recruitment',
     utm_content: new Date().toISOString().slice(0, 7), // YYYY-MM
   });
-  return `${baseUrl}?${params.toString()}`;
+  // baseUrl may already carry a ?role= param — append UTM with the right separator.
+  const sep = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${sep}${params.toString()}`;
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function RecruitmentAdvertising() {
   const [country, setCountry] = useState<Country>('NZ');
-  const [tenantSlug, setTenantSlug] = useState('premier-express');
-  const [domain, setDomain] = useState('deliver-different-testing.github.io');
+  const [tenantSlug, setTenantSlug] = useState('');
+  const [domain, setDomain] = useState(window.location.host);
+  const [portalEnabled, setPortalEnabled] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<'url' | 'platforms' | 'template' | 'tracking'>('url');
   const [complianceProfiles, setComplianceProfiles] = useState<ComplianceProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
 
   useEffect(() => {
     complianceProfileService.getAll().then(ps => setComplianceProfiles(ps.filter(p => p.active)));
+  }, []);
+  // Item 2 — real applicant-portal slug + enabled state for THIS deployment, so
+  // the URL / QR / preview point at the actual portal (PortalController serves
+  // /apply/{slug}) rather than a hardcoded placeholder. Domain stays editable
+  // below because the portal may be hosted on a different deployment.
+  useEffect(() => {
+    recruitmentService.getPortalConfig()
+      .then(cfg => { setTenantSlug(cfg.slug); setPortalEnabled(cfg.portalEnabled); })
+      .catch(() => setPortalEnabled(null));
   }, []);
 
   // Logo management — default from tenant DB, per-ad override
@@ -236,7 +254,11 @@ export default function RecruitmentAdvertising() {
   }, [country]);
 
   const selectedProfile = complianceProfiles.find(p => p.id === selectedProfileId);
-  const portalUrl = `https://${domain}/NP-Agent-Management/portal/apply/${tenantSlug}${selectedProfileId ? `?profile=${selectedProfileId}` : ''}`;
+  // Real apply URL. The role param (slug of the selected compliance profile)
+  // rides on the shared link + QR for source tracking; the portal doesn't filter
+  // on it yet, so it's additive/forward-looking. "All Roles" → no param.
+  const roleSlug = selectedProfile ? slugify(selectedProfile.name) : '';
+  const portalUrl = `https://${domain}/apply/${tenantSlug}${roleSlug ? `?role=${roleSlug}` : ''}`;
 
   const baseTemplate = country === 'NZ' ? NZ_TEMPLATE : US_TEMPLATE;
   const activeTemplate = customTemplate || baseTemplate;
@@ -309,7 +331,19 @@ export default function RecruitmentAdvertising() {
         <div className="space-y-4">
           {/* URL Config */}
           <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="font-bold mb-4">Tenant Portal URL</h3>
+            <h3 className="font-bold mb-1">Tenant Portal URL</h3>
+            <p className="text-xs text-text-secondary mb-4">
+              The real applicant sign-up link for this tenant. The <span className="font-medium">slug</span> is
+              pre-filled from this deployment's portal config; the <span className="font-medium">domain</span> defaults
+              to this host — change it if your applicant portal is served from a different domain.
+            </p>
+            {portalEnabled === false && (
+              <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                ⚠️ The applicant portal isn't enabled on this deployment, so this exact link may not resolve here.
+                The URL shape is correct — point the <span className="font-medium">domain</span> at the deployment
+                that hosts the portal for this tenant.
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="text-xs text-text-secondary uppercase tracking-wide block mb-1">Domain</label>
@@ -372,6 +406,14 @@ export default function RecruitmentAdvertising() {
 
             <div className="flex items-center gap-3 bg-surface-light rounded-lg p-4 border border-border">
               <code className="flex-1 text-sm font-mono text-brand-dark break-all">{portalUrl}</code>
+              <a
+                href={`https://${portalUrl.replace(/^https?:\/\//, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-border text-text-primary hover:border-brand-cyan hover:text-brand-cyan transition-all whitespace-nowrap"
+              >
+                Open ↗
+              </a>
               <CopyButton text={portalUrl} label="Copy URL" />
             </div>
           </div>
@@ -380,7 +422,9 @@ export default function RecruitmentAdvertising() {
           <div className="bg-white border border-border rounded-lg p-5">
             <h3 className="font-bold mb-1">Ad Branding</h3>
             <p className="text-xs text-text-secondary mb-4">
-              Your default logo comes from the master tenant config. Override it here to use a different brand, franchise name, or go incognito for competitive roles.
+              A <span className="font-medium">per-ad override</span> for this session — applied to the preview and QR
+              below so you can use a different brand or go incognito for competitive roles. It isn't saved to tenant
+              config; the applicant portal shows its own configured branding.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Logo upload */}
@@ -464,8 +508,22 @@ export default function RecruitmentAdvertising() {
             </div>
 
             <div className="bg-white border border-border rounded-lg p-5">
-              <h3 className="font-bold mb-4">Portal Preview</h3>
-              <p className="text-xs text-text-secondary mb-3">How applicants see your recruitment landing page.</p>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-bold">Portal Preview</h3>
+                <a
+                  href={`https://${portalUrl.replace(/^https?:\/\//, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-brand-dark text-white hover:bg-brand-dark/90 transition-all"
+                >
+                  Open live portal ↗
+                </a>
+              </div>
+              <p className="text-xs text-text-secondary mb-3">
+                A representation of the applicant landing page. Use <span className="font-medium">Open live portal</span> to
+                load the real page at the URL above (an inline live embed is blocked by the portal's clickjacking
+                protection).
+              </p>
               <div className="border border-border rounded-lg overflow-hidden bg-surface-light">
                 <div className="bg-brand-dark text-white px-4 py-3 text-center">
                   <div className="text-xs opacity-60 mb-1">🔒 {domain}</div>

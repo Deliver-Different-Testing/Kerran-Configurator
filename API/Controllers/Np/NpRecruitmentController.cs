@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Np;
 using DfrntDriveConfigurator.Core.Application.Services.Np;
+using DfrntDriveConfigurator.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
@@ -12,12 +13,26 @@ namespace DfrntDriveConfigurator.Api.Controllers.Np;
 //   GET /api/v1/np/recruitment/applicants        — applicant list
 //   GET /api/v1/np/recruitment/applicants/{id}   — single applicant
 //   GET /api/v1/np/recruitment/pipeline-summary  — stage counts
+//   GET /api/v1/np/recruitment/portal-config     — applicant-portal slug/state
 // Mutating actions (advance / approve / reject) are a later slice.
 [Route("api/v1/np/recruitment")]
 [ApiController]
 [Authorize(Policy = "NetworkPartnerOrAdmin")]
-public class NpRecruitmentController(NpApplicantService service) : BaseController
+public class NpRecruitmentController(NpApplicantService service, AppSettings appSettings) : BaseController
 {
+    // Item 2 — the deployment's real applicant-portal config so the Recruitment
+    // Advertising page builds the actual apply URL (…/apply/{slug}) instead of a
+    // hardcoded placeholder. The host/domain stays operator-editable on the page
+    // (the portal may be served from a different deployment than this admin app).
+    [HttpGet("portal-config")]
+    public IActionResult GetPortalConfig() => Ok(new
+    {
+        slug = string.IsNullOrWhiteSpace(appSettings.PortalTenantSlug) ? "portal" : appSettings.PortalTenantSlug,
+        portalEnabled = appSettings.PortalEnabled,
+        applyPath = "/apply",
+        displayName = appSettings.PortalDisplayName,
+    });
+
     [HttpGet("applicants")]
     public async Task<IActionResult> GetApplicants()
     {

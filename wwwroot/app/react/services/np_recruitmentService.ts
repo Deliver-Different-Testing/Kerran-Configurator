@@ -10,6 +10,13 @@ import type {
   ApplicantDocumentSummary,
 } from '@/types';
 
+export interface PortalConfig {
+  slug: string;
+  portalEnabled: boolean;
+  applyPath: string;
+  displayName: string;
+}
+
 interface ApplicantDocApi {
   documentTypeName: string;
   category: string;
@@ -124,6 +131,13 @@ export const recruitmentService = {
   async getPipelineSummary(): Promise<PipelineSummary[]> {
     const { data } = await api.get<PipelineSummary[]>('/recruitment/pipeline-summary');
     return data ?? [];
+  },
+
+  // Item 2 — the deployment's real applicant-portal config (slug + enabled state)
+  // so Recruitment Advertising builds the actual /apply/{slug} URL.
+  async getPortalConfig(): Promise<PortalConfig> {
+    const { data } = await api.get<PortalConfig>('/recruitment/portal-config');
+    return data;
   },
 
   // ── Stage actions (Slice B) — flag transitions on CourierApplicant. ──

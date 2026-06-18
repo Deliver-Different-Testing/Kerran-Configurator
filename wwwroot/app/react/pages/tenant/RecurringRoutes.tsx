@@ -14,6 +14,7 @@ import {
 } from '@/services/tenant_routeService';
 import { AssignTargetPicker, AssignTargetValue } from '@/components/common/AssignTargetPicker';
 import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
+import { RowActionsMenu } from '@/components/tenant/RowActionsMenu';
 import { LinehaulTab } from './LinehaulTab';
 import { LinehaulRosterTab } from './LinehaulRosterTab';
 
@@ -139,11 +140,8 @@ function RoutesTab({
   const [editing, setEditing] = useState<TenantRoute | 'new' | null>(null);
   const [copying, setCopying] = useState<TenantRoute | null>(null);
 
-  const handleSoftDelete = async (r: TenantRoute) => {
-    if (!confirm(`Soft-delete "${r.name}"? It will be hidden but not removed.`)) return;
-    await routeService.softDeleteRoute(r.id);
-    onChanged();
-  };
+  // Fix 4: row-level Delete removed — soft-delete now lives only in the edit
+  // panel (the "Active — uncheck to soft-delete" checkbox in RouteEditorModal).
 
   return (
     <div>
@@ -180,9 +178,16 @@ function RoutesTab({
             </thead>
             <tbody>
               {routes.map((r) => (
-                <tr key={r.id} className="border-b border-border last:border-b-0 hover:bg-slate-50">
+                <tr
+                  key={r.id}
+                  onClick={() => setEditing(r)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing(r); } }}
+                  role="button"
+                  tabIndex={0}
+                  className="border-b border-border last:border-b-0 cursor-pointer hover:bg-surface-cream focus:bg-surface-cream focus:outline-none"
+                >
                   <td className="px-4 py-3.5">
-                    <button onClick={() => setEditing(r)} className="text-[#0d0c2c] font-medium hover:text-brand-cyan">{r.name}</button>
+                    <span className="text-[#0d0c2c] font-medium">{r.name}</span>
                   </td>
                   <td className="px-4 py-3.5"><RouteTypeChip kind="first-final" /></td>
                   <td className="px-4 py-3.5 text-text-secondary">{r.area || '—'}</td>
@@ -214,8 +219,9 @@ function RoutesTab({
                     <span className="text-[11px] ml-1">entries</span>
                   </td>
                   {/* Mapped Stops — live count from the API. cursor-pointer telegraphs
-                      the §5 drill-down (per-job list + Speed modal); inert until that ships. */}
-                  <td className="px-4 py-3.5 text-text-secondary cursor-pointer" title="Mapped stops drill-down (coming soon)">
+                      the §5 drill-down (per-job list + Speed modal); inert until that ships.
+                      stopPropagation (Fix 3) so the count never opens the row's edit panel. */}
+                  <td className="px-4 py-3.5 text-text-secondary cursor-pointer" title="Mapped stops drill-down (coming soon)" onClick={(e) => e.stopPropagation()}>
                     <span className="text-[#0d0c2c] font-display font-semibold">{r.bookingCount}</span>
                     <span className="text-[11px] ml-1">stop{r.bookingCount === 1 ? '' : 's'}</span>
                   </td>
@@ -224,10 +230,10 @@ function RoutesTab({
                       ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800">Active</span>
                       : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200 text-slate-700">Inactive</span>}
                   </td>
-                  <td className="px-4 py-3.5 text-right text-[12.5px] space-x-3">
-                    <button onClick={() => setCopying(r)} className="text-text-secondary hover:text-brand-cyan font-medium">Copy</button>
-                    <button onClick={() => setEditing(r)} className="text-text-secondary hover:text-brand-cyan font-medium">Edit</button>
-                    <button onClick={() => handleSoftDelete(r)} className="text-text-secondary hover:text-red-600 font-medium">Delete</button>
+                  {/* Fixes 3+4: Edit (whole-row click) and Delete (panel-only soft
+                      delete) removed; Actions collapses to a ⋯ overflow with Copy. */}
+                  <td className="px-4 py-3.5 text-right">
+                    <RowActionsMenu actions={[{ label: 'Copy', onClick: () => setCopying(r) }]} />
                   </td>
                 </tr>
               ))}

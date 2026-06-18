@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
+import { RowActionsMenu } from '@/components/tenant/RowActionsMenu';
 import { TimeField } from '@/components/common/TimeField';
 import { MappedStopsDrilldown } from './MappedStopsDrilldown';
 import {
@@ -92,9 +93,16 @@ export function LinehaulTab() {
             </thead>
             <tbody>
               {runs.map((r) => (
-                <tr key={r.id} className="border-b border-border last:border-b-0 hover:bg-slate-50">
+                <tr
+                  key={r.id}
+                  onClick={() => setEditing(r)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing(r); } }}
+                  role="button"
+                  tabIndex={0}
+                  className="border-b border-border last:border-b-0 cursor-pointer hover:bg-surface-cream focus:bg-surface-cream focus:outline-none"
+                >
                   <td className="px-4 py-3.5">
-                    <button onClick={() => setEditing(r)} className="text-[#0d0c2c] font-medium hover:text-brand-cyan">{r.runName}</button>
+                    <span className="text-[#0d0c2c] font-medium">{r.runName}</span>
                   </td>
                   <td className="px-4 py-3.5"><RouteTypeChip kind="middle" /></td>
                   <td className="px-4 py-3.5 text-[#0d0c2c]">
@@ -107,9 +115,10 @@ export function LinehaulTab() {
                     <span className="text-[#0d0c2c] font-display font-semibold">{r.usedBySchedulesCount}</span>
                     <span className="text-[11px] ml-1">schedule{r.usedBySchedulesCount === 1 ? '' : 's'}</span>
                   </td>
-                  {/* Mapped Stops — click drills into the per-job list + Speed modal (§5). */}
+                  {/* Mapped Stops — click drills into the per-job list + Speed modal (§5).
+                      stopPropagation (Fix 3) so the drill-down doesn't also open the edit panel. */}
                   <td className="px-4 py-3.5">
-                    <button onClick={() => setDrillRun(r)} className="text-text-secondary hover:text-brand-cyan" title="View mapped stops">
+                    <button onClick={(e) => { e.stopPropagation(); setDrillRun(r); }} className="text-text-secondary hover:text-brand-cyan" title="View mapped stops">
                       <span className="text-[#0d0c2c] font-display font-semibold">{r.mappedStopsCount}</span>
                       <span className="text-[11px] ml-1">stop{r.mappedStopsCount === 1 ? '' : 's'}</span>
                     </button>
@@ -119,9 +128,10 @@ export function LinehaulTab() {
                       ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800">Active</span>
                       : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200 text-slate-700">Inactive</span>}
                   </td>
-                  <td className="px-4 py-3.5 text-right text-[12.5px] space-x-3">
-                    <button onClick={() => handleCopy(r)} className="text-text-secondary hover:text-brand-cyan font-medium">Copy</button>
-                    <button onClick={() => setEditing(r)} className="text-text-secondary hover:text-brand-cyan font-medium">Edit</button>
+                  {/* Fixes 3+4: Edit removed (whole-row click); Delete stays panel-only;
+                      Actions collapses to a ⋯ overflow with Copy. */}
+                  <td className="px-4 py-3.5 text-right">
+                    <RowActionsMenu actions={[{ label: 'Copy', onClick: () => handleCopy(r) }]} />
                   </td>
                 </tr>
               ))}

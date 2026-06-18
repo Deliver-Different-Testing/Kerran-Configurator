@@ -74,6 +74,7 @@ public class TenantLinehaulService(
             DefaultTargetType = targetType,
             CourierId = courierId,   // NULL when Agent/NP (no more 0 sentinel)
             DefaultAgentId = agentId,
+            SpeedId = dto.SpeedId,
         };
         Context.TblbulkLinehaulRuns.Add(run);
         await Context.SaveChangesAsync();
@@ -98,6 +99,7 @@ public class TenantLinehaulService(
         run.DefaultTargetType = targetType;
         run.CourierId = courierId;   // NULL when Agent/NP (no more 0 sentinel)
         run.DefaultAgentId = agentId;
+        run.SpeedId = dto.SpeedId;
         await Context.SaveChangesAsync();
 
         return TenantLinehaulMutationResult.Ok((await EnrichAsync([run])).Single());
@@ -139,6 +141,7 @@ public class TenantLinehaulService(
             DefaultTargetType = src.DefaultTargetType,
             CourierId = src.CourierId,
             DefaultAgentId = src.DefaultAgentId,
+            SpeedId = src.SpeedId,
             // Schedule bindings + roster rows are NOT carried — operators bind/roster the copy fresh.
         };
         Context.TblbulkLinehaulRuns.Add(copy);
@@ -369,6 +372,7 @@ public class TenantLinehaulService(
                 DefaultTargetId = targetId,
                 DefaultTargetName = targetName,
                 DefaultTargetHint = targetHint,
+                SpeedId = r.SpeedId,
                 MappedStopsCount = stopCounts.GetValueOrDefault(r.Id),
                 UsedBySchedulesCount = usedBy,
                 Active = usedBy > 0,

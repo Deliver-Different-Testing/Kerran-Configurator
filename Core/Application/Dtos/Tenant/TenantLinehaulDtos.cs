@@ -24,6 +24,8 @@ public class TenantLinehaulRunDto
     public int? DefaultTargetId { get; set; }
     public string? DefaultTargetName { get; set; }
     public string? DefaultTargetHint { get; set; }
+    // Fixes §8 — run-level Speed (service level) override. null = inherit schedule.
+    public int? SpeedId { get; set; }
     public int MappedStopsCount { get; set; }    // tblBulkJob WHERE LinehaulRunID = Id AND !Void
     public int UsedBySchedulesCount { get; set; } // tblBulkScheduleLinehaul WHERE LinehaulRunID = Id AND Active
     public bool Active { get; set; }             // derived: >=1 active schedule binding
@@ -43,6 +45,8 @@ public class TenantLinehaulRunUpsertDto
     // courier-only CourierId). null type => unbound.
     public string? DefaultTargetType { get; set; }   // "Courier" / "Agent" / "NetworkPartner"
     public int? DefaultTargetId { get; set; }
+    // Fixes §8 — run-level Speed override (TucJobType.UcjtId). null = inherit schedule.
+    public int? SpeedId { get; set; }
 }
 
 public class TenantDepotLookupDto

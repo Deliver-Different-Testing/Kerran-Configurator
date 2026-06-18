@@ -31,9 +31,15 @@ public partial class TblbulkLinehaulRun
 
     public int? DefaultAgentId { get; set; }
 
+    // Recurring Routes Fixes §8 — run-level Speed (service level) override.
+    // NULL = inherit the schedule's speed at booking time. FK TucJobType.UcjtId.
+    public int? SpeedId { get; set; }
+
     public virtual TucCourier Courier { get; set; }
 
     public virtual TucAgent DefaultAgent { get; set; }
+
+    public virtual TucJobType Speed { get; set; }
 
     public virtual ICollection<DispatchLinehaulRunRoster> DispatchLinehaulRunRosters { get; set; } = new List<DispatchLinehaulRunRoster>();
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
 import { RowActionsMenu } from '@/components/tenant/RowActionsMenu';
 import { TargetTypeChip } from '@/components/tenant/TargetTypeChip';
@@ -7,6 +7,7 @@ import { TimeField } from '@/components/common/TimeField';
 import { MappedStopsDrilldown } from './MappedStopsDrilldown';
 import { routeService, AssignableTargets } from '@/services/tenant_routeService';
 import { useAuth } from '@/context/AuthContext';
+import { rateScheduleService, ReportingSpeed } from '@/services/reporting_rateScheduleService';
 import {
   linehaulService,
   extractLinehaulError,
@@ -289,8 +290,27 @@ function LinehaulEditModal({
       ? { type: run.defaultTargetType, id: run.defaultTargetId }
       : null,
   );
+  // Fixes §8 — run-level Speed override. 0 = "— Use schedule default —" (null).
+  const [speedId, setSpeedId] = useState<number>(run?.speedId ?? 0);
+  const [speeds, setSpeeds] = useState<ReportingSpeed[]>([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    rateScheduleService.getSpeeds().then((s) => { if (alive) setSpeeds(s.data); }).catch(() => { /* non-fatal */ });
+    return () => { alive = false; };
+  }, []);
+
+  // optgroup the speed picker by grouping name (same source as the Job-detail spec).
+  const groupedSpeeds = useMemo(() => {
+    const m = new Map<string, ReportingSpeed[]>();
+    for (const s of speeds) {
+      const key = s.groupingName ?? 'Other';
+      (m.get(key) ?? m.set(key, []).get(key)!).push(s);
+    }
+    return [...m.entries()];
+  }, [speeds]);
 
   const sameDepot = fromDepotId > 0 && fromDepotId === toDepotId;
   const despatchBeforeStart = !!startTime && !!despatchTime && despatchTime < startTime;
@@ -309,6 +329,7 @@ function LinehaulEditModal({
         despatchTime: despatchTime || null,
         defaultTargetType: target?.type ?? null,
         defaultTargetId: target?.id ?? null,
+        speedId: speedId > 0 ? speedId : null,
       };
       if (run) {
         await linehaulService.update(run.id, payload);
@@ -396,6 +417,21 @@ function LinehaulEditModal({
             <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Default assigned to</label>
             <AssignTargetPicker targets={targets} value={target} onChange={setTarget} />
             <p className="text-[11px] text-text-secondary mt-1">The run's default Courier, Agent, or Network Partner. Day-by-day overrides live on the Linehaul Roster.</p>
+          </div>
+
+          {/* Fixes §8 — run-level Speed (service level). Empty = inherit the schedule's speed. */}
+          <div>
+            <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Speed (service level)</label>
+            <select value={speedId} onChange={(e) => setSpeedId(Number(e.target.value))}
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-brand-cyan focus:outline-none">
+              <option value={0}>— Use schedule default —</option>
+              {groupedSpeeds.map(([groupName, items]) => (
+                <optgroup key={groupName} label={groupName}>
+                  {items.map((s) => <option key={s.id} value={s.id}>{s.shortName} · {s.name}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            <p className="text-[11px] text-text-secondary mt-1">Overrides the schedule's speed for jobs booked against this run. Leave on default to inherit.</p>
           </div>
 
           {run && (

@@ -22,6 +22,8 @@ export interface TenantLinehaulRun {
   defaultTargetId: number | null;
   defaultTargetName: string | null;
   defaultTargetHint: string | null;
+  // Fixes §8 — run-level Speed override (TucJobType id). null = inherit schedule.
+  speedId: number | null;
   mappedStopsCount: number;
   usedBySchedulesCount: number;
   active: boolean;                // derived: >=1 active schedule binding
@@ -36,6 +38,8 @@ export interface TenantLinehaulRunUpsert {
   // Fixes §5 — polymorphic default target (replaces courierId). null = unbound.
   defaultTargetType: AssignTargetType | null;
   defaultTargetId: number | null;
+  // Fixes §8 — run-level Speed override (TucJobType id). null = inherit schedule.
+  speedId: number | null;
 }
 
 export interface DepotLookup {

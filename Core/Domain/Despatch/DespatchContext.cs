@@ -2021,6 +2021,10 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.DefaultAgentId)
                 .HasConstraintName("FK_LinehaulRun_DefaultAgent");
 
+            entity.HasOne(d => d.Speed).WithMany()
+                .HasForeignKey(d => d.SpeedId)
+                .HasConstraintName("FK_LinehaulRun_Speed");
+
             entity.HasOne(d => d.FromDepot).WithMany(p => p.TblbulkLinehaulRunFromDepots)
                 .HasForeignKey(d => d.FromDepotId)
                 .OnDelete(DeleteBehavior.ClientSetNull)

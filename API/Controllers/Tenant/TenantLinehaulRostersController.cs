@@ -40,7 +40,7 @@ public class TenantLinehaulRostersController(TenantLinehaulService service) : Ba
         {
             var cell = await service.UpsertRosterCellAsync(dto);
             return cell is null
-                ? BadRequest(new { message = "Invalid roster cell (run, day-of-week 1-7, and courier are required)." })
+                ? BadRequest(new { message = "Invalid roster cell (run, day-of-week 1-7, and a Courier/Agent/NP target are required)." })
                 : Ok(cell);
         }
         catch (Exception e)

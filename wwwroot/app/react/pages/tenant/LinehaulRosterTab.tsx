@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { RosterPickerModal } from '@/components/tenant/RosterPickerModal';
+import { TargetTypeChip } from '@/components/tenant/TargetTypeChip';
+import { AssignTargetValue } from '@/components/common/AssignTargetPicker';
+import { routeService, AssignableTargets } from '@/services/tenant_routeService';
 import {
   linehaulService,
   extractLinehaulError,
@@ -6,10 +10,10 @@ import {
   LinehaulRosterRow,
 } from '@/services/tenant_linehaulService';
 
-// ─── Linehaul Roster tab (Recurring Routes spec §4) ───────────────────────
-// Run × Day driver grid backed by Dispatch_LinehaulRunRoster. Courier-only,
-// recurring weekly (1=Mon..7=Sun) in v1. Editing a cell never touches the run's
-// own default driver (tblbulkLinehaulRun.CourierId).
+// ─── Linehaul Roster tab (Recurring Routes spec §4 + Fixes §6) ─────────────
+// Run × Day target grid backed by Dispatch_LinehaulRunRoster. Each cell can be
+// a Courier, Agent, or Network Partner (Fixes §6), recurring weekly (1=Mon..7=Sun)
+// in v1. Editing a cell never touches the run's own default target.
 
 const DAYS: { dow: number; label: string }[] = [
   { dow: 1, label: 'Mon' },
@@ -23,20 +27,23 @@ const DAYS: { dow: number; label: string }[] = [
 
 export function LinehaulRosterTab() {
   const [grid, setGrid] = useState<LinehaulRosterGrid | null>(null);
+  const [targets, setTargets] = useState<AssignableTargets | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ runId: number; dow: number } | null>(null);
 
   // filters
   const [runSearch, setRunSearch] = useState('');
-  const [driverFilter, setDriverFilter] = useState<number>(0);   // 0 = all
+  const [driverFilter, setDriverFilter] = useState<number>(0);   // 0 = all (courier match)
   const [activeOnly, setActiveOnly] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setGrid(await linehaulService.rosterGrid());
+      const [g, t] = await Promise.all([linehaulService.rosterGrid(), routeService.getAssignableTargets()]);
+      setGrid(g);
+      setTargets(t);
     } catch (e: unknown) {
       setError(extractLinehaulError(e, 'Failed to load roster'));
     } finally {
@@ -57,27 +64,36 @@ export function LinehaulRosterTab() {
     });
   }, [grid, runSearch, driverFilter, activeOnly]);
 
-  const saveCell = async (row: LinehaulRosterRow, dow: number, courierId: number) => {
+  const saveCell = async (row: LinehaulRosterRow, dow: number, value: AssignTargetValue | null) => {
     const cell = row.cells.find((c) => c.dayOfWeek === dow) ?? null;
-    const current = cell?.courierId ?? 0;
-    if (courierId === current) { setEditing(null); return; }   // no change
+    setEditing(null);
     try {
-      if (courierId === 0) {
+      if (value === null) {
         if (cell) await linehaulService.deleteRosterCell(cell.rosterId);
+        else return;   // nothing to clear
       } else {
-        await linehaulService.upsertRosterCell({ linehaulRunId: row.runId, dayOfWeek: dow, courierId });
+        if (cell && cell.targetType === value.type && cell.targetId === value.id) return;   // no change
+        await linehaulService.upsertRosterCell({ linehaulRunId: row.runId, dayOfWeek: dow, targetType: value.type, targetId: value.id });
       }
-      setEditing(null);
       await refresh();
     } catch (e: unknown) {
       setError(extractLinehaulError(e, 'Failed to update roster cell'));
-      setEditing(null);
     }
   };
 
   if (loading) {
     return <div className="rounded-xl border border-border bg-white p-10 text-center text-sm text-text-secondary">Loading roster…</div>;
   }
+
+  const editRow = editing ? grid?.rows.find((r) => r.runId === editing.runId) ?? null : null;
+  const editCell = editRow && editing ? editRow.cells.find((c) => c.dayOfWeek === editing.dow) ?? null : null;
+  // Pre-fill the picker with the cell's current target, else the run's default
+  // target (AR-Fix6.2 — first edit pre-fills with the run default, whichever type).
+  const editValue: AssignTargetValue | null = editCell?.targetType && editCell?.targetId
+    ? { type: editCell.targetType, id: editCell.targetId }
+    : (editRow?.defaultTargetType && editRow?.defaultTargetId
+        ? { type: editRow.defaultTargetType, id: editRow.defaultTargetId }
+        : null);
 
   return (
     <div className="space-y-4">
@@ -110,7 +126,7 @@ export function LinehaulRosterTab() {
             <thead className="bg-slate-50 border-b border-border">
               <tr className="text-left text-[12.5px] font-semibold text-text-secondary">
                 <th className="px-4 py-3 min-w-[200px]">Run</th>
-                {DAYS.map((d) => <th key={d.dow} className="px-3 py-3 text-center min-w-[120px]">{d.label}</th>)}
+                {DAYS.map((d) => <th key={d.dow} className="px-3 py-3 text-center min-w-[130px]">{d.label}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -122,44 +138,23 @@ export function LinehaulRosterTab() {
                   </td>
                   {DAYS.map((d) => {
                     const cell = row.cells.find((c) => c.dayOfWeek === d.dow) ?? null;
-                    const isEditing = editing?.runId === row.runId && editing?.dow === d.dow;
                     return (
                       <td key={d.dow} className="px-3 py-2 text-center border-l border-border/50">
-                        {isEditing ? (
-                          <select
-                            autoFocus
-                            // Controlled to the cell's CURRENT value (not pre-set to the
-                            // run default) — a native <select> only fires onChange on a
-                            // real change, so pre-selecting the default meant "accept the
-                            // default" saved nothing. The default is offered as an explicit
-                            // marked option instead, so picking it is a genuine change.
-                            value={cell?.courierId ?? 0}
-                            onChange={(e) => saveCell(row, d.dow, Number(e.target.value))}
-                            onBlur={() => setEditing(null)}
-                            className="w-full border border-brand-cyan rounded-md px-1.5 py-1 text-[12.5px] bg-white focus:outline-none"
-                          >
-                            <option value={0}>— Unassigned —</option>
-                            {row.defaultCourierId != null && (
-                              <option value={row.defaultCourierId}>{row.defaultDriverName ?? 'Default driver'} (default)</option>
-                            )}
-                            {grid?.couriers
-                              .filter((c) => c.id !== row.defaultCourierId)
-                              .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          <button
-                            onClick={() => setEditing({ runId: row.runId, dow: d.dow })}
-                            className={`w-full rounded-md px-2 py-1.5 text-[12.5px] transition-colors flex items-center justify-center gap-1 ${
-                              cell?.courierName
-                                ? 'text-[#0d0c2c] hover:bg-cyan-50'
-                                : 'text-text-secondary hover:bg-slate-50'
-                            }`}
-                            title="Click to assign a driver"
-                          >
-                            {cell?.courierName ?? '—'}
-                            <span className="text-text-secondary text-[10px]">▾</span>
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setEditing({ runId: row.runId, dow: d.dow })}
+                          className={`w-full rounded-md px-2 py-1.5 text-[12.5px] transition-colors flex items-center justify-center gap-1.5 ${
+                            cell?.targetName ? 'text-[#0d0c2c] hover:bg-cyan-50' : 'text-text-secondary hover:bg-slate-50'
+                          }`}
+                          title="Click to assign a Courier / Agent / NP"
+                        >
+                          {cell?.targetName ? (
+                            <>
+                              <span>{cell.targetName}</span>
+                              {cell.targetType && <TargetTypeChip type={cell.targetType} />}
+                            </>
+                          ) : '—'}
+                          <span className="text-text-secondary text-[10px]">▾</span>
+                        </button>
                       </td>
                     );
                   })}
@@ -170,8 +165,18 @@ export function LinehaulRosterTab() {
         )}
       </div>
 
+      {editing && editRow && (
+        <RosterPickerModal
+          title={`${editRow.runName} — ${DAYS.find((x) => x.dow === editing.dow)?.label} assignment`}
+          targets={targets}
+          value={editValue}
+          onClose={() => setEditing(null)}
+          onSave={(v) => saveCell(editRow, editing.dow, v)}
+        />
+      )}
+
       <p className="text-[12px] text-text-secondary">
-        Recurring weekly roster. Editing a cell does not change the run's own default driver — set that on the Linehaul tab.
+        Recurring weekly roster. Editing a cell does not change the run's own default target — set that on the Linehaul tab.
         Date-specific overrides arrive in a later update.
       </p>
     </div>

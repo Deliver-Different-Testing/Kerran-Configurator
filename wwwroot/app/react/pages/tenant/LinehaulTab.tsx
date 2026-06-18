@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
 import { RowActionsMenu } from '@/components/tenant/RowActionsMenu';
+import { TargetTypeChip } from '@/components/tenant/TargetTypeChip';
+import { AssignTargetPicker, AssignTargetValue } from '@/components/common/AssignTargetPicker';
 import { TimeField } from '@/components/common/TimeField';
 import { MappedStopsDrilldown } from './MappedStopsDrilldown';
+import { routeService, AssignableTargets } from '@/services/tenant_routeService';
 import {
   linehaulService,
   extractLinehaulError,
@@ -17,6 +20,7 @@ import {
 export function LinehaulTab() {
   const [runs, setRuns] = useState<TenantLinehaulRun[]>([]);
   const [lookups, setLookups] = useState<LinehaulLookups | null>(null);
+  const [targets, setTargets] = useState<AssignableTargets | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TenantLinehaulRun | 'new' | null>(null);
@@ -26,9 +30,16 @@ export function LinehaulTab() {
     setLoading(true);
     setError(null);
     try {
-      const [r, l] = await Promise.all([linehaulService.list(), linehaulService.lookups()]);
+      // Reuse the Routes-side assignable-targets endpoint for the Courier/Agent/NP
+      // picker (Fixes §5) — same tenant-scoped {couriers, agents, nps} shape.
+      const [r, l, t] = await Promise.all([
+        linehaulService.list(),
+        linehaulService.lookups(),
+        routeService.getAssignableTargets(),
+      ]);
       setRuns(r);
       setLookups(l);
+      setTargets(t);
     } catch (e: unknown) {
       setError(extractLinehaulError(e, 'Failed to load linehaul runs'));
     } finally {
@@ -84,7 +95,7 @@ export function LinehaulTab() {
                 <th className="px-4 py-3">Origin → Destination</th>
                 <th className="px-4 py-3">Start</th>
                 <th className="px-4 py-3">Despatch</th>
-                <th className="px-4 py-3">Default Driver</th>
+                <th className="px-4 py-3">Default</th>
                 <th className="px-4 py-3">Used by Schedules</th>
                 <th className="px-4 py-3">Mapped Stops</th>
                 <th className="px-4 py-3">Status</th>
@@ -110,7 +121,18 @@ export function LinehaulTab() {
                   </td>
                   <td className="px-4 py-3.5 text-text-secondary">{r.startTime || '—'}</td>
                   <td className="px-4 py-3.5 text-text-secondary">{r.despatchTime || '—'}</td>
-                  <td className="px-4 py-3.5 text-text-secondary">{r.defaultDriverName || <span className="text-text-secondary">— Unbound —</span>}</td>
+                  {/* Fixes §5 — polymorphic default target: name + Courier/Agent/NP chip. */}
+                  <td className="px-4 py-3.5">
+                    {r.defaultTargetName ? (
+                      <div>
+                        <div className="text-[#0d0c2c] flex items-center gap-1.5">
+                          {r.defaultTargetName}
+                          {r.defaultTargetType && <TargetTypeChip type={r.defaultTargetType} />}
+                        </div>
+                        {r.defaultTargetHint && <div className="text-[11px] text-text-secondary">{r.defaultTargetHint}</div>}
+                      </div>
+                    ) : <span className="text-text-secondary">— Unbound —</span>}
+                  </td>
                   <td className="px-4 py-3.5 text-text-secondary">
                     <span className="text-[#0d0c2c] font-display font-semibold">{r.usedBySchedulesCount}</span>
                     <span className="text-[11px] ml-1">schedule{r.usedBySchedulesCount === 1 ? '' : 's'}</span>
@@ -144,6 +166,7 @@ export function LinehaulTab() {
         <LinehaulEditModal
           run={editing === 'new' ? null : editing}
           lookups={lookups}
+          targets={targets}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); refresh(); }}
         />
@@ -163,11 +186,13 @@ export function LinehaulTab() {
 function LinehaulEditModal({
   run,
   lookups,
+  targets,
   onClose,
   onSaved,
 }: {
   run: TenantLinehaulRun | null;
   lookups: LinehaulLookups;
+  targets: AssignableTargets | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -176,7 +201,11 @@ function LinehaulEditModal({
   const [toDepotId, setToDepotId] = useState<number>(run?.toDepotId ?? 0);
   const [startTime, setStartTime] = useState(run?.startTime ?? '');
   const [despatchTime, setDespatchTime] = useState(run?.despatchTime ?? '');
-  const [courierId, setCourierId] = useState<number>(run?.courierId ?? 0);
+  const [target, setTarget] = useState<AssignTargetValue | null>(
+    run?.defaultTargetType && run?.defaultTargetId
+      ? { type: run.defaultTargetType, id: run.defaultTargetId }
+      : null,
+  );
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -195,7 +224,8 @@ function LinehaulEditModal({
         toDepotId,
         startTime: startTime || null,
         despatchTime: despatchTime || null,
-        courierId: courierId > 0 ? courierId : null,
+        defaultTargetType: target?.type ?? null,
+        defaultTargetId: target?.id ?? null,
       };
       if (run) {
         await linehaulService.update(run.id, payload);
@@ -278,14 +308,11 @@ function LinehaulEditModal({
           </div>
           {despatchBeforeStart && <p className="text-[11px] text-amber-600">Despatch time must be at or after the start time.</p>}
 
+          {/* Fixes §5 — polymorphic default target (Courier / Agent / NP). */}
           <div>
-            <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Default driver</label>
-            <select value={courierId} onChange={(e) => setCourierId(Number(e.target.value))}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-brand-cyan focus:outline-none">
-              <option value={0}>— Unbound —</option>
-              {lookups.couriers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ''}</option>)}
-            </select>
-            <p className="text-[11px] text-text-secondary mt-1">The run's default driver. Day-by-day overrides live on the Linehaul Roster.</p>
+            <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Default assigned to</label>
+            <AssignTargetPicker targets={targets} value={target} onChange={setTarget} />
+            <p className="text-[11px] text-text-secondary mt-1">The run's default Courier, Agent, or Network Partner. Day-by-day overrides live on the Linehaul Roster.</p>
           </div>
 
           {run && (

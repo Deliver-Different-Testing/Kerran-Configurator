@@ -1,4 +1,5 @@
 import api from './tenant_api';
+import type { AssignTargetType } from './tenant_routeService';
 
 // Linehaul (depot-to-depot middle-mile) runs — backs the Linehaul tab on the
 // tenant Recurring Routes page (spec §3). Native configurator API at
@@ -13,8 +14,14 @@ export interface TenantLinehaulRun {
   toDepotName: string;
   startTime: string | null;       // "HH:mm"
   despatchTime: string | null;    // "HH:mm"
-  courierId: number | null;       // null = unbound
+  courierId: number | null;       // null = unbound (courier back-compat)
   defaultDriverName: string | null;
+  // Fixes §5 — polymorphic default target (Courier/Agent/NP).
+  defaultAgentId: number | null;
+  defaultTargetType: AssignTargetType | null;
+  defaultTargetId: number | null;
+  defaultTargetName: string | null;
+  defaultTargetHint: string | null;
   mappedStopsCount: number;
   usedBySchedulesCount: number;
   active: boolean;                // derived: >=1 active schedule binding
@@ -26,7 +33,9 @@ export interface TenantLinehaulRunUpsert {
   toDepotId: number;
   startTime: string | null;       // "HH:mm"
   despatchTime: string | null;    // "HH:mm"
-  courierId: number | null;       // null = unbound
+  // Fixes §5 — polymorphic default target (replaces courierId). null = unbound.
+  defaultTargetType: AssignTargetType | null;
+  defaultTargetId: number | null;
 }
 
 export interface DepotLookup {
@@ -57,8 +66,13 @@ export function extractLinehaulError(e: unknown, fallback: string): string {
 export interface LinehaulRosterCell {
   rosterId: number;
   dayOfWeek: number;            // 1 = Mon .. 7 = Sun
-  courierId: number | null;
+  courierId: number | null;     // courier back-compat / driver filter
   courierName: string | null;
+  // Fixes §6 — polymorphic target (Courier/Agent/NP).
+  targetType: AssignTargetType | null;
+  targetId: number | null;
+  targetName: string | null;
+  targetHint: string | null;
 }
 
 export interface LinehaulRosterRow {
@@ -68,6 +82,11 @@ export interface LinehaulRosterRow {
   toDepotName: string;
   defaultCourierId: number | null;
   defaultDriverName: string | null;
+  // Fixes §6 — run's default target (whichever type); cells pre-fill from this.
+  defaultTargetType: AssignTargetType | null;
+  defaultTargetId: number | null;
+  defaultTargetName: string | null;
+  defaultTargetHint: string | null;
   active: boolean;
   cells: LinehaulRosterCell[];
 }
@@ -80,7 +99,9 @@ export interface LinehaulRosterGrid {
 export interface LinehaulRosterUpsert {
   linehaulRunId: number;
   dayOfWeek: number;            // 1 = Mon .. 7 = Sun
-  courierId: number;
+  // Fixes §6 — polymorphic target (replaces courierId).
+  targetType: AssignTargetType;
+  targetId: number;
 }
 
 export const linehaulService = {

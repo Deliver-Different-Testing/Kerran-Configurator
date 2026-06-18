@@ -17,11 +17,23 @@ public partial class TblbulkLinehaulRun
 
     public TimeOnly? StartTime { get; set; }
 
-    public int CourierId { get; set; }
+    // Nullable since Fixes §5 — a run can be assigned to an Agent/NP instead of
+    // a courier (CourierId NULL then; the old 0 "unbound" sentinel is retired —
+    // it violated the FK to tucCourier).
+    public int? CourierId { get; set; }
 
     public TimeOnly? DespatchTime { get; set; }
 
+    // Recurring Routes Fixes §5 — polymorphic default target. TargetType:
+    // 1=Courier (CourierId), 2=Agent, 3=NetworkPartner (both via DefaultAgentId;
+    // NP = agent with IsNetworkPartner=1). Mirrors Route.DefaultTargetType.
+    public byte? DefaultTargetType { get; set; }
+
+    public int? DefaultAgentId { get; set; }
+
     public virtual TucCourier Courier { get; set; }
+
+    public virtual TucAgent DefaultAgent { get; set; }
 
     public virtual ICollection<DispatchLinehaulRunRoster> DispatchLinehaulRunRosters { get; set; } = new List<DispatchLinehaulRunRoster>();
 

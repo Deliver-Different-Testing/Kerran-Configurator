@@ -15,6 +15,13 @@ public partial class DispatchLinehaulRunRoster
 
     public int? VehicleId { get; set; }
 
+    // Recurring Routes Fixes §6 — polymorphic cell target. TargetType:
+    // 1=Courier (CourierId), 2=Agent, 3=NetworkPartner (both via AgentId).
+    // Mirrors DispatchRouteRoster.TargetType/AgentId.
+    public byte? TargetType { get; set; }
+
+    public int? AgentId { get; set; }
+
     public DateTime? RosterDate { get; set; }
 
     public byte? DayOfWeek { get; set; }
@@ -24,6 +31,8 @@ public partial class DispatchLinehaulRunRoster
     public DateTime CreatedAt { get; set; }
 
     public string CreatedBy { get; set; }
+
+    public virtual TucAgent Agent { get; set; }
 
     public virtual TucCourier Courier { get; set; }
 

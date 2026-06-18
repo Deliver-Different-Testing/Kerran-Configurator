@@ -15,6 +15,8 @@ import {
 import { AssignTargetPicker, AssignTargetValue } from '@/components/common/AssignTargetPicker';
 import { RouteTypeChip } from '@/components/tenant/RouteTypeChip';
 import { RowActionsMenu } from '@/components/tenant/RowActionsMenu';
+import { TargetTypeChip } from '@/components/tenant/TargetTypeChip';
+import { RosterPickerModal } from '@/components/tenant/RosterPickerModal';
 import { LinehaulTab } from './LinehaulTab';
 import { LinehaulRosterTab } from './LinehaulRosterTab';
 
@@ -687,49 +689,6 @@ function WeeklyDayRow({
   );
 }
 
-// Small modal hosting AssignTargetPicker, with Save + Clear (→ use default).
-function RosterPickerModal({
-  title,
-  targets,
-  value,
-  onClose,
-  onSave,
-}: {
-  title: string;
-  targets: AssignableTargets | null;
-  value: AssignTargetValue | null;
-  onClose: () => void;
-  onSave: (v: AssignTargetValue | null) => void;
-}) {
-  const [picked, setPicked] = useState<AssignTargetValue | null>(value);
-
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-display text-base font-semibold text-[#0d0c2c]">{title}</h3>
-          <button onClick={onClose} className="text-text-secondary hover:text-[#0d0c2c] text-2xl leading-none w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">×</button>
-        </div>
-        <div className="px-5 py-5">
-          <AssignTargetPicker targets={targets} value={picked} onChange={setPicked} />
-        </div>
-        <div className="px-5 py-3 border-t border-border bg-slate-50 flex items-center justify-between">
-          {value
-            ? <button onClick={() => onSave(null)} className="text-[12.5px] text-text-secondary hover:text-red-600 font-medium">Clear (use default)</button>
-            : <span />}
-          <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-[13px] text-text-secondary hover:text-[#0d0c2c] hover:bg-white rounded-full font-medium">Cancel</button>
-            <button onClick={() => onSave(picked)} disabled={!picked}
-              className="bg-brand-cyan text-[#0d0c2c] font-medium text-[13px] px-5 py-2 rounded-full disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed hover:shadow-cyan-glow transition-shadow">
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function DateOverrides({
   route,
   overrides,
@@ -854,16 +813,6 @@ function FourteenDayPreview({
       })}
     </div>
   );
-}
-
-function TargetTypeChip({ type }: { type: AssignTargetType }) {
-  const label = type === 'NetworkPartner' ? 'NP' : type;
-  const tone = type === 'Courier'
-    ? 'bg-cyan-100 text-[#0d0c2c]'
-    : type === 'Agent'
-      ? 'bg-violet-100 text-violet-800'
-      : 'bg-amber-100 text-amber-800';
-  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tone}`}>{label}</span>;
 }
 
 // Collapsible read-only summary of live recurring bookings on a route. Lazy-loads

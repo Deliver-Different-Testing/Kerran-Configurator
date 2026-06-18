@@ -17,6 +17,13 @@ public class TenantLinehaulRunDto
     public string? DespatchTime { get; set; }   // "HH:mm" (null when unset)
     public int? CourierId { get; set; }          // null when unbound (0 in DB)
     public string? DefaultDriverName { get; set; }
+    // Recurring Routes Fixes §5 — polymorphic default target (Courier/Agent/NP).
+    // CourierId/DefaultDriverName kept for back-compat (roster courier fallback).
+    public int? DefaultAgentId { get; set; }
+    public string? DefaultTargetType { get; set; }   // "Courier" / "Agent" / "NetworkPartner" / null
+    public int? DefaultTargetId { get; set; }
+    public string? DefaultTargetName { get; set; }
+    public string? DefaultTargetHint { get; set; }
     public int MappedStopsCount { get; set; }    // tblBulkJob WHERE LinehaulRunID = Id AND !Void
     public int UsedBySchedulesCount { get; set; } // tblBulkScheduleLinehaul WHERE LinehaulRunID = Id AND Active
     public bool Active { get; set; }             // derived: >=1 active schedule binding
@@ -32,7 +39,10 @@ public class TenantLinehaulRunUpsertDto
     public int ToDepotId { get; set; }
     public string? StartTime { get; set; }      // "HH:mm"
     public string? DespatchTime { get; set; }   // "HH:mm"
-    public int? CourierId { get; set; }          // null/0 => unbound
+    // Recurring Routes Fixes §5 — polymorphic default target (replaces the
+    // courier-only CourierId). null type => unbound.
+    public string? DefaultTargetType { get; set; }   // "Courier" / "Agent" / "NetworkPartner"
+    public int? DefaultTargetId { get; set; }
 }
 
 public class TenantDepotLookupDto
@@ -55,8 +65,14 @@ public class LinehaulRosterCellDto
 {
     public int RosterId { get; set; }
     public int DayOfWeek { get; set; }   // 1 = Mon .. 7 = Sun
+    // Courier fields kept for the driver filter + back-compat; null for Agent/NP.
     public int? CourierId { get; set; }
     public string? CourierName { get; set; }
+    // Recurring Routes Fixes §6 — polymorphic target (Courier/Agent/NP).
+    public string? TargetType { get; set; }   // "Courier" / "Agent" / "NetworkPartner"
+    public int? TargetId { get; set; }
+    public string? TargetName { get; set; }
+    public string? TargetHint { get; set; }
 }
 
 public class LinehaulRosterRowDto
@@ -67,6 +83,11 @@ public class LinehaulRosterRowDto
     public string ToDepotName { get; set; } = string.Empty;
     public int? DefaultCourierId { get; set; }
     public string? DefaultDriverName { get; set; }
+    // Run's default target (whichever type) — cells pre-fill from this (AR-Fix6.2).
+    public string? DefaultTargetType { get; set; }
+    public int? DefaultTargetId { get; set; }
+    public string? DefaultTargetName { get; set; }
+    public string? DefaultTargetHint { get; set; }
     public bool Active { get; set; }   // derived: run has >=1 active schedule binding
     public List<LinehaulRosterCellDto> Cells { get; set; } = [];
 }
@@ -81,7 +102,9 @@ public class LinehaulRosterUpsertDto
 {
     public int LinehaulRunId { get; set; }
     public int DayOfWeek { get; set; }   // 1 = Mon .. 7 = Sun
-    public int CourierId { get; set; }
+    // Recurring Routes Fixes §6 — polymorphic target (replaces courier-only).
+    public string? TargetType { get; set; }   // "Courier" / "Agent" / "NetworkPartner"
+    public int TargetId { get; set; }
 }
 
 // Service-level outcome so the controller can map to the right HTTP status

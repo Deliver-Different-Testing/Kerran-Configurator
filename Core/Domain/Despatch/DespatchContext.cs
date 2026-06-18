@@ -870,6 +870,10 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.CourierId)
                 .HasConstraintName("FK_LinehaulRunRoster_Courier");
 
+            entity.HasOne(d => d.Agent).WithMany()
+                .HasForeignKey(d => d.AgentId)
+                .HasConstraintName("FK_LinehaulRunRoster_Agent");
+
             entity.HasOne(d => d.LinehaulRun).WithMany(p => p.DispatchLinehaulRunRosters)
                 .HasForeignKey(d => d.LinehaulRunId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -2012,6 +2016,10 @@ public partial class DespatchContext : DbContext
                 .HasForeignKey(d => d.CourierId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__TblbulkLi__Couri__0A5E6A10");
+
+            entity.HasOne(d => d.DefaultAgent).WithMany()
+                .HasForeignKey(d => d.DefaultAgentId)
+                .HasConstraintName("FK_LinehaulRun_DefaultAgent");
 
             entity.HasOne(d => d.FromDepot).WithMany(p => p.TblbulkLinehaulRunFromDepots)
                 .HasForeignKey(d => d.FromDepotId)

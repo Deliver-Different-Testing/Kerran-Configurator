@@ -247,9 +247,10 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
     id: 'operations', label: 'Operations', icon: icons.settings,
     featureKey: 'cfg-operations',
     items: [
-      // Single child — the section header auto-routes here and only one row
-      // highlights. (Removed the redundant '/operations' child that double-lit
-      // the section on /operations/recurring-routes.)
+      // Fix 1 (2026-06-17) — the '/operations' landing link stays. The
+      // double-highlight on /operations/recurring-routes is solved by the
+      // most-specific-wins helper at render time, not by deleting this item.
+      { id: '/operations', label: 'Operations', implemented: true },
       { id: '/operations/recurring-routes', label: 'Recurring Routes', featureKey: 'cfg-operations-recurring-routes', implemented: true },
     ],
   });
@@ -341,7 +342,9 @@ function buildNpSections(): NavSection[] {
       id: 'operations', label: 'Operations', icon: icons.settings,
       featureKey: 'cfg-operations',
       items: [
-        // Single child — see the tenant-lane Operations note above.
+        // Fix 1 (2026-06-17) — '/operations' landing link stays; see the
+        // tenant-lane Operations note above.
+        { id: '/operations', label: 'Operations', implemented: true },
         { id: '/operations/recurring-routes', label: 'Recurring Routes', featureKey: 'cfg-operations-recurring-routes', implemented: true },
       ],
     },
@@ -420,6 +423,18 @@ const findSectionForPath = (sections: NavSection[], path: string): string | null
   }
   return null;
 };
+
+// Fix 1 (STEVE-RECURRING-ROUTES-COMBINED-FIXES-2026-06-17 §1) — most-specific-wins.
+// Within a section, return the single item whose id best matches the current
+// pathname (longest id satisfying exact-or-prefix). This stops a parent item
+// (e.g. /operations) and a child item (/operations/recurring-routes) from BOTH
+// lighting up when a prefix match would otherwise pass for both. The generic
+// `pathname === id || startsWith(id + '/')` rule also handles `/` (exact-only,
+// since `//` never matches) and `/agents` correctly with no special-casing.
+const mostSpecificActiveItem = (items: NavItem[], pathname: string): string | null =>
+  items
+    .filter((i) => pathname === i.id || pathname.startsWith(i.id + '/'))
+    .reduce<string | null>((best, i) => (best === null || i.id.length > best.length ? i.id : best), null);
 
 /* ------------------------------------------------------------------ */
 /*  Title / subtitle per role                                          */
@@ -658,6 +673,9 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
           {sections.map((section) => {
             const sectionActive = isSectionActive(section);
             const sectionExpanded = expandedSections.includes(section.id);
+            // Fix 1 — only the single most-specific child highlights, so a
+            // parent link (e.g. /operations) and its child don't both light up.
+            const activeItemId = mostSpecificActiveItem(section.items, location.pathname);
             const sectionHighlighted =
               (section.items.length === 1 && isActive(section.items[0].id)) || (section.items.length > 1 && sectionActive && !sectionExpanded);
 
@@ -718,7 +736,7 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
                       );
                     }
 
-                    const active = isActive(item.id);
+                    const active = item.id === activeItemId;
                     const disabled = item.disabled && !selectedCourierId;
 
                     return (

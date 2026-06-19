@@ -150,9 +150,15 @@ public class TenantLinehaulService(
         return TenantLinehaulMutationResult.Ok((await EnrichAsync([copy])).Single());
     }
 
-    // Schedules binding a run (Fixes §7 — the "Used by Schedules" drill-down).
-    // Weekday-variant binding rows (schedules are one-row-per-weekday) group into
-    // one logical schedule; rows with no BulkRunScheduleId group on their name.
+    // Schedules binding a run (Fix 7 + the 2026-06-19 dedupe amendment). A schedule
+    // is physically ONE tblBulkRunSchedule row PER WEEKDAY (DayOfWeek smallint),
+    // each with its own BulkRunScheduleId — so the leg→schedule join emits one row
+    // per active weekday and the old "group by BulkRunScheduleId" left N dupes
+    // (and showed the leg-level WeekDay mask "1111111"). Collapse to one entry per
+    // LOGICAL schedule = (Name, ClientId), and build the day label from the
+    // schedule rows' DayOfWeek (active leg-bindings only), short-named + ordered.
+    // Grouped in memory (small per-run set) — STRING_AGG / DateName don't translate
+    // in EF, same pattern as TenantRouteService.BuildScheduleLookupAsync.
     public async Task<List<LinehaulScheduleBindingDto>> GetScheduleBindingsAsync(int runId)
     {
         var rows = await Context.TblBulkScheduleLinehauls.AsNoTracking()
@@ -161,30 +167,45 @@ public class TenantLinehaulService(
             {
                 s.BulkRunScheduleId,
                 BindingName = s.Name,
-                ScheduleName = s.BulkRunSchedule != null ? s.BulkRunSchedule.Name : null,
-                s.WeekDay,
+                SchedName = s.BulkRunSchedule != null ? s.BulkRunSchedule.Name : null,
+                ClientId = s.BulkRunSchedule != null ? s.BulkRunSchedule.ClientId : null,
+                DayOfWeek = s.BulkRunSchedule != null ? (short?)s.BulkRunSchedule.DayOfWeek : null,
             })
             .ToListAsync();
 
         return rows
-            .GroupBy(r => r.BulkRunScheduleId.HasValue ? $"id:{r.BulkRunScheduleId}" : $"name:{r.BindingName}")
+            // Collapse weekday rows: schedule-backed rows group by (Name, ClientId)
+            // — NULL ClientId (shared/multi-client schedules) collapses to one group.
+            // Bindings with no schedule fall back to their own name.
+            .GroupBy(r => r.SchedName != null ? $"s|{r.SchedName}|{r.ClientId}" : $"b|{r.BindingName}")
             .Select(g =>
             {
                 var first = g.First();
-                var days = g.Select(x => x.WeekDay).Where(w => !string.IsNullOrWhiteSpace(w)).Distinct().ToList();
+                var days = g.Where(x => x.DayOfWeek.HasValue)
+                            .Select(x => (int)x.DayOfWeek!.Value).Distinct().OrderBy(d => d)
+                            .Select(WeekdayShort).ToList();
                 return new LinehaulScheduleBindingDto
                 {
-                    ScheduleId = first.BulkRunScheduleId,
-                    Name = !string.IsNullOrWhiteSpace(first.ScheduleName) ? first.ScheduleName!
+                    ScheduleId = g.Min(x => x.BulkRunScheduleId),   // representative row id for Open ↗
+                    Name = !string.IsNullOrWhiteSpace(first.SchedName) ? first.SchedName!
                          : !string.IsNullOrWhiteSpace(first.BindingName) ? first.BindingName!
                          : "(unnamed schedule)",
-                    Active = true,
+                    Active = true,   // only active leg-bindings are fetched (matches the cell count)
                     WeekDay = days.Count > 0 ? string.Join(", ", days) : null,
                 };
             })
             .OrderBy(d => d.Name)
             .ToList();
     }
+
+    // tblBulkRunSchedule.DayOfWeek is ISO-ish in this schema: 1=Mon … 7=Sun (matches
+    // the existing schedule-lookup / Routes day handling). 0 maps to Sun defensively.
+    // CONFIRM on staging per the dedupe spec note; flip if the data is 1=Sunday.
+    private static string WeekdayShort(int dow) => dow switch
+    {
+        1 => "Mon", 2 => "Tue", 3 => "Wed", 4 => "Thu", 5 => "Fri", 6 => "Sat", 7 => "Sun", 0 => "Sun",
+        _ => dow.ToString(),
+    };
 
     // ── Roster (spec §4 + Fixes §6) — Run × Day target grid ────────────────
 
@@ -343,11 +364,27 @@ public class TenantLinehaulService(
             .Select(g => new { RunId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.RunId, x => x.Count);
 
-        var activeBindingCounts = await Context.TblBulkScheduleLinehauls.AsNoTracking()
+        // Used-by-Schedules count = DISTINCT logical schedules (Name, ClientId) per
+        // run, NOT raw per-weekday binding rows (a schedule is one tblBulkRunSchedule
+        // row per weekday, so a plain bsl count over-reports — e.g. Mon–Fri = 5).
+        // Matches the deduped modal list (GetScheduleBindingsAsync), same key scheme.
+        // Deduped in memory (small per-tenant set).
+        var bindingRows = await Context.TblBulkScheduleLinehauls.AsNoTracking()
             .Where(s => s.LinehaulRunId != null && runIds.Contains(s.LinehaulRunId.Value) && s.Active == true)
-            .GroupBy(s => s.LinehaulRunId!.Value)
-            .Select(g => new { RunId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.RunId, x => x.Count);
+            .Select(s => new
+            {
+                RunId = s.LinehaulRunId!.Value,
+                SchedName = s.BulkRunSchedule != null ? s.BulkRunSchedule.Name : null,
+                ClientId = s.BulkRunSchedule != null ? s.BulkRunSchedule.ClientId : null,
+                BindingName = s.Name,
+            })
+            .ToListAsync();
+        var activeBindingCounts = bindingRows
+            .GroupBy(r => r.RunId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(r => r.SchedName != null ? $"s|{r.SchedName}|{r.ClientId}" : $"b|{r.BindingName}")
+                      .Distinct().Count());
 
         return runs.Select(r =>
         {

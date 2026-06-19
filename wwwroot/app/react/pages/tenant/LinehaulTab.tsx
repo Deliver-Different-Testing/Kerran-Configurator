@@ -431,7 +431,7 @@ function LinehaulEditModal({
                 </optgroup>
               ))}
             </select>
-            <p className="text-[11px] text-text-secondary mt-1">Overrides the schedule's speed for jobs booked against this run. Leave on default to inherit.</p>
+            <p className="text-[11px] text-text-secondary mt-1">Default service class for legs riding this run — individual schedules can override it per leg. Leave on default to inherit from the schedule.</p>
           </div>
 
           {run && (

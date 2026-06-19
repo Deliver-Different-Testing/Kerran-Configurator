@@ -390,6 +390,9 @@ public partial class TucJobBooking
 
     public int? RouteId { get; set; }
 
+    // Recurring Routes Fixes §10 — links a linehaul-leg booking to its run.
+    public int? LinehaulRunId { get; set; }
+
     public int? AgentId { get; set; }
 
     public decimal? RawBaseAmount { get; set; }

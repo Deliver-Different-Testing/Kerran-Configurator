@@ -493,6 +493,9 @@ public partial class TucJob
 
     public int? RouteId { get; set; }
 
+    // Recurring Routes Fixes §10 — links a live linehaul-leg job to its run.
+    public int? LinehaulRunId { get; set; }
+
     public decimal? SubContractorPaymentAmount { get; set; }
 
     public decimal? SubContractorFuelAmount { get; set; }

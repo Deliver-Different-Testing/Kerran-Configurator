@@ -513,6 +513,9 @@ public partial class TucJobArchive
 
     public int? RouteId { get; set; }
 
+    // Recurring Routes Fixes §10 — links an archived linehaul-leg job to its run.
+    public int? LinehaulRunId { get; set; }
+
     public int? AgentBctiRunId { get; set; }
 
     public decimal? SubContractorPaymentAmount { get; set; }

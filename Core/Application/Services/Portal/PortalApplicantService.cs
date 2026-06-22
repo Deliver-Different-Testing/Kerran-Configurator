@@ -199,6 +199,47 @@ public class PortalApplicantService(
         return MapToDto(applicant);
     }
 
+    // The canonical declaration the applicant agrees to on final submit. Stored
+    // verbatim on the record so we always know what was agreed; the portal shows
+    // the same wording. Neutral (no tenant brand) so FE/DB copies stay in sync.
+    public const string DeclarationStatement =
+        "I confirm that the information and documents I have provided are true, accurate, and complete " +
+        "to the best of my knowledge. I understand that providing false information may result in my " +
+        "application being declined.";
+
+    // Final submit — captures the declaration and advances the applicant from the
+    // self-service "Documentation" stage into "Training" (DeclarationAgree=true),
+    // which is where the staff recruitment pipeline picks them up for review.
+    // Mirrors the same flag transition NpApplicantService.AdvanceAsync performs.
+    public async Task<PortalApplicantDto> SubmitApplicationAsync(int applicantId, PortalSubmitDto dto, CancellationToken ct)
+    {
+        await using var ctx = await contextFactory.CreateDbContextAsync(ct);
+        var applicant = await ctx.CourierApplicants.FirstOrDefaultAsync(a => a.Id == applicantId, ct);
+        if (applicant == null) throw new PortalException("Application not found.");
+
+        if (applicant.CourierId.HasValue)
+            throw new PortalException("This application has already been approved.");
+        if (!applicant.EmailVerified)
+            throw new PortalException("Please verify your email before submitting.");
+
+        // Idempotent: a double-submit just returns the already-submitted state.
+        if (applicant.DeclarationAgree) return MapToDto(applicant);
+
+        if (!dto.Agree)
+            throw new PortalException("Please tick the box to agree to the declaration before submitting.");
+        if (string.IsNullOrWhiteSpace(dto.FullName))
+            throw new PortalException("Please type your full name to sign the declaration.");
+
+        applicant.DeclarationAgree = true;
+        applicant.DeclarationName = dto.FullName.Trim();
+        applicant.DeclarationText = DeclarationStatement;
+        applicant.DeclarationDate = DateTime.UtcNow;
+        applicant.ModifiedDate = DateTime.UtcNow;
+
+        await ctx.SaveChangesAsync(ct);
+        return MapToDto(applicant);
+    }
+
     // ---- helpers ----------------------------------------------------------
 
     private PortalSessionDto BuildSession(CourierApplicant applicant)
@@ -222,6 +263,9 @@ public class PortalApplicantService(
         Phone = a.Phone,
         EmailVerified = a.EmailVerified,
         PipelineStage = DeriveStage(a),
+        Submitted = a.DeclarationAgree,
+        SubmittedDate = a.DeclarationDate,
+        DeclarationName = a.DeclarationName,
         AddressLine1 = a.AddressLine1,
         City = a.City,
         State = a.State,

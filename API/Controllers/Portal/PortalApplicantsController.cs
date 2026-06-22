@@ -57,6 +57,11 @@ public class PortalApplicantsController(PortalApplicantService service) : Contro
     public Task<IActionResult> SaveProgress([FromBody] PortalProgressDto dto, CancellationToken ct) =>
         Run(() => service.SaveProgressAsync(ApplicantId(), dto, ct), "save applicant progress");
 
+    [HttpPost("applicants/submit")]
+    [PortalAuthorize]
+    public Task<IActionResult> Submit([FromBody] PortalSubmitDto dto, CancellationToken ct) =>
+        Run(() => service.SubmitApplicationAsync(ApplicantId(), dto, ct), "submit applicant application");
+
     // ---- helpers ----------------------------------------------------------
 
     private string BaseUrl() => $"{Request.Scheme}://{Request.Host}";

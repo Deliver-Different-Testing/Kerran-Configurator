@@ -33,6 +33,15 @@ public class PortalRefreshDto
     public string Token { get; set; }
 }
 
+// Final submit / declaration. The applicant types their full name as a signature
+// and ticks the agree box; the server stamps the declaration and advances them
+// into the staff review pipeline.
+public class PortalSubmitDto
+{
+    public bool Agree { get; set; }
+    public string FullName { get; set; }
+}
+
 // Returned by register (no token yet — applicant is unverified).
 public class PortalRegisterResultDto
 {
@@ -60,6 +69,11 @@ public class PortalApplicantDto
     public string Phone { get; set; }
     public bool EmailVerified { get; set; }
     public string PipelineStage { get; set; }   // derived from legacy flags
+
+    // ---- final-submit / declaration state (read-only) ----
+    public bool Submitted { get; set; }              // DeclarationAgree
+    public DateTime? SubmittedDate { get; set; }     // DeclarationDate
+    public string DeclarationName { get; set; }      // typed signature name
 
     // ---- progress (editable) ----
     public string AddressLine1 { get; set; }

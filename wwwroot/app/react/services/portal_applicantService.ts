@@ -12,6 +12,10 @@ export interface PortalApplicant {
   phone: string | null;
   emailVerified: boolean;
   pipelineStage: string;
+  // final-submit / declaration state (read-only)
+  submitted: boolean;
+  submittedDate: string | null;
+  declarationName: string | null;
   // progress (editable)
   addressLine1: string | null;
   city: string | null;
@@ -80,4 +84,14 @@ export const portalApplicantService = {
 
   saveProgress: (p: ProgressPayload) =>
     applicantApi.put<PortalApplicant>('/applicants', p).then(r => r.data),
+
+  submit: (fullName: string) =>
+    applicantApi.post<PortalApplicant>('/applicants/submit', { agree: true, fullName }).then(r => r.data),
 };
+
+// The declaration wording the applicant agrees to on submit — kept in sync with
+// PortalApplicantService.DeclarationStatement (server stores the canonical copy).
+export const DECLARATION_STATEMENT =
+  'I confirm that the information and documents I have provided are true, accurate, and complete ' +
+  'to the best of my knowledge. I understand that providing false information may result in my ' +
+  'application being declined.';

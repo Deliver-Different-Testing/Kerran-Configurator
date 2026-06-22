@@ -6,11 +6,13 @@ import { extractPortalError } from '@/services/applicant_api';
 import type { ProgressPayload } from '@/services/portal_applicantService';
 import { Card, ErrorBanner, Field, PrimaryButton, SuccessBanner } from './ui';
 import ApplicantDocuments from './ApplicantDocuments';
+import ApplicantSubmit from './ApplicantSubmit';
 
-// Phase 1 authenticated application — the applicant fills in / resumes their
-// details. Progress is saved server-side (PUT /api/portal/applicants), so a
-// refresh or a return on another device resumes where they left off. Document
-// upload + AI vetting + final submit/declaration are later phases (Phase 4).
+// Authenticated application — the applicant fills in / resumes their details.
+// Progress is saved server-side (PUT /api/portal/applicants), so a refresh or a
+// return on another device resumes where they left off. Below the form sit the
+// document uploads (AI-vetted) and the final declaration + submit step, which
+// advances the applicant into the staff recruitment pipeline for review.
 
 type Draft = {
   addressLine1: string; city: string; state: string; postCode: string;
@@ -133,6 +135,8 @@ export default function ApplicantWizard() {
       </Card>
 
       <ApplicantDocuments />
+
+      <ApplicantSubmit />
     </div>
   );
 }

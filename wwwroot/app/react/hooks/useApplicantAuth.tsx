@@ -22,6 +22,7 @@ interface ApplicantAuthValue {
   verify: (email: string, code: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   saveProgress: (p: ProgressPayload) => Promise<void>;
+  submit: (fullName: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -71,6 +72,11 @@ export function ApplicantAuthProvider({ children }: { children: ReactNode }) {
     setApplicant(updated);
   }, []);
 
+  const submit = useCallback(async (fullName: string) => {
+    const updated = await portalApplicantService.submit(fullName);
+    setApplicant(updated);
+  }, []);
+
   const logout = useCallback(() => {
     applicantToken.clear();
     setApplicant(null);
@@ -84,8 +90,9 @@ export function ApplicantAuthProvider({ children }: { children: ReactNode }) {
     verify,
     login,
     saveProgress,
+    submit,
     logout,
-  }), [applicant, loading, register, verify, login, saveProgress, logout]);
+  }), [applicant, loading, register, verify, login, saveProgress, submit, logout]);
 
   return <ApplicantAuthContext.Provider value={value}>{children}</ApplicantAuthContext.Provider>;
 }

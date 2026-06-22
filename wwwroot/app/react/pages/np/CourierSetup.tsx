@@ -24,6 +24,7 @@ import FormField from '@/components/common/FormField';
 import PasswordInput from '@/components/common/PasswordInput';
 import DocumentUpload from '@/components/common/DocumentUpload';
 import { useDocumentTypes, useCourierDocuments, useComplianceSummary } from '@/hooks/useDocuments';
+import { courierComplianceProfileService, type CourierComplianceProfiles } from '@/services/np_courierComplianceProfileService';
 import { CourierDocumentPreviewModal } from '@/components/np/CourierDocumentPreviewModal';
 import { courierDocumentService } from '@/services/np_documentService';
 import { useAuth } from '@/context/AuthContext';
@@ -92,6 +93,10 @@ export default function CourierSetup({ onSelectCourier }: Props) {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginSaving, setLoginSaving] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  // §11: the courier's assigned compliance profiles ("roles") + the required
+  // doc-type set derived from them — drives the Compliance tab doc list + the
+  // Profile-tab summary. Lifted here so both tabs stay in sync.
+  const [profileData, setProfileData] = useState<CourierComplianceProfiles | null>(null);
   const [loginSuccess, setLoginSuccess] = useState(false);
 
   useEffect(() => {
@@ -146,6 +151,16 @@ export default function CourierSetup({ onSelectCourier }: Props) {
     }
     return () => { alive = false; };
   }, [courier?.id, courier?.type]);
+
+  // §11: load the courier's assigned compliance profiles + required-doc set.
+  useEffect(() => {
+    if (!courier?.id) { setProfileData(null); return; }
+    let alive = true;
+    courierComplianceProfileService.get(courier.id)
+      .then(d => { if (alive) setProfileData(d); })
+      .catch(() => { /* non-fatal — tab still renders, just no role-driven list */ });
+    return () => { alive = false; };
+  }, [courier?.id]);
 
   if (!courier || !draft) {
     return (
@@ -423,6 +438,9 @@ export default function CourierSetup({ onSelectCourier }: Props) {
       {/* ── Profile Tab — identity + dates ── */}
       {tab === 'profile' && (
         <div className="space-y-5">
+          {/* §11: surface the courier's assigned roles + compliance at a glance */}
+          <CourierRolesSummaryCard data={profileData} onManage={() => setTab('compliance')} />
+
           <div className="bg-white border border-border rounded-lg p-5">
             <h3 className="text-sm font-semibold text-text-primary mb-4">Identity</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -583,6 +601,9 @@ export default function CourierSetup({ onSelectCourier }: Props) {
       {/* ── Compliance & Licensing Tab ── */}
       {tab === 'compliance' && (
         <div className="space-y-5">
+          {/* §11: compliance profiles (roles) drive the required-doc list below */}
+          <CourierComplianceProfilesCard courierId={c.id} data={profileData} onChange={setProfileData} />
+
           <div className="bg-white border border-border rounded-lg p-5">
             <h3 className="text-sm font-semibold text-text-primary mb-4">Driver's License</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -627,8 +648,9 @@ export default function CourierSetup({ onSelectCourier }: Props) {
 
           {/* §10: Documents folded in here — the licence/endorsements/insurance
               fields above are scalar attributes; the documents that PROVE them
-              upload (AI-vetted) through this list. */}
-          <CourierDocumentsTab courierId={c.id} />
+              upload (AI-vetted) through this list. §11: required set = the
+              union of the assigned compliance profiles' DocumentTypes. */}
+          <CourierDocumentsTab courierId={c.id} requiredTypeIds={profileData?.requiredDocumentTypeIds ?? []} />
         </div>
       )}
 
@@ -862,15 +884,25 @@ function StatusBadgeDoc({ status }: { status: DocumentStatus }) {
   return <span className={`text-xs px-2.5 py-0.5 rounded-lg border ${s.bg} ${s.color}`}>{s.icon} {s.label}</span>;
 }
 
-function CourierDocumentsTab({ courierId }: { courierId: number }) {
+function CourierDocumentsTab({ courierId, requiredTypeIds }: { courierId: number; requiredTypeIds: number[] }) {
   const { types } = useDocumentTypes();
   const { documents, upload, deleteDoc, getDownloadUrl, refresh } = useCourierDocuments(courierId);
-  const summary = useComplianceSummary(types, documents);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadTypeId, setUploadTypeId] = useState<number | undefined>();
   const [previewDoc, setPreviewDoc] = useState<CourierDocument | null>(null);
 
+  // §11: the required-doc list is driven by the courier's assigned compliance
+  // profiles (requiredTypeIds), not a hardcoded type filter. Rows = the required
+  // types, then any type that still has an uploaded doc but is no longer required
+  // (removing a role never hides existing evidence — it's just "no longer required").
+  const requiredSet = new Set(requiredTypeIds);
+  const hasDoc = (dtId: number) => documents.some(d => d.documentTypeId === dtId && d.status !== 'Superseded');
+  const requiredTypes = types.filter(dt => requiredSet.has(dt.id));
+  const extraTypes = types.filter(dt => !requiredSet.has(dt.id) && hasDoc(dt.id));
+  const rows = [...requiredTypes, ...extraTypes];
+  // Upload picker still offers all courier-applicable active types.
   const activeTypes = types.filter(dt => dt.active && (dt.appliesTo === 'ActiveCourier' || dt.appliesTo === 'Both'));
+  const summary = useComplianceSummary(rows, documents);
 
   const handleDownload = async (docId: number) => {
     const url = await getDownloadUrl(docId);
@@ -903,15 +935,23 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
         </button>
       </div>
 
-      {/* Document type rows */}
-      {activeTypes.map((dt) => {
+      {/* Document type rows — driven by assigned compliance profiles (§11) */}
+      {rows.length === 0 && (
+        <div className="text-sm text-text-muted py-6 text-center">
+          No required documents yet. Assign a compliance profile (role) above to define what this courier must provide.
+        </div>
+      )}
+      {rows.map((dt) => {
         const doc = documents.find(d => d.documentTypeId === dt.id && d.status !== 'Superseded');
+        const required = requiredSet.has(dt.id);
         return (
           <div key={dt.id} className="flex items-center gap-3 py-3 border-b border-border last:border-b-0">
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-brand-dark flex items-center gap-2">
                 {dt.name}
-                {dt.mandatory && <span className="text-[10px] px-1.5 py-0 rounded bg-red-50 text-red-600 border border-red-200 uppercase">Required</span>}
+                {required
+                  ? <span className="text-[10px] px-1.5 py-0 rounded bg-red-50 text-red-600 border border-red-200 uppercase">Required</span>
+                  : <span className="text-[10px] px-1.5 py-0 rounded bg-gray-50 text-gray-500 border border-gray-200 uppercase">No longer required</span>}
               </div>
               {doc ? (
                 <div className="text-xs text-text-secondary mt-0.5 flex items-center gap-2 flex-wrap">
@@ -928,7 +968,7 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
                 </div>
               ) : (
                 <div className="text-xs text-red-400 mt-0.5">
-                  {dt.mandatory ? '⚠ Not uploaded — required' : 'Not uploaded'}
+                  {required ? '⚠ Not uploaded — required' : 'Not uploaded'}
                 </div>
               )}
             </div>
@@ -969,6 +1009,106 @@ function CourierDocumentsTab({ courierId }: { courierId: number }) {
         onReject={async (reason) => { if (previewDoc) { await courierDocumentService.reject(courierId, previewDoc.id, reason); refresh(); } }}
         onClose={() => setPreviewDoc(null)}
       />
+    </div>
+  );
+}
+
+// ── §11: Compliance profile (role) assignment for a courier ───────────
+// Tenant/DF-admin assigns ComplianceProfiles; their required DocumentTypes
+// drive the required-doc list above. Replace semantics on Save.
+
+function CourierComplianceProfilesCard({
+  courierId, data, onChange,
+}: {
+  courierId: number;
+  data: CourierComplianceProfiles | null;
+  onChange: (d: CourierComplianceProfiles) => void;
+}) {
+  const [selected, setSelected] = useState<number[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { setSelected(data?.assignedProfileIds ?? []); }, [data?.assignedProfileIds]);
+
+  if (!data) {
+    return <div className="bg-white border border-border rounded-lg p-5 text-sm text-text-muted">Loading compliance profiles…</div>;
+  }
+
+  const toggle = (id: number) =>
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const assignedSet = new Set(data.assignedProfileIds);
+  const dirty = selected.length !== data.assignedProfileIds.length || selected.some(id => !assignedSet.has(id));
+
+  const save = async () => {
+    setSaving(true); setError(null);
+    try {
+      onChange(await courierComplianceProfileService.set(courierId, selected));
+    } catch {
+      setError('Could not save compliance profiles. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border border-border rounded-lg p-5">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-semibold text-text-primary">Compliance Profiles (Roles)</h3>
+        <button
+          onClick={save}
+          disabled={!dirty || saving}
+          className="bg-brand-cyan text-brand-dark border-none font-medium px-3 py-1.5 rounded-md text-xs hover:shadow-cyan-glow disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? 'Saving…' : 'Save Roles'}
+        </button>
+      </div>
+      <p className="text-xs text-text-muted mb-3">
+        The required-document list below is the union of the assigned profiles' documents. Removing a role
+        doesn't delete uploaded documents — they're kept and marked as no longer required.
+      </p>
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md px-3 py-2 text-xs mb-3">⚠️ {error}</div>}
+      {data.available.length === 0 ? (
+        <div className="text-xs text-text-muted">No compliance profiles are configured. Create them in Compliance setup first.</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {data.available.map(p => (
+            <label key={p.id} className="flex items-start gap-2 text-sm cursor-pointer rounded-md border border-border px-3 py-2 hover:border-brand-cyan">
+              <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggle(p.id)} className="mt-0.5" />
+              <span>
+                <span className="font-medium text-text-primary">{p.name}</span>
+                {p.description && <span className="block text-xs text-text-muted">{p.description}</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── §11: assigned-roles + compliance glance for the Profile tab ───────
+function CourierRolesSummaryCard({ data, onManage }: { data: CourierComplianceProfiles | null; onManage: () => void }) {
+  const assignedNames = data ? data.available.filter(p => data.assignedProfileIds.includes(p.id)).map(p => p.name) : [];
+  const requiredCount = data?.requiredDocumentTypeIds.length ?? 0;
+  return (
+    <div className="bg-white border border-border rounded-lg p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-text-primary">Roles &amp; Compliance</h3>
+        <button onClick={onManage} className="text-xs text-brand-cyan hover:underline">Manage →</button>
+      </div>
+      {assignedNames.length === 0 ? (
+        <div className="text-sm text-text-muted">
+          No compliance profiles assigned. Assign roles on the Compliance &amp; Licensing tab to define required documents.
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {assignedNames.map(n => (
+            <span key={n} className="text-xs px-2.5 py-0.5 rounded-full bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">{n}</span>
+          ))}
+          <span className="text-xs text-text-muted ml-1">· {requiredCount} required document{requiredCount === 1 ? '' : 's'}</span>
+        </div>
+      )}
     </div>
   );
 }

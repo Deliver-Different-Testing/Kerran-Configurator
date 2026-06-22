@@ -369,6 +369,7 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.AgentDocumentService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpAgentComplianceService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.AgentComplianceProfileService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.CourierComplianceProfileService>();
 builder.Services.AddScoped<
     DfrntDriveConfigurator.Core.Application.Services.Np.INpScopeResolver,
     DfrntDriveConfigurator.Core.Application.Services.Np.NpScopeResolver>();

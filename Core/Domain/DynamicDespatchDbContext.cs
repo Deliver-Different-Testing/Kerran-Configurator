@@ -31,6 +31,9 @@ namespace DfrntDriveConfigurator.Core.Domain
         // Agent/NP client compliance-profile overlays (2026-06-11, database/043).
         public virtual DbSet<TucAgentComplianceProfile> TucAgentComplianceProfiles { get; set; }
 
+        // Courier compliance-profile assignment (courier modal §11, database/054).
+        public virtual DbSet<CourierComplianceProfile> CourierComplianceProfiles { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -128,6 +131,14 @@ namespace DfrntDriveConfigurator.Core.Domain
                 entity.ToTable("tucAgentComplianceProfile");
                 // PascalCase columns match property names (database/043); no FK
                 // navs modelled (queried by AgentId / ProfileId as plain ints).
+            });
+
+            modelBuilder.Entity<CourierComplianceProfile>(entity =>
+            {
+                entity.HasKey(e => e.UccpId);
+                entity.ToTable("tucCourierComplianceProfile");
+                // PascalCase columns match property names (database/054); no FK
+                // navs modelled (queried by CourierId / ProfileId as plain ints).
             });
 
             modelBuilder.Entity<TucAgentDocument>(entity =>

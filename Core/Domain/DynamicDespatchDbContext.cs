@@ -34,6 +34,9 @@ namespace DfrntDriveConfigurator.Core.Domain
         // Courier compliance-profile assignment (courier modal §11, database/054).
         public virtual DbSet<CourierComplianceProfile> CourierComplianceProfiles { get; set; }
 
+        // Legacy events log, repurposed for courier communications (modal §13).
+        public virtual DbSet<TucEvent> TucEvents { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -139,6 +142,27 @@ namespace DfrntDriveConfigurator.Core.Domain
                 entity.ToTable("tucCourierComplianceProfile");
                 // PascalCase columns match property names (database/054); no FK
                 // navs modelled (queried by CourierId / ProfileId as plain ints).
+            });
+
+            modelBuilder.Entity<TucEvent>(entity =>
+            {
+                entity.HasKey(e => e.UcevId);
+                entity.ToTable("tucEvent");
+                // Legacy lowercase column names — map explicitly (lean projection).
+                entity.Property(e => e.UcevId).HasColumnName("ucevID");
+                entity.Property(e => e.UcevType).HasColumnName("ucevType");
+                entity.Property(e => e.UcevCourierId).HasColumnName("ucevCourierID");
+                entity.Property(e => e.UcevNotes).HasColumnName("ucevNotes");
+                entity.Property(e => e.UcevDescription).HasColumnName("ucevDescription");
+                entity.Property(e => e.UcevDate).HasColumnName("ucevDate");
+                entity.Property(e => e.UcevTime).HasColumnName("ucevTime");
+                entity.Property(e => e.UcevOriginator).HasColumnName("ucevOriginator");
+                entity.Property(e => e.UcevDespatcher).HasColumnName("ucevDespatcher");
+                entity.Property(e => e.UcevPageCourier).HasColumnName("ucevPageCourier");
+                entity.Property(e => e.UcevClosed).HasColumnName("ucevClosed");
+                entity.Property(e => e.UcevIsScheduled).HasColumnName("ucevIsScheduled");
+                entity.Property(e => e.UcevNotificationSent).HasColumnName("ucevNotificationSent");
+                entity.Property(e => e.UcevDueTime).HasColumnName("ucevDueTime");
             });
 
             modelBuilder.Entity<TucAgentDocument>(entity =>

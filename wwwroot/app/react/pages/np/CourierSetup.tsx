@@ -25,6 +25,7 @@ import PasswordInput from '@/components/common/PasswordInput';
 import DocumentUpload from '@/components/common/DocumentUpload';
 import { useDocumentTypes, useCourierDocuments, useComplianceSummary } from '@/hooks/useDocuments';
 import { courierComplianceProfileService, type CourierComplianceProfiles } from '@/services/np_courierComplianceProfileService';
+import { courierCommunicationService, type CourierCommunications } from '@/services/np_courierCommunicationService';
 import { CourierDocumentPreviewModal } from '@/components/np/CourierDocumentPreviewModal';
 import { courierDocumentService } from '@/services/np_documentService';
 import { useAuth } from '@/context/AuthContext';
@@ -42,7 +43,7 @@ const TAB_LABELS: Record<CourierTab, string> = {
   compliance: 'Compliance & Licensing',
   financial: 'Financial',
   device: 'Device & Access',
-  notes: 'Notes & Audit',
+  notes: 'Communications',
 };
 
 interface Props {
@@ -454,6 +455,15 @@ export default function CourierSetup({ onSelectCourier }: Props) {
             </div>
           </div>
 
+          {/* §13: Training hours relocated here from the old Notes & Audit tab. */}
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Training</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Training Hours (Initial)" value={String(c.trainingInit ?? '')} readonly />
+              <FormField label="Training Hours (Follow-up)" value={String(c.trainingFollow ?? '')} readonly />
+            </div>
+          </div>
+
           {/* Attached Subs — when this courier is a Master.  */}
           {c.type === 'Master' && (
             <div className="bg-white border border-border rounded-lg p-5">
@@ -804,22 +814,12 @@ export default function CourierSetup({ onSelectCourier }: Props) {
         </div>
       )}
 
-      {/* ── Notes & Audit Tab ── */}
+      {/* ── Communications Tab (§13: replaces Notes & Audit) ── */}
       {tab === 'notes' && (
         <div className="space-y-5">
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Notes</h3>
-            <FormField label="Notes" type="textarea" {...bind('notes')} full rows={5} />
-          </div>
+          <CourierCommunicationsTab courierId={c.id} />
 
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Training</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Training Hours (Initial)" value={String(c.trainingInit ?? '')} readonly />
-              <FormField label="Training Hours (Follow-up)" value={String(c.trainingFollow ?? '')} readonly />
-            </div>
-          </div>
-
+          {/* Audit trail kept as a small block at the bottom (§13). */}
           <div className="bg-white border border-border rounded-lg p-5">
             <h3 className="text-sm font-semibold text-text-primary mb-4">Audit Trail</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -1107,6 +1107,101 @@ function CourierRolesSummaryCard({ data, onManage }: { data: CourierCompliancePr
             <span key={n} className="text-xs px-2.5 py-0.5 rounded-full bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">{n}</span>
           ))}
           <span className="text-xs text-text-muted ml-1">· {requiredCount} required document{requiredCount === 1 ? '' : 's'}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── §13: Courier communications — staff-logged, stored in tucEvent (Group 'CE') ──
+function CourierCommunicationsTab({ courierId }: { courierId: number }) {
+  const [data, setData] = useState<CourierCommunications | null>(null);
+  const [typeId, setTypeId] = useState<number | ''>('');
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    courierCommunicationService.get(courierId)
+      .then(d => { if (alive) setData(d); })
+      .catch(() => { if (alive) setError('Could not load communications.'); });
+    return () => { alive = false; };
+  }, [courierId]);
+
+  const log = async () => {
+    if (typeId === '' || !body.trim()) return;
+    setBusy(true); setError(null);
+    try {
+      const updated = await courierCommunicationService.log(courierId, Number(typeId), body.trim());
+      setData(updated);
+      setBody(''); setTypeId('');
+    } catch (e) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Could not log the communication. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const noTypes = data !== null && data.types.length === 0;
+
+  return (
+    <div className="bg-white border border-border rounded-lg p-5">
+      <h3 className="text-sm font-semibold text-text-primary mb-4">Communications</h3>
+
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md px-3 py-2 text-xs mb-3">⚠️ {error}</div>}
+
+      {noTypes ? (
+        <div className="text-sm text-text-muted mb-2">
+          No communication types are configured. Add them under Settings → Communication Types.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 mb-5">
+          <select
+            value={typeId}
+            onChange={e => setTypeId(e.target.value === '' ? '' : Number(e.target.value))}
+            className="rounded-md border border-border px-3 py-2 text-sm md:w-64"
+          >
+            <option value="">Select type…</option>
+            {(data?.types ?? []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <textarea
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            rows={3}
+            placeholder="Log a communication about this courier…"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm resize-none"
+          />
+          <div className="flex justify-end">
+            <button
+              onClick={log}
+              disabled={busy || typeId === '' || !body.trim()}
+              className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {busy ? 'Logging…' : 'Log communication'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!data ? (
+        <div className="text-sm text-text-muted">Loading…</div>
+      ) : data.entries.length === 0 ? (
+        <div className="text-sm text-text-muted py-2">No communications logged yet.</div>
+      ) : (
+        <div className="divide-y divide-border">
+          {data.entries.map(e => (
+            <div key={e.id} className="py-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-sm font-medium text-text-primary">{e.typeName}</span>
+                <span className="text-xs text-text-muted">
+                  {e.date ? new Date(e.date).toLocaleString() : ''}{e.staff ? ` · ${e.staff}` : ''}
+                </span>
+              </div>
+              <div className="text-sm text-text-secondary mt-0.5 whitespace-pre-wrap">{e.body}</div>
+            </div>
+          ))}
         </div>
       )}
     </div>

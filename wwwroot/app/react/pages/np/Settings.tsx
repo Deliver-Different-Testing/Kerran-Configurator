@@ -182,6 +182,20 @@ export default function Settings({ onUpgrade, isDfAdmin = false }: Props) {
         </button>
       </div>
 
+      {/* §14: Communication Types quick link */}
+      <div className="bg-white border border-border rounded-lg p-5 mb-4 flex items-center justify-between">
+        <div>
+          <h3 className="font-bold">Communication Types</h3>
+          <p className="text-xs text-text-secondary mt-0.5">Manage the courier-communication types (Group CE) shown in the courier modal's Communications tab.</p>
+        </div>
+        <button
+          onClick={() => navigate('/settings/communication-types')}
+          className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow shrink-0"
+        >
+          Manage Communication Types
+        </button>
+      </div>
+
       {/* Registration Settings Quick Link */}
       <div className="bg-white border border-border rounded-lg p-5 mb-4 flex items-center justify-between">
         <div>

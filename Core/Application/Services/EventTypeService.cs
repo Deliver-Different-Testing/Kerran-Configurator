@@ -161,6 +161,55 @@ public class EventTypeService(IDbContextFactory<DynamicDespatchDbContext> contex
         response.Success = true;
         return response;
     }
+
+    // ── §14: tucEventType catalogue CRUD (e.g. the 'CE' courier-comms types) ──
+
+    public async Task<EventTypeCatalogResponse> GetCatalog(Guid messageId, string? group = null)
+    {
+        var query = Context.TucEventTypes.AsQueryable();
+        if (!string.IsNullOrWhiteSpace(group))
+            query = query.Where(e => e.UcetGroup == group);
+
+        var items = await query
+            .OrderBy(e => e.UcetGroup).ThenBy(e => e.UcetName)
+            .Select(e => new EventTypeCatalogItemDto { Id = e.UcetId, Name = e.UcetName ?? "", Group = e.UcetGroup ?? "" })
+            .ToListAsync();
+
+        return new EventTypeCatalogResponse(messageId) { Success = true, Items = items };
+    }
+
+    public async Task<EventTypeCatalogItemResponse> CreateCatalogItem(string name, string group, Guid messageId)
+    {
+        var response = new EventTypeCatalogItemResponse(messageId);
+        if (string.IsNullOrWhiteSpace(name)) return ResponseUtility.AddMessageAndReturnResponse(response, "Name is required.");
+        if (string.IsNullOrWhiteSpace(group)) return ResponseUtility.AddMessageAndReturnResponse(response, "Group is required.");
+
+        var et = new TucEventType { UcetName = name.Trim(), UcetGroup = group.Trim() };
+        Context.TucEventTypes.Add(et);
+        await Context.SaveChangesAsync();
+
+        response.Success = true;
+        response.Item = new EventTypeCatalogItemDto { Id = et.UcetId, Name = et.UcetName ?? "", Group = et.UcetGroup ?? "" };
+        return response;
+    }
+
+    public async Task<EventTypeCatalogItemResponse> UpdateCatalogItem(int id, string name, string group, Guid messageId)
+    {
+        var response = new EventTypeCatalogItemResponse(messageId);
+        if (string.IsNullOrWhiteSpace(name)) return ResponseUtility.AddMessageAndReturnResponse(response, "Name is required.");
+        if (string.IsNullOrWhiteSpace(group)) return ResponseUtility.AddMessageAndReturnResponse(response, "Group is required.");
+
+        var et = await Context.TucEventTypes.FirstOrDefaultAsync(e => e.UcetId == id);
+        if (et == null) return ResponseUtility.AddMessageAndReturnResponse(response, "Event type not found.");
+
+        et.UcetName = name.Trim();
+        et.UcetGroup = group.Trim();
+        await Context.SaveChangesAsync();
+
+        response.Success = true;
+        response.Item = new EventTypeCatalogItemDto { Id = et.UcetId, Name = et.UcetName ?? "", Group = et.UcetGroup ?? "" };
+        return response;
+    }
 }
 
 // DTOs
@@ -209,4 +258,31 @@ public class AddEventTypeGroupRequest : BaseRequest
     public string? Description { get; set; }
     public string? Icon { get; set; }
     public string? Color { get; set; }
+}
+
+// §14: tucEventType catalogue item (id + name + group code).
+public class EventTypeCatalogItemDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Group { get; set; } = "";
+}
+
+public class EventTypeCatalogResponse : BaseResponse
+{
+    public EventTypeCatalogResponse(Guid messageId) : base(messageId) { }
+    public List<EventTypeCatalogItemDto> Items { get; set; } = [];
+}
+
+public class EventTypeCatalogItemResponse : BaseResponse
+{
+    public EventTypeCatalogItemResponse(Guid messageId) : base(messageId) { }
+    public EventTypeCatalogItemDto? Item { get; set; }
+}
+
+// §14: request body for create/update of a tucEventType catalogue row.
+public class EventTypeCatalogRequest
+{
+    public string Name { get; set; } = "";
+    public string Group { get; set; } = "";
 }

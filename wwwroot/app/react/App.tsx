@@ -53,6 +53,7 @@ import FeatureMatrixPage from './pages/settings/FeatureMatrix';
 import RolePermissionsPage from './pages/settings/RolePermissions';
 import RolesPage from './pages/settings/Roles';
 import TeamUsersPage from './pages/settings/TeamUsers';
+import CommunicationTypes from './pages/settings/CommunicationTypes';
 
 // Public (anonymous) routes — slice 2b external-carrier flow.
 import QuoteResponse from './pages/public/QuoteResponse';
@@ -174,6 +175,7 @@ export default function App() {
             <Route path="settings/roles" element={<RolesPage />} />
             <Route path="settings/role-permissions" element={<RolePermissionsPage />} />
             <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
+            <Route path="settings/communication-types" element={<CommunicationTypes />} />
             <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />
             <Route path="settings/contracts" element={<ContractSettings />} />
             <Route path="settings/recruitment-ads" element={<RecruitmentAdvertising />} />
@@ -234,6 +236,7 @@ export default function App() {
             <Route path="settings" element={<NpSettings onUpgrade={() => setUpgradeOpen(true)} />} />
             {/* Document-type config is tenant-admin (TenantStaffOrAdminNoNp) — not for NP. */}
             <Route path="settings/document-types" element={<Navigate to="/compliance/my-documents" replace />} />
+            <Route path="settings/communication-types" element={<CommunicationTypes />} />
             <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />
             <Route path="settings/contracts" element={<ContractSettings />} />
             <Route path="settings/recruitment-ads" element={<RecruitmentAdvertising />} />
@@ -295,6 +298,7 @@ export default function App() {
             <Route path="operations/recurring-routes" element={<RecurringRoutes />} />
             <Route path="settings" element={<TenantSettings />} />
             <Route path="settings/document-types" element={<ComplianceHub initialTab="documents" standalone />} />
+            <Route path="settings/communication-types" element={<CommunicationTypes />} />
             <Route path="settings/recruitment-stages" element={<RecruitmentStageSettings />} />
             <Route path="settings/contracts" element={<ContractSettings />} />
             <Route path="settings/recruitment-ads" element={<RecruitmentAdvertising />} />

@@ -182,7 +182,6 @@ function buildTenantSections(cfg: ReturnType<typeof useTenantConfig>['config']):
       featureKey: 'cfg-fleet',
       items: [
         { id: '/fleet', label: 'Courier List', implemented: true },
-        { id: '/fleet/add', label: 'Add Courier', implemented: true },
         { id: '/fleet-management', label: 'Vehicle Fleet', implemented: true },
       ],
     });
@@ -290,7 +289,6 @@ function buildNpSections(): NavSection[] {
       featureKey: 'cfg-fleet',
       items: [
         { id: '/fleet', label: 'Driver List', implemented: true },
-        { id: '/fleet/add', label: 'Add Driver', implemented: true },
         { id: '/fleet-management', label: 'Vehicle Fleet', implemented: true },
       ],
     },
@@ -375,7 +373,6 @@ const idSections: NavSection[] = [
     id: 'fleet', label: 'My Fleet', icon: icons.fleet,
     items: [
       { id: '/fleet', label: 'Fleet Overview', implemented: true },
-      { id: '/fleet/add', label: 'Add Driver', implemented: true },
     ],
   },
   {

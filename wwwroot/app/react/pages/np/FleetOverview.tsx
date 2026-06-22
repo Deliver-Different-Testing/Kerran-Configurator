@@ -237,11 +237,11 @@ export default function FleetOverview({ onSelectCourier }: Props) {
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-bold">Driver Management</h2>
         <div className="flex gap-2">
+          {/* §16a: "+ Full Recruitment" removed — "Add Driver Manually" is the
+              sole header action. The full-recruitment flow stays reachable via
+              its route (e.g. deep links) but is no longer a primary CTA here. */}
           <button onClick={() => navigate('/fleet/add?mode=quick')} className="bg-blue-600 text-white border-none font-medium px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors">
             + Add Driver Manually
-          </button>
-          <button onClick={() => navigate('/fleet/add')} className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow">
-            + Full Recruitment
           </button>
         </div>
       </div>

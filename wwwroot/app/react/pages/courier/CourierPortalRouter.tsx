@@ -1,13 +1,14 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { CourierPortalSessionProvider, useCourierPortalSession } from '@/context/CourierPortalSessionContext';
 import { useCourierPortalTheme } from '@/hooks/useCourierPortalTheme';
-import CourierPortalShell, { CourierComingSoon } from './CourierPortalShell';
+import CourierPortalShell from './CourierPortalShell';
 import CourierLogin from './CourierLogin';
 import CourierDashboard from './CourierDashboard';
 import CourierRuns from './CourierRuns';
 import CourierRunDetail from './CourierRunDetail';
 import CourierSchedule from './CourierSchedule';
 import CourierContractors from './CourierContractors';
+import CourierDocuments from './CourierDocuments';
 import CourierSettings from './CourierSettings';
 
 // Courier Portal magic-link (Item 8.5) — entry for /drive/*. Wraps the subtree
@@ -44,7 +45,7 @@ function DriveGate() {
         <Route path="runs" element={<CourierRuns />} />
         <Route path="runs/detail" element={<CourierRunDetail />} />
         <Route path="schedule" element={<CourierSchedule />} />
-        <Route path="documents" element={<CourierComingSoon title="Documents" />} />
+        <Route path="documents" element={<CourierDocuments />} />
         <Route path="contractors" element={<CourierContractors />} />
         <Route path="profile" element={<CourierSettings />} />
         <Route path="*" element={<Navigate to="dashboard" replace />} />

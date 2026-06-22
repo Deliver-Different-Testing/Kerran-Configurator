@@ -437,6 +437,7 @@ builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Cour
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Courier.CourierScheduleService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Courier.CourierRunsService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Courier.CourierContractorsService>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Courier.CourierDocumentsService>();
 
 // Client Reporting lane — Rate Schedule (ported from clientcustomreportbuilder)
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Reporting.ReportingLookupService>();

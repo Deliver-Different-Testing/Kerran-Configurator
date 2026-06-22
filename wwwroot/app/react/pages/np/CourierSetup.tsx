@@ -29,9 +29,11 @@ import { courierDocumentService } from '@/services/np_documentService';
 import { useAuth } from '@/context/AuthContext';
 import type { Courier, DocumentStatus, CourierDocument } from '@/types';
 
-type CourierTab = 'profile' | 'contact' | 'vehicle' | 'compliance' | 'financial' | 'device' | 'documents' | 'notes';
+// §10: the standalone 'documents' tab is folded into 'compliance' (Compliance &
+// Licensing) — the document rows + AI upload now live under that tab.
+type CourierTab = 'profile' | 'contact' | 'vehicle' | 'compliance' | 'financial' | 'device' | 'notes';
 
-const TAB_KEYS: CourierTab[] = ['profile', 'contact', 'vehicle', 'compliance', 'financial', 'device', 'documents', 'notes'];
+const TAB_KEYS: CourierTab[] = ['profile', 'contact', 'vehicle', 'compliance', 'financial', 'device', 'notes'];
 const TAB_LABELS: Record<CourierTab, string> = {
   profile: 'Profile',
   contact: 'Contact',
@@ -39,7 +41,6 @@ const TAB_LABELS: Record<CourierTab, string> = {
   compliance: 'Compliance & Licensing',
   financial: 'Financial',
   device: 'Device & Access',
-  documents: 'Documents',
   notes: 'Notes & Audit',
 };
 
@@ -623,6 +624,11 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <FormField label="Commercial Insurance" type="checkbox" {...bindBool('commercialIns')} />
             </div>
           </div>
+
+          {/* §10: Documents folded in here — the licence/endorsements/insurance
+              fields above are scalar attributes; the documents that PROVE them
+              upload (AI-vetted) through this list. */}
+          <CourierDocumentsTab courierId={c.id} />
         </div>
       )}
 
@@ -773,13 +779,6 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <FormField label="Expected End Time" type="time" {...bind('endTime')} />
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ── Documents Tab ── */}
-      {tab === 'documents' && (
-        <div className="space-y-5">
-          <CourierDocumentsTab courierId={c.id} />
         </div>
       )}
 

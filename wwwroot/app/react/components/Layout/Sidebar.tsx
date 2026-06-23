@@ -532,6 +532,16 @@ export default function Sidebar({ collapsed, onUpgrade, selectedCourierId }: Pro
           { id: '/df-drive-config/automations', label: 'Automations', implemented: true },
         ],
       });
+      // Tools — folded-in utilities. PDF Overlay stamps DB fields onto customer PDF
+      // templates (from the standalone pdf-overlay-tool). DF Admin only.
+      dfSections.push({
+        id: 'tools',
+        label: 'Tools',
+        icon: icons.deliveries,
+        items: [
+          { id: '/tools/pdf-overlay', label: 'PDF Overlay', implemented: true },
+        ],
+      });
       built = dfSections;
     } else {
       built = buildTenantSections(config);

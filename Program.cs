@@ -13,6 +13,7 @@ using DfrntDriveConfigurator.Core.Application.Interfaces;
 using DfrntDriveConfigurator.Core.Application.Services;
 using DfrntDriveConfigurator.Core.Domain;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
+using DfrntDriveConfigurator.Core.PdfOverlay;
 using DfrntDriveConfigurator.Infrastructure;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -138,6 +139,7 @@ builder.Services.AddSingleton<IAmazonS3>(_ =>
 var appSettings = new AppSettings
 {
     S3BucketComplianceUploads = builder.Configuration["S3BucketComplianceUploads"] ?? string.Empty,
+    S3BucketPdfOverlay = builder.Configuration["S3BucketPdfOverlay"] ?? string.Empty,
     HubBaseUrl = (builder.Configuration["HubBaseUrl"] ?? string.Empty).TrimEnd('/'),
     HubAdminApiKey = builder.Configuration["HubAdminApiKey"] ?? string.Empty,
     DespatchWebBaseUrl = (builder.Configuration["DespatchWebBaseUrl"] ?? string.Empty).TrimEnd('/'),
@@ -156,6 +158,15 @@ if (string.IsNullOrEmpty(appSettings.S3BucketComplianceUploads))
 else
 {
     Log.Information("S3BucketComplianceUploads: {Bucket}", appSettings.S3BucketComplianceUploads);
+}
+
+if (string.IsNullOrEmpty(appSettings.S3BucketPdfOverlay))
+{
+    Log.Warning("S3BucketPdfOverlay environment variable is not set — the PDF Overlay tool will fail until it is configured.");
+}
+else
+{
+    Log.Information("S3BucketPdfOverlay: {Bucket}", appSettings.S3BucketPdfOverlay);
 }
 
 // Phase 5+28a §B.1 — Hub invite cascade settings. Both must be set for
@@ -339,6 +350,10 @@ builder.Services.AddScoped<AppConfigService>();
 builder.Services.AddScoped<WorkflowTemplateService>();
 builder.Services.AddScoped<EventTypeService>();
 builder.Services.AddScoped<LookupService>();
+
+// PDF Overlay tool (folded in from the standalone pdf-overlay-tool): pure renderer,
+// SSRF-guarded image resolution, tenant-scoped S3 template store + orchestrator.
+builder.Services.AddPdfOverlay();
 
 // Phase 4 — Network Partner services
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpUserService>();
@@ -595,7 +610,10 @@ var provider = new FileExtensionContentTypeProvider
 {
     Mappings =
     {
-        [".map"] = "application/json"
+        [".map"] = "application/json",
+        // ES-module worker for the PDF Overlay tool (pdfjs-dist ships pdf.worker.min.mjs).
+        // A module worker is rejected by the browser unless served with a JS MIME type.
+        [".mjs"] = "text/javascript"
     }
 };
 

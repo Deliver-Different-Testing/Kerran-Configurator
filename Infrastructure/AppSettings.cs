@@ -20,6 +20,15 @@ public class AppSettings
     public string S3BucketComplianceUploads { get; set; } = string.Empty;
 
     /// <summary>
+    /// S3 bucket holding the PDF Overlay tool's templates, field-maps and rendered
+    /// output (folded in from the standalone pdf-overlay-tool). Keys are rooted at
+    /// `tenants/{tenantId}/templates/...` so the one bucket is shared across tenants
+    /// with isolation by prefix. Bound from env var S3BucketPdfOverlay at startup.
+    /// Empty value disables the tool (the admin endpoints throw a clear 500 until set).
+    /// </summary>
+    public string S3BucketPdfOverlay { get; set; } = string.Empty;
+
+    /// <summary>
     /// Base URL of the Hub app (`https://hub.example.com`), used by the
     /// configurator's NP user-invite cascade to call Hub's
     /// `POST /api/admin/users` endpoint server-to-server (Phase 5+28a §B.1).

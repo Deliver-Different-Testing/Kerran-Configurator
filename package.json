@@ -13,6 +13,8 @@
   "dependencies": {
     "@tinymce/tinymce-react": "^6.3.0",
     "axios": "^1.7.0",
+    "fabric": "^7.4.0",
+    "pdfjs-dist": "^6.0.227",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",

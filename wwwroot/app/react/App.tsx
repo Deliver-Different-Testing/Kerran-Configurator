@@ -7,6 +7,13 @@ import RolePlaceholder from './pages/RolePlaceholder';
 import AppLayout from './components/Layout/AppLayout';
 import UpgradeModal from './components/common/UpgradeModal';
 
+// PDF Overlay tool (folded in from the standalone pdf-overlay-tool). Statically imported like every
+// other page (the app's single-bundle build doesn't code-split — lazy chunks broke the React hook
+// dispatcher). DF-Admin only.
+import PdfOverlayTemplateList from './pages/tools/pdfOverlay/TemplateListPage';
+import PdfOverlayUpload from './pages/tools/pdfOverlay/UploadPage';
+import PdfOverlayEditor from './pages/tools/pdfOverlay/EditorPage';
+
 // NP pages — full second-wave wiring. Underlying services are Phase-3 sync
 // stubs (see np_dashboardService.ts pattern); pages will swap to real data
 // in Phase 4.
@@ -187,6 +194,9 @@ export default function App() {
             <Route path="scheduling" element={<Scheduling />} />
             <Route path="operations" element={<Operations />} />
             <Route path="operations/recurring-routes" element={<RecurringRoutes />} />
+            <Route path="tools/pdf-overlay" element={<PdfOverlayTemplateList />} />
+            <Route path="tools/pdf-overlay/new" element={<PdfOverlayUpload />} />
+            <Route path="tools/pdf-overlay/:id" element={<PdfOverlayEditor />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

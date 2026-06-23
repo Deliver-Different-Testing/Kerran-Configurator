@@ -30,6 +30,9 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.3" />
+    <!-- PDF Overlay tool (folded in from pdf-overlay-tool): PDFsharp stamps data onto
+         customer PDF templates. WPFonts (embedded Segoe WP) ships inside the PDFsharp package. -->
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
   </ItemGroup>
 
   <ItemGroup>

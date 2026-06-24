@@ -161,14 +161,35 @@ public sealed class PdfOverlayRenderer : IPdfOverlayRenderer
 
     private static void DrawText(XGraphics gfx, XRect rect, FieldMapping field, string text)
     {
+        // A single-line text field can't show line breaks (they'd render as missing-glyph boxes), so
+        // collapse any to a comma list — e.g. a multi-line address mapped to a text field degrades to
+        // "line1, line2, line3" instead of tofu. (Use a Multiline field to stack them properly.)
+        text = CollapseNewlines(text);
         if (text.Length == 0)
         {
             return;
         }
 
         var font = CreateFont(field);
-        gfx.DrawString(text, font, XBrushes.Black, rect, FormatFor(field.Alignment));
+        var format = new XStringFormat
+        {
+            // Vertically centre the text within the field box — the admin sizes/places the box over the
+            // line and the text sits on it. (Top-anchor floated tall boxes high; centre reads best.)
+            LineAlignment = XLineAlignment.Center,
+            Alignment = field.Alignment switch
+            {
+                TextAlignment.Center => XStringAlignment.Center,
+                TextAlignment.Right => XStringAlignment.Far,
+                _ => XStringAlignment.Near
+            }
+        };
+        gfx.DrawString(text, font, XBrushes.Black, rect, format);
     }
+
+    private static string CollapseNewlines(string text) =>
+        text.Contains('\n')
+            ? string.Join(", ", text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            : text;
 
     private static void DrawMultiline(XGraphics gfx, XRect rect, FieldMapping field, string text)
     {
@@ -211,13 +232,6 @@ public sealed class PdfOverlayRenderer : IPdfOverlayRenderer
 
     private static XFont CreateFont(FieldMapping field) =>
         new(field.FontFamily, field.FontSize, XFontStyleEx.Regular);
-
-    private static XStringFormat FormatFor(TextAlignment alignment) => alignment switch
-    {
-        TextAlignment.Center => XStringFormats.TopCenter,
-        TextAlignment.Right => XStringFormats.TopRight,
-        _ => XStringFormats.TopLeft
-    };
 
     private static string FormatValue(FieldMapping field, object value)
     {

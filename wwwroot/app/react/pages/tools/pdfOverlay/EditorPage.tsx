@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import FieldMapperCanvas from './FieldMapperCanvas';
 import FieldPropertiesPanel from './FieldPropertiesPanel';
+import PdfPreview from './PdfPreview';
 import { getOriginal, getTemplate, getVersions, renderPreview, saveMap } from './service';
 import { newField } from './types';
 import type { FieldMapping, TemplateDetail } from './types';
@@ -21,7 +22,7 @@ export default function PdfOverlayEditor() {
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pdfData, setPdfData] = useState<ArrayBuffer>();
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewData, setPreviewData] = useState<ArrayBuffer | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
@@ -38,13 +39,6 @@ export default function PdfOverlayEditor() {
     getVersions(id).then(setVersions).catch(() => {});
     getOriginal(id).then(setPdfData).catch(() => setError('Could not load the PDF.'));
   }, [id]);
-
-  // Revoke any open preview blob on unmount so the URL doesn't leak.
-  const previewUrlRef = useRef<string | null>(null);
-  previewUrlRef.current = previewUrl;
-  useEffect(() => () => {
-    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-  }, []);
 
   const pageCount = detail?.pageCount ?? 1;
   const pageFields = useMemo(() => fields.filter((f) => f.page === page), [fields, page]);
@@ -113,21 +107,13 @@ export default function PdfOverlayEditor() {
       data[f.id] = f.type === 'date' ? '2026-06-22T10:00:00Z' : (f.label ?? f.id);
     }
     try {
-      const url = await renderPreview(id, data, version);
-      setPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return url;
-      });
+      setPreviewData(await renderPreview(id, data, version));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Preview failed.');
     }
   }, [id, fields]);
 
-  const closePreview = useCallback(() =>
-    setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    }), []);
+  const closePreview = useCallback(() => setPreviewData(null), []);
 
   const save = useCallback(async () => {
     if (!id) return;
@@ -242,16 +228,18 @@ export default function PdfOverlayEditor() {
         </div>
       </div>
 
-      {previewUrl && (
+      {previewData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closePreview}>
           <div className="bg-white rounded-lg w-full max-w-3xl h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center px-4 py-2 border-b border-border">
               <span className="text-sm font-semibold">Preview</span>
               <button onClick={closePreview} className="text-sm text-text-muted hover:text-text-primary">✕</button>
             </div>
-            {/* Blob is pinned to application/pdf (see renderPreview) and the frame is sandboxed
-                (no allow-scripts) so unexpected content can't execute. */}
-            <iframe title="preview" src={previewUrl} sandbox="allow-same-origin" className="flex-1 w-full border-0" />
+            {/* Rendered with pdf.js to a canvas (not an iframe) — avoids Chrome blocking a PDF in a
+                sandboxed frame, and renders cleanly under the app CSP. */}
+            <div className="flex-1 overflow-hidden">
+              <PdfPreview data={previewData} />
+            </div>
           </div>
         </div>
       )}

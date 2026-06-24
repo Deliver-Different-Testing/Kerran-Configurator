@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
-import { Canvas as FabricCanvas, FabricText, Rect } from 'fabric';
+import { Canvas as FabricCanvas, FabricImage, FabricText, Rect } from 'fabric';
 import type { FieldMapping } from './types';
 import { pixelsToPoints, pointsToPixels } from './fieldGeometry';
 
@@ -20,7 +20,6 @@ export interface FieldMapperCanvasProps {
 
 function FieldMapperCanvas(props: FieldMapperCanvasProps) {
   const { data, pageNumber, scale, fields, selectedId, onSelect, onGeometryChange } = props;
-  const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
   const fabricElRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<FabricCanvas | null>(null);
   const rectToId = useRef(new WeakMap<object, string>());
@@ -55,49 +54,20 @@ function FieldMapperCanvas(props: FieldMapperCanvasProps) {
     };
   }, [data]);
 
-  // Render the current page into the background canvas and size the fabric overlay to match.
-  useEffect(() => {
-    const canvas = pdfCanvasRef.current;
-    if (!pdfDoc || !canvas) return;
-
-    let cancelled = false;
-    let task: RenderTask | null = null;
-
-    pdfDoc.getPage(pageNumber)
-      .then((page) => {
-        if (cancelled) return;
-        const viewport = page.getViewport({ scale });
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        task = page.render({ canvas, viewport });
-        return task.promise;
-      })
-      .then(() => {
-        if (cancelled) return;
-        const fabric = fabricRef.current;
-        if (fabric) {
-          fabric.setDimensions({ width: canvas.width, height: canvas.height });
-          fabric.renderAll();
-        }
-      })
-      .catch((err: unknown) => {
-        // Cancelling an in-flight render (rapid page-flip / zoom) rejects with RenderingCancelledException
-        // — expected, swallow it. Anything else is a real failure worth surfacing.
-        if (!(err as { name?: string })?.name?.includes('RenderingCancelled')) {
-          console.error('PDF page render failed', err);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      task?.cancel();
-    };
-  }, [pdfDoc, pageNumber, scale]);
-
-  // Initialise the fabric overlay once.
+  // Initialise the fabric canvas once. The PDF page is drawn as this canvas's BACKGROUND IMAGE (below),
+  // so the page and the field rects share ONE coordinate system — they can't drift apart (the previous
+  // two-overlaid-canvases approach left a constant horizontal offset between the page and the boxes).
   useEffect(() => {
     if (!fabricElRef.current) return;
-    const fabric = new FabricCanvas(fabricElRef.current, { selection: true, preserveObjectStacking: true });
+    // enableRetinaScaling:false — Fabric's retina (×devicePixelRatio) backing store was leaking into
+    // the pointer→coordinate mapping, so a box dropped at a visual position stored a coordinate
+    // devicePixelRatio× too large. Disabling it keeps backing = display = coordinate space, all at
+    // logical size (we render the PDF background ourselves, so we don't need Fabric's hi-dpi handling).
+    const fabric = new FabricCanvas(fabricElRef.current, {
+      selection: true,
+      preserveObjectStacking: true,
+      enableRetinaScaling: false,
+    });
     fabricRef.current = fabric;
 
     fabric.on('selection:created', (e) => {
@@ -132,6 +102,61 @@ function FieldMapperCanvas(props: FieldMapperCanvasProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Render the current page into an offscreen canvas, then set it as the fabric canvas's background.
+  useEffect(() => {
+    const fabric = fabricRef.current;
+    if (!pdfDoc || !fabric) return;
+
+    let cancelled = false;
+    let task: RenderTask | null = null;
+
+    pdfDoc.getPage(pageNumber)
+      .then((page) => {
+        if (cancelled) return null;
+        // LOGICAL page size (point × scale) — this is the coordinate space the field rects use.
+        const viewport = page.getViewport({ scale });
+        const off = document.createElement('canvas');
+        off.width = Math.floor(viewport.width);
+        off.height = Math.floor(viewport.height);
+        task = page.render({ canvas: off, viewport });
+        return task.promise.then(() => ({ off, logicalW: viewport.width, logicalH: viewport.height }));
+      })
+      .then((res) => {
+        if (cancelled || !res) return;
+        const { off, logicalW, logicalH } = res;
+        // pdf.js renders into `off` at DEVICE pixels — it multiplies by devicePixelRatio (OS display
+        // scaling × browser zoom), so off.width can be 2–3× the logical width. Scale the page image
+        // back down to the logical size so it lines up with the fabric coordinate space the boxes use.
+        // (This was the bug: the page was DPR× bigger than the box coordinates, so a box dropped on a
+        // line stored a coordinate DPR× too large.)
+        const factor = logicalW / off.width;
+        fabric.setDimensions({ width: logicalW, height: logicalH });
+        fabric.backgroundImage = new FabricImage(off, {
+          left: 0,
+          top: 0,
+          originX: 'left',
+          originY: 'top',
+          scaleX: factor,
+          scaleY: factor,
+          selectable: false,
+          evented: false,
+        });
+        fabric.renderAll();
+      })
+      .catch((err: unknown) => {
+        // Cancelling an in-flight render (rapid page-flip / zoom) rejects with RenderingCancelledException
+        // — expected, swallow it. Anything else is a real failure worth surfacing.
+        if (!(err as { name?: string })?.name?.includes('RenderingCancelled')) {
+          console.error('PDF page render failed', err);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      task?.cancel();
+    };
+  }, [pdfDoc, pageNumber, scale]);
+
   // Sync the rectangles to the current page's fields.
   useEffect(() => {
     const fabric = fabricRef.current;
@@ -149,6 +174,10 @@ function FieldMapperCanvas(props: FieldMapperCanvasProps) {
         top: px.top,
         width: px.width,
         height: px.height,
+        // Fabric v6 defaults originX/originY to 'center'; pin to the top-left so `left`/`top` are the
+        // box's TOP-LEFT corner — which is what the renderer (and field.x/y) treat as the anchor.
+        originX: 'left',
+        originY: 'top',
         fill: 'rgba(33,150,243,0.12)',
         stroke: field.id === selectedId ? '#1976d2' : '#90caf9',
         strokeWidth: field.id === selectedId ? 2 : 1,
@@ -163,10 +192,12 @@ function FieldMapperCanvas(props: FieldMapperCanvasProps) {
       // reposition it on drag/resize since it isn't grouped with the rect. An absolute-positioned
       // clipPath confines the caption to the field box so a long name can't spill past the edges.
       const caption = field.label?.trim() || field.dataBinding || field.id;
-      const clip = new Rect({ left: px.left, top: px.top, width: px.width, height: px.height, absolutePositioned: true });
+      const clip = new Rect({ left: px.left, top: px.top, width: px.width, height: px.height, originX: 'left', originY: 'top', absolutePositioned: true });
       const tag = new FabricText(caption, {
         left: px.left + 2,
         top: px.top + 2,
+        originX: 'left',
+        originY: 'top',
         fontSize: 11,
         fontFamily: 'sans-serif',
         fill: '#fff',
@@ -197,9 +228,8 @@ function FieldMapperCanvas(props: FieldMapperCanvasProps) {
   }, [fields, selectedId, scale]);
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block', lineHeight: 0 }}>
-      <canvas ref={pdfCanvasRef} style={{ position: 'absolute', top: 0, left: 0 }} />
-      <canvas ref={fabricElRef} style={{ position: 'relative', top: 0, left: 0 }} />
+    <div style={{ display: 'inline-block', lineHeight: 0 }}>
+      <canvas ref={fabricElRef} />
     </div>
   );
 }

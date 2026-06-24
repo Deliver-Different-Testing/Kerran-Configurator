@@ -140,6 +140,8 @@ var appSettings = new AppSettings
 {
     S3BucketComplianceUploads = builder.Configuration["S3BucketComplianceUploads"] ?? string.Empty,
     S3BucketPdfOverlay = builder.Configuration["S3BucketPdfOverlay"] ?? string.Empty,
+    S3BucketMarsApi = builder.Configuration["S3BucketMarsApi"] ?? string.Empty,
+    PdfOverlayRenderApiKey = builder.Configuration["PdfOverlayRenderApiKey"] ?? string.Empty,
     HubBaseUrl = (builder.Configuration["HubBaseUrl"] ?? string.Empty).TrimEnd('/'),
     HubAdminApiKey = builder.Configuration["HubAdminApiKey"] ?? string.Empty,
     DespatchWebBaseUrl = (builder.Configuration["DespatchWebBaseUrl"] ?? string.Empty).TrimEnd('/'),
@@ -354,6 +356,8 @@ builder.Services.AddScoped<LookupService>();
 // PDF Overlay tool (folded in from the standalone pdf-overlay-tool): pure renderer,
 // SSRF-guarded image resolution, tenant-scoped S3 template store + orchestrator.
 builder.Services.AddPdfOverlay();
+// Consumer render path (M2M): assembles a job's POD data for the render-job endpoint.
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.PdfOverlay.JobPodAssembler>();
 
 // Phase 4 — Network Partner services
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Np.NpUserService>();
@@ -637,7 +641,11 @@ app.Use(async (context, next) =>
     var method = context.Request.Method;
     var isStateChangingRequest = method is "POST" or "PUT" or "PATCH" or "DELETE";
 
-    if (isStateChangingRequest && !context.Request.Path.StartsWithSegments("/healthz"))
+    // The PDF Overlay M2M render endpoint is authenticated by an API key, not the cookie, so it is
+    // exempt from the browser X-Requested-With CSRF check (server-to-server callers don't send it).
+    var isM2mRender = context.Request.Path.StartsWithSegments("/api/pdf-overlay/render-job");
+
+    if (isStateChangingRequest && !context.Request.Path.StartsWithSegments("/healthz") && !isM2mRender)
     {
         var hasXhrHeader = context.Request.Headers.XRequestedWith == "XMLHttpRequest";
         if (!hasXhrHeader)
@@ -693,7 +701,10 @@ app.Use(async (context, next) =>
         "connect-src 'self' wss: ws:" + (app.Environment.IsDevelopment() ? " http://localhost:*" : "") + "; " +
         "worker-src 'self' blob:; " +
         (isFrameableDoc ? "frame-ancestors 'self'; " : "frame-ancestors 'none'; ") +
-        "frame-src 'self'; " +
+        // blob: lets the PDF Overlay editor preview a rendered PDF in a sandboxed iframe (the render
+        // endpoint returns bytes the SPA wraps in a blob: URL). Same-origin, client-generated — already
+        // allowed for img-src/worker-src.
+        "frame-src 'self' blob:; " +
         "object-src 'none'; " +
         "manifest-src 'self'; " +
         "base-uri 'self'; " +

@@ -28,12 +28,33 @@ public interface ITenantContext
     string TenantId { get; }
 }
 
-/// <summary>Reads the tenant id from the authenticated principal (configurator's <c>CurrentTenantID</c> claim).</summary>
+/// <summary>
+/// Reads the tenant id for the current request. Prefers the per-request override that M2M / anonymous
+/// flows stash in <c>HttpContext.Items["OverrideTenantId"]</c> (same key the Despatch DB factory uses),
+/// then falls back to the authenticated <c>CurrentTenantID</c> claim (admin/cookie flows).
+/// </summary>
 public sealed class HttpTenantContext(IHttpContextAccessor accessor) : ITenantContext
 {
-    public string TenantId =>
-        accessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == "CurrentTenantID")?.Value
-        ?? throw new InvalidOperationException("No CurrentTenantID claim on the current request.");
+    // Mirrors DynamicDespatchDbContextFactory.OverrideTenantIdItemsKey (kept as a literal to avoid an
+    // Infrastructure dependency from Core).
+    private const string OverrideTenantIdItemsKey = "OverrideTenantId";
+
+    public string TenantId
+    {
+        get
+        {
+            var ctx = accessor.HttpContext
+                ?? throw new InvalidOperationException("No HttpContext on the current request.");
+
+            if (ctx.Items[OverrideTenantIdItemsKey] is string overrideId && !string.IsNullOrEmpty(overrideId))
+            {
+                return overrideId;
+            }
+
+            return ctx.User.Claims.FirstOrDefault(c => c.Type == "CurrentTenantID")?.Value
+                ?? throw new InvalidOperationException("No CurrentTenantID claim or tenant override on the current request.");
+        }
+    }
 }
 
 /// <summary>

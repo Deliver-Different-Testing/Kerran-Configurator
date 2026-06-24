@@ -29,6 +29,22 @@ public class AppSettings
     public string S3BucketPdfOverlay { get; set; } = string.Empty;
 
     /// <summary>
+    /// Per-tenant marsapi S3 bucket (`urgent-couriers-marsapi-{tenant}-{env}`) where the driver app
+    /// stores delivery/pickup signatures and POD photos. The PDF Overlay consumer render path reads a
+    /// job's delivery-signature object (key from JobWorkflowSteps.BlobUrl) from here to stamp it onto a
+    /// template. Bound from env var S3BucketMarsApi. Empty = signatures are skipped (text still renders).
+    /// Configurator's role needs S3 read on this bucket (cross-service grant — see the consumer-render ADR).
+    /// </summary>
+    public string S3BucketMarsApi { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Shared secret for the PDF Overlay M2M render endpoint (`POST /api/pdf-overlay/render-job`).
+    /// Trusted internal callers (DespatchWeb, AutomationEngine) present it as the `X-Api-Key` header.
+    /// Bound from env var PdfOverlayRenderApiKey. Empty = the endpoint is disabled (returns 503).
+    /// </summary>
+    public string PdfOverlayRenderApiKey { get; set; } = string.Empty;
+
+    /// <summary>
     /// Base URL of the Hub app (`https://hub.example.com`), used by the
     /// configurator's NP user-invite cascade to call Hub's
     /// `POST /api/admin/users` endpoint server-to-server (Phase 5+28a §B.1).

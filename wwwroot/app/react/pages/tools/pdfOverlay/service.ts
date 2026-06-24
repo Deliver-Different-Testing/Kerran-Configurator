@@ -73,21 +73,19 @@ export async function setTemplateActive(id: string, active: boolean): Promise<vo
   if (!res.ok) return fail(res);
 }
 
-/** Renders the template with placeholder data and returns a blob URL for preview. Caller revokes it. */
+/** Renders the template with placeholder data and returns the PDF bytes (rendered to canvas by PdfPreview). */
 export async function renderPreview(
   id: string,
   data: Record<string, unknown>,
   version?: number,
-): Promise<string> {
+): Promise<ArrayBuffer> {
   const res = await fetch(`${BASE}/templates/${id}/render`, {
     method: 'POST',
     headers: { ...XHR, 'Content-Type': 'application/json' },
     body: JSON.stringify({ data, bindingMode: 'id', version }),
   });
   if (!res.ok) return fail(res);
-  const blob = await res.blob();
-  // Pin the MIME type so the browser treats the preview as a PDF (never interprets it as HTML/script).
-  return URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+  return res.arrayBuffer();
 }
 
 /** Active clients for the current tenant — reuses configurator's shared lookup endpoint. */

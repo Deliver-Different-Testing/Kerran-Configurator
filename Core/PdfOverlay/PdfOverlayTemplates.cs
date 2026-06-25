@@ -183,7 +183,12 @@ public interface IPdfOverlayTemplates
 {
     /// <summary>Stores a new client PDF template (version 1, empty map). Throws if the bytes aren't a readable PDF.</summary>
     Task<TemplateSummary> CreateAsync(
-        string clientId, string displayName, string documentType, byte[] pdf, CancellationToken ct = default);
+        IReadOnlyList<string> clientIds, bool allClients, string displayName, string documentType, byte[] pdf, CancellationToken ct = default);
+
+    /// <summary>Updates editable metadata (display name, document type, client scope). Null args unchanged. Null if not found.</summary>
+    Task<TemplateSummary?> UpdateDetailsAsync(
+        string templateId, string? displayName, string? documentType,
+        IReadOnlyList<string>? clientIds, bool? allClients, CancellationToken ct = default);
 
     Task<IReadOnlyList<TemplateSummary>> ListAsync(
         string? clientId = null, string? documentType = null, bool? active = null, CancellationToken ct = default);
@@ -225,15 +230,20 @@ public sealed class PdfOverlayTemplates(
     ITemplateStore store, IImageResolver images, IPdfOverlayRenderer renderer) : IPdfOverlayTemplates
 {
     public Task<TemplateSummary> CreateAsync(
-        string clientId, string displayName, string documentType, byte[] pdf, CancellationToken ct = default)
+        IReadOnlyList<string> clientIds, bool allClients, string displayName, string documentType, byte[] pdf, CancellationToken ct = default)
     {
         if (!PdfInspector.TryGetPageCount(pdf, out var pageCount))
         {
             throw new ArgumentException("The supplied bytes are not a readable, unencrypted PDF.", nameof(pdf));
         }
 
-        return store.CreateAsync(clientId, displayName, documentType, pdf, pageCount, ct);
+        return store.CreateAsync(clientIds, allClients, displayName, documentType, pdf, pageCount, ct);
     }
+
+    public Task<TemplateSummary?> UpdateDetailsAsync(
+        string templateId, string? displayName, string? documentType,
+        IReadOnlyList<string>? clientIds, bool? allClients, CancellationToken ct = default) =>
+        store.UpdateDetailsAsync(templateId, displayName, documentType, clientIds, allClients, ct);
 
     public Task<IReadOnlyList<TemplateSummary>> ListAsync(
         string? clientId = null, string? documentType = null, bool? active = null, CancellationToken ct = default) =>

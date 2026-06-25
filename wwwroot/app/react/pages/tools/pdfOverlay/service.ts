@@ -39,17 +39,33 @@ export async function getOriginal(id: string): Promise<ArrayBuffer> {
 
 export async function uploadTemplate(input: {
   file: File;
-  clientId: string;
+  clientIds: string[];
+  allClients: boolean;
   displayName: string;
   documentType: string;
 }): Promise<TemplateSummary> {
   const form = new FormData();
   form.append('file', input.file);
-  form.append('clientId', input.clientId);
+  form.append('clientIds', input.clientIds.join(','));
+  form.append('allClients', String(input.allClients));
   form.append('displayName', input.displayName);
   form.append('documentType', input.documentType);
   // No Content-Type header — the browser sets the multipart boundary.
   const res = await fetch(`${BASE}/templates`, { method: 'POST', headers: { ...XHR }, body: form });
+  if (!res.ok) return fail(res);
+  return res.json();
+}
+
+/** Edit a template's details (display name, document type, client scope). Omitted fields are unchanged. */
+export async function updateTemplateDetails(
+  id: string,
+  details: { displayName?: string; documentType?: string; clientIds?: string[]; allClients?: boolean },
+): Promise<TemplateSummary> {
+  const res = await fetch(`${BASE}/templates/${id}/details`, {
+    method: 'PUT',
+    headers: { ...XHR, 'Content-Type': 'application/json' },
+    body: JSON.stringify(details),
+  });
   if (!res.ok) return fail(res);
   return res.json();
 }

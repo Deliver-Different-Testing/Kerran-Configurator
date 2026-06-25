@@ -17,7 +17,7 @@ export interface DataBinding {
   value: string;
 }
 
-export const dataBindingGroups: readonly DataBinding[] = [
+const baseBindings: readonly DataBinding[] = [
   // ── Proof of Delivery (POD) ───────────────────────────────────────────────
   { group: 'Proof of Delivery', label: 'Job number', value: 'pod.jobNumber' },
   { group: 'Proof of Delivery', label: 'Client ref A', value: 'pod.clientRefA' },
@@ -53,11 +53,6 @@ export const dataBindingGroups: readonly DataBinding[] = [
   { group: 'Proof of Delivery', label: 'Delivery signature (image)', value: 'pod.signatureImage' },
   { group: 'Proof of Delivery', label: 'Pickup signature (image)', value: 'pod.pickupSignatureImage' },
   { group: 'Proof of Delivery', label: 'Delivered / completed time', value: 'pod.deliveredTime' },
-  { group: 'Proof of Delivery', label: 'Item code', value: 'pod.item.itemCode' },
-  { group: 'Proof of Delivery', label: 'Item ref', value: 'pod.item.itemRef' },
-  { group: 'Proof of Delivery', label: 'Item description', value: 'pod.item.description' },
-  { group: 'Proof of Delivery', label: 'Item quantity', value: 'pod.item.quantity' },
-  { group: 'Proof of Delivery', label: 'Item barcode', value: 'pod.item.barcode' },
   { group: 'Proof of Delivery', label: 'Show price', value: 'pod.showPrice' },
   { group: 'Proof of Delivery', label: 'Service description', value: 'pod.serviceDescription' },
   { group: 'Proof of Delivery', label: 'Service price', value: 'pod.servicePrice' },
@@ -394,12 +389,40 @@ export const dataBindingGroups: readonly DataBinding[] = [
   { group: 'Tenant Branding', label: 'Country code', value: 'branding.countryCode' },
 ];
 
+// ── Proof of Delivery — Item table rows (fixed indexed slots) ─────────────────
+// A coordinate overlay stamps one value per fixed position, so item tables use indexed slots: place a
+// field per cell and bind it to `pod.item.<row>.<field>`. The server fills rows in job-item order up to
+// ITEM_ROW_SLOTS; a job with more items overflows (extra rows are not stamped). NB: tucJobItems has no
+// separate width column — Depth is the third linear dimension. Item code / type names live on the item
+// *type* (a many-per-item relationship) and aren't flattened into a physical-item row here.
+const ITEM_ROW_SLOTS = 20;
+const ITEM_ROW_FIELDS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: 'quantity', label: 'Qty' },
+  { key: 'barcode', label: 'Barcode' },
+  { key: 'notes', label: 'Notes' },
+  { key: 'weight', label: 'Weight' },
+  { key: 'length', label: 'Length' },
+  { key: 'height', label: 'Height' },
+  { key: 'depth', label: 'Depth (width)' },
+  { key: 'cubic', label: 'Cubic' },
+];
+
+const itemRowBindings: readonly DataBinding[] = Array.from({ length: ITEM_ROW_SLOTS }, (_, i) => i).flatMap((i) =>
+  ITEM_ROW_FIELDS.map((f) => ({
+    group: 'Proof of Delivery — Item rows',
+    label: `Item ${i + 1} · ${f.label}`,
+    value: `pod.item.${i}.${f.key}`,
+  })),
+);
+
+export const dataBindingGroups: readonly DataBinding[] = [...baseBindings, ...itemRowBindings];
+
 /** Flat list of binding paths (back-compat; free-text is also allowed). */
 export const dataBindings: readonly string[] = dataBindingGroups.map((b) => b.value);
 
 // Path segments that denote a per-record collection (line items, job rows, manifest cells, …).
 const REPEATING_SEGMENTS = new Set([
-  'row', 'line', 'item', 'cell', 'page', 'statement',
+  'row', 'line', 'cell', 'page', 'statement',
   'job', 'callout', 'performance', 'expenditure', 'destination', 'speed',
 ]);
 

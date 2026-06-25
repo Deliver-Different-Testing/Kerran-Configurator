@@ -28,7 +28,10 @@ export interface FieldMap {
 
 export interface TemplateSummary {
   templateId: string;
-  clientId: string;
+  /** Client codes this template applies to. Empty when allClients is true. */
+  clientIds: string[];
+  /** True when the template applies to every client (clientIds is then ignored). */
+  allClients: boolean;
   displayName: string;
   documentType: string;
   currentVersion: number;

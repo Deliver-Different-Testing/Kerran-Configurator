@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listClients, uploadTemplate } from './service';
 import type { ClientOption } from './types';
+import ClientScopePicker from './ClientScopePicker';
 
 // PDF Overlay tool — upload a new template, then go straight to the field mapper.
 export default function PdfOverlayUpload() {
   const navigate = useNavigate();
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [file, setFile] = useState<File | null>(null);
-  const [clientCode, setClientCode] = useState('');
+  const [allClients, setAllClients] = useState(false);
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [displayName, setDisplayName] = useState('');
   const [documentType, setDocumentType] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,19 +23,21 @@ export default function PdfOverlayUpload() {
   }, []);
 
   const canSubmit = useMemo(
-    () => Boolean(file && clientCode && displayName.trim() && documentType.trim()) && !busy,
-    [file, clientCode, displayName, documentType, busy],
+    () =>
+      Boolean(file && displayName.trim() && documentType.trim() && (allClients || selectedClients.length > 0)) &&
+      !busy,
+    [file, allClients, selectedClients, displayName, documentType, busy],
   );
 
   const submit = async () => {
-    if (!file || !clientCode) return;
+    if (!file || (!allClients && selectedClients.length === 0)) return;
     setBusy(true);
     setError(null);
     try {
-      // The client's code is the stable, human-readable id templates are keyed by in storage.
       const summary = await uploadTemplate({
         file,
-        clientId: clientCode,
+        clientIds: allClients ? [] : selectedClients,
+        allClients,
         displayName: displayName.trim(),
         documentType: documentType.trim(),
       });
@@ -81,21 +85,13 @@ export default function PdfOverlayUpload() {
           />
         </label>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-text-secondary uppercase tracking-wide">Client</label>
-          <select
-            value={clientCode}
-            onChange={(e) => setClientCode(e.target.value)}
-            className="rounded-md border border-border px-3 py-2 text-sm"
-          >
-            <option value="">Select a client…</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.code}>
-                {c.code} — {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ClientScopePicker
+          clients={clients}
+          allClients={allClients}
+          selected={selectedClients}
+          onAllClientsChange={setAllClients}
+          onSelectedChange={setSelectedClients}
+        />
 
         <div className="flex flex-col gap-1">
           <label className="text-xs text-text-secondary uppercase tracking-wide">Display name</label>

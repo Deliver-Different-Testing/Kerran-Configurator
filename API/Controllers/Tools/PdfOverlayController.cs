@@ -37,16 +37,18 @@ namespace DfrntDriveConfigurator.Api.Controllers.Tools
 
             var form = await Request.ReadFormAsync(ct);
             var file = form.Files["file"];
-            var clientId = form["clientId"].ToString();
+            var clientIds = form["clientIds"].ToString()
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var allClients = string.Equals(form["allClients"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
             var displayName = form["displayName"].ToString();
             var documentType = form["documentType"].ToString();
 
             if (file is null || file.Length == 0
-                || string.IsNullOrWhiteSpace(clientId)
                 || string.IsNullOrWhiteSpace(displayName)
-                || string.IsNullOrWhiteSpace(documentType))
+                || string.IsNullOrWhiteSpace(documentType)
+                || (!allClients && clientIds.Length == 0))
             {
-                return BadRequest("file, clientId, displayName and documentType are all required.");
+                return BadRequest("file, displayName, documentType and either clientIds or allClients are required.");
             }
 
             using var ms = new MemoryStream();
@@ -54,7 +56,7 @@ namespace DfrntDriveConfigurator.Api.Controllers.Tools
 
             try
             {
-                var summary = await templates.CreateAsync(clientId, displayName, documentType, ms.ToArray(), ct);
+                var summary = await templates.CreateAsync(clientIds, allClients, displayName, documentType, ms.ToArray(), ct);
                 Response.Headers.Location = $"/api/pdf-overlay/templates/{summary.TemplateId}";
                 return Json(summary, 201);
             }
@@ -121,6 +123,37 @@ namespace DfrntDriveConfigurator.Api.Controllers.Tools
             }
 
             return await templates.SetActiveAsync(id, active, ct) ? NoContent() : NotFound();
+        }
+
+        /// <summary>
+        /// Edit a template's details. Body: { displayName?, documentType?, clientIds?: string[], allClients?: bool }.
+        /// Omitted/blank fields are left unchanged.
+        /// </summary>
+        [HttpPut("templates/{id}/details")]
+        public async Task<IActionResult> UpdateDetails(string id, CancellationToken ct)
+        {
+            UpdateDetailsDto body;
+            try
+            {
+                body = JsonSerializer.Deserialize<UpdateDetailsDto>(await ReadBodyAsync(ct), FieldMapJson.Options)
+                       ?? new UpdateDetailsDto();
+            }
+            catch (JsonException ex)
+            {
+                return BadRequest($"Invalid body: {ex.Message}");
+            }
+
+            try
+            {
+                return await templates.UpdateDetailsAsync(
+                    id, body.DisplayName, body.DocumentType, body.ClientIds, body.AllClients, ct) is { } summary
+                    ? Json(summary)
+                    : NotFound();
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         /// <summary>
@@ -205,6 +238,14 @@ namespace DfrntDriveConfigurator.Api.Controllers.Tools
             public Dictionary<string, JsonElement> Data { get; set; } = new();
             public string BindingMode { get; set; } = "id";
             public int? Version { get; set; }
+        }
+
+        private sealed class UpdateDetailsDto
+        {
+            public string? DisplayName { get; set; }
+            public string? DocumentType { get; set; }
+            public List<string>? ClientIds { get; set; }
+            public bool? AllClients { get; set; }
         }
     }
 }

@@ -86,16 +86,19 @@ namespace DfrntDriveConfigurator.Api.Controllers.Tools
 
             if (string.IsNullOrWhiteSpace(templateId))
             {
-                if (string.IsNullOrWhiteSpace(assembly.ClientCode))
-                {
-                    return NotFound($"Job {jobId} has no client, so no template could be resolved.");
-                }
+                // Resolve by document type. A client-specific template wins over an all-clients one; a job
+                // with no client can still match an all-clients template.
+                var clientCode = assembly.ClientCode;
+                var matches = await templates.ListAsync(clientCode, documentType, active: true, ct);
+                var chosen = !string.IsNullOrWhiteSpace(clientCode)
+                    ? matches.Where(m => !m.AllClients).OrderByDescending(s => s.UpdatedAt).FirstOrDefault()
+                      ?? matches.Where(m => m.AllClients).OrderByDescending(s => s.UpdatedAt).FirstOrDefault()
+                    : matches.Where(m => m.AllClients).OrderByDescending(s => s.UpdatedAt).FirstOrDefault();
 
-                var active = await templates.ListAsync(assembly.ClientCode, documentType, active: true, ct);
-                var chosen = active.OrderByDescending(s => s.UpdatedAt).FirstOrDefault();
                 if (chosen is null)
                 {
-                    return NotFound($"No active '{documentType}' template for client '{assembly.ClientCode}'.");
+                    var who = string.IsNullOrWhiteSpace(clientCode) ? "any client" : $"client '{clientCode}'";
+                    return NotFound($"No active '{documentType}' template for {who}.");
                 }
 
                 templateId = chosen.TemplateId;

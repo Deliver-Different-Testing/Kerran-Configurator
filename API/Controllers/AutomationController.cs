@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DfrntDriveConfigurator.Core.Application.Dtos.Automation;
 using DfrntDriveConfigurator.Core.Application.Interfaces;
 using DfrntDriveConfigurator.Core.Domain.Despatch;
+using DfrntDriveConfigurator.Core.PdfOverlay;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
@@ -17,7 +18,8 @@ namespace DfrntDriveConfigurator.Api.Controllers;
 [Route("api/automations")]
 [Authorize(Policy = "AdminOnly")]
 public class AutomationController(
-    IAutomationRepository repository) : ControllerBase
+    IAutomationRepository repository,
+    IPdfOverlayTemplates pdfOverlayTemplates) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<AutomationRuleDto>>> GetAll(
@@ -262,13 +264,38 @@ public class AutomationController(
     }
 
     [HttpGet("available-reports")]
-    public ActionResult<List<object>> GetAvailableReports()
+    public async Task<ActionResult<List<object>>> GetAvailableReports(CancellationToken ct)
     {
-        // Hardcoded for now — will integrate with DeliverDifferentReporting catalog API later
-        var reports = new[]
+        var reports = new List<object>
         {
             new { key = "pod", name = "POD Report", description = "Proof of delivery report" }
         };
+
+        // Offer each distinct active PDF Overlay document type as an attachable report. At run time the
+        // AutomationEngine renders the matching client template for the job via the render-job endpoint
+        // (key format "pdfoverlay:<documentType>").
+        try
+        {
+            var overlays = await pdfOverlayTemplates.ListAsync(active: true, ct: ct);
+            foreach (var docType in overlays
+                         .Select(t => t.DocumentType)
+                         .Where(d => !string.IsNullOrWhiteSpace(d))
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+            {
+                reports.Add(new
+                {
+                    key = $"pdfoverlay:{docType}",
+                    name = $"PDF Overlay — {docType}",
+                    description = $"Customer-branded '{docType}' document from the PDF Overlay tool"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not enumerate PDF Overlay document types for the automation report catalog");
+        }
+
         return Ok(reports);
     }
 

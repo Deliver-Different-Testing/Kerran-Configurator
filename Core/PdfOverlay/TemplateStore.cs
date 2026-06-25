@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,8 @@ namespace DfrntDriveConfigurator.Core.PdfOverlay;
 /// <summary>Listing/metadata view of a template (no PDF bytes or field map).</summary>
 public sealed record TemplateSummary(
     string TemplateId,
-    string ClientId,
+    IReadOnlyList<string> ClientIds,
+    bool AllClients,
     string DisplayName,
     string DocumentType,
     int CurrentVersion,
@@ -67,17 +69,27 @@ public static partial class Identifiers
 /// </summary>
 internal sealed record StoredMeta(
     string TemplateId,
-    string ClientId,
     string DisplayName,
     string DocumentType,
     bool IsActive,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     int PageCount,
-    int CurrentVersion)
+    int CurrentVersion,
+    IReadOnlyList<string>? ClientIds = null,
+    bool AllClients = false,
+    string? ClientId = null)
 {
+    /// <summary>Client codes this template targets (empty when <see cref="AllClients"/>). Falls back to
+    /// the legacy single <c>clientId</c> for templates created before multi-client support.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> EffectiveClientIds =>
+        ClientIds is { Count: > 0 }
+            ? ClientIds
+            : (!string.IsNullOrWhiteSpace(ClientId) ? new[] { ClientId! } : Array.Empty<string>());
+
     public TemplateSummary ToSummary() => new(
-        TemplateId, ClientId, DisplayName, DocumentType, CurrentVersion, IsActive, CreatedAt, UpdatedAt);
+        TemplateId, EffectiveClientIds, AllClients, DisplayName, DocumentType, CurrentVersion, IsActive, CreatedAt, UpdatedAt);
 }
 
 /// <summary>
@@ -87,7 +99,7 @@ internal sealed record StoredMeta(
 public interface ITemplateStore
 {
     Task<TemplateSummary> CreateAsync(
-        string clientId, string displayName, string documentType,
+        IReadOnlyList<string> clientIds, bool allClients, string displayName, string documentType,
         byte[] pdf, int pageCount, CancellationToken ct = default);
 
     Task<IReadOnlyList<TemplateSummary>> ListAsync(
@@ -102,6 +114,12 @@ public interface ITemplateStore
 
     /// <summary>Sets the active flag (true = published, false = inactive). Versions remain. False if not found.</summary>
     Task<bool> SetActiveAsync(string templateId, bool active, CancellationToken ct = default);
+
+    /// <summary>Updates editable metadata (display name, document type, client scope). Null args are left
+    /// unchanged. Returns the updated summary, or null if the template doesn't exist.</summary>
+    Task<TemplateSummary?> UpdateDetailsAsync(
+        string templateId, string? displayName, string? documentType,
+        IReadOnlyList<string>? clientIds, bool? allClients, CancellationToken ct = default);
 
     /// <summary>Fetches the PDF + field map for a render. Null if not found; throws if version unknown.</summary>
     Task<RenderSource?> GetRenderSourceAsync(string templateId, int? version, CancellationToken ct = default);
@@ -136,18 +154,19 @@ public sealed class S3TemplateStore(IAmazonS3 s3, string bucket, string tenantId
     private string MapKey(string templateId, int v) => $"{Dir(templateId)}v{v}/{MapFile}";
 
     public async Task<TemplateSummary> CreateAsync(
-        string clientId, string displayName, string documentType,
+        IReadOnlyList<string> clientIds, bool allClients, string displayName, string documentType,
         byte[] pdf, int pageCount, CancellationToken ct = default)
     {
-        Identifiers.Require(clientId, nameof(clientId));
+        var normalisedClients = NormaliseClients(clientIds, allClients);
         var now = clock.GetUtcNow();
         var templateId = Guid.NewGuid().ToString("N");
 
         await PutBytesAsync(PdfKey(templateId, 1), pdf, "application/pdf", ct);
         await PutTextAsync(MapKey(templateId, 1), FieldMapJson.Serialize(new FieldMap()), ct);
 
-        var meta = new StoredMeta(templateId, clientId, displayName, documentType,
-            IsActive: true, CreatedAt: now, UpdatedAt: now, PageCount: pageCount, CurrentVersion: 1);
+        var meta = new StoredMeta(templateId, displayName, documentType,
+            IsActive: true, CreatedAt: now, UpdatedAt: now, PageCount: pageCount, CurrentVersion: 1,
+            ClientIds: normalisedClients, AllClients: allClients);
         await WriteMetaAsync(meta, ct);
         return meta.ToSummary();
     }
@@ -171,7 +190,11 @@ public sealed class S3TemplateStore(IAmazonS3 s3, string bucket, string tenantId
                     continue;
                 }
 
-                if (clientId is not null && meta.ClientId != clientId)
+                // Filtering by client matches both client-specific templates targeting it and
+                // all-clients templates (render-job then applies client-specific precedence).
+                if (clientId is not null
+                    && !meta.AllClients
+                    && !meta.EffectiveClientIds.Contains(clientId, StringComparer.Ordinal))
                 {
                     continue;
                 }
@@ -265,6 +288,61 @@ public sealed class S3TemplateStore(IAmazonS3 s3, string bucket, string tenantId
         meta = meta with { IsActive = active, UpdatedAt = clock.GetUtcNow() };
         await WriteMetaAsync(meta, ct);
         return true;
+    }
+
+    public async Task<TemplateSummary?> UpdateDetailsAsync(
+        string templateId, string? displayName, string? documentType,
+        IReadOnlyList<string>? clientIds, bool? allClients, CancellationToken ct = default)
+    {
+        var meta = await TryReadMetaAsync(templateId, ct);
+        if (meta is null)
+        {
+            return null;
+        }
+
+        var newAllClients = allClients ?? meta.AllClients;
+        var newClientIds = clientIds is not null || allClients is not null
+            ? NormaliseClients(clientIds ?? meta.EffectiveClientIds, newAllClients)
+            : meta.EffectiveClientIds;
+
+        meta = meta with
+        {
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? meta.DisplayName : displayName.Trim(),
+            DocumentType = string.IsNullOrWhiteSpace(documentType) ? meta.DocumentType : documentType.Trim(),
+            ClientIds = newClientIds,
+            AllClients = newAllClients,
+            ClientId = null,
+            UpdatedAt = clock.GetUtcNow()
+        };
+        await WriteMetaAsync(meta, ct);
+        return meta.ToSummary();
+    }
+
+    // Validates + dedupes client codes for storage. Returns empty when allClients (the list is ignored).
+    private static IReadOnlyList<string> NormaliseClients(IReadOnlyList<string>? clientIds, bool allClients)
+    {
+        if (allClients)
+        {
+            return Array.Empty<string>();
+        }
+
+        var list = (clientIds ?? Array.Empty<string>())
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Select(c => c.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (list.Count == 0)
+        {
+            throw new ArgumentException(
+                "At least one client is required unless the template targets all clients.", nameof(clientIds));
+        }
+
+        foreach (var c in list)
+        {
+            Identifiers.Require(c, nameof(clientIds));
+        }
+
+        return list;
     }
 
     public async Task<RenderSource?> GetRenderSourceAsync(string templateId, int? version, CancellationToken ct = default)

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -79,6 +81,9 @@ public sealed class JobPodAssembler(
         var signatureB64 = await TryGetDeliverySignatureAsync(db, jobId, ct);
         Set("pod.signatureImage", signatureB64);
 
+        // Per-item table rows (fixed indexed slots pod.item.{i}.{field}) for templates with an item list.
+        await AddJobItemBindingsAsync(db, jobId, b, ct);
+
         var clientCode = job.UcjbClient?.UcclCode ?? job.UcjbClientCode;
         return new JobPodAssembly(clientCode, b);
     }
@@ -130,4 +135,84 @@ public sealed class JobPodAssembler(
 
     private static string? JoinSpace(params string?[] parts) =>
         string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p!.Trim()));
+
+    // Up to this many item rows are stamped (fixed indexed slots pod.item.{i}.{field}); a job with more
+    // items overflows and the extras are not rendered (Option A — fixed rows). Mirrors ITEM_ROW_SLOTS in
+    // the SPA's dataBindings.ts.
+    private const int MaxItemRows = 20;
+
+    /// <summary>
+    /// Adds per-item bindings for a fixed-row item table, keyed <c>pod.item.{i}.{field}</c> in job-item
+    /// order (i = 0-based row). Read from <c>tucJobItems</c> via raw SQL — that table isn't an EF entity in
+    /// configurator. Best-effort: a query failure is logged and skipped (the rest of the render proceeds).
+    /// </summary>
+    private static async Task AddJobItemBindingsAsync(
+        DynamicDespatchDbContext db, int jobId, Dictionary<string, string?> b, CancellationToken ct)
+    {
+        try
+        {
+            var conn = db.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText =
+                "SELECT TOP (@n) Items, Weight, Length, Height, Depth, Cubic, Barcode, Notes " +
+                "FROM tucJobItems WHERE JobID = @jobId ORDER BY ItemID";
+            AddParam(cmd, "@n", MaxItemRows);
+            AddParam(cmd, "@jobId", jobId);
+
+            var opened = conn.State != ConnectionState.Open;
+            if (opened)
+            {
+                await db.Database.OpenConnectionAsync(ct);
+            }
+
+            try
+            {
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                var i = 0;
+                while (await reader.ReadAsync(ct))
+                {
+                    var row = i;
+                    void SetItem(string field, string? value)
+                    {
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            b[$"pod.item.{row}.{field}"] = value;
+                        }
+                    }
+
+                    SetItem("quantity", ToStr(reader["Items"]));
+                    SetItem("weight", ToStr(reader["Weight"]));
+                    SetItem("length", ToStr(reader["Length"]));
+                    SetItem("height", ToStr(reader["Height"]));
+                    SetItem("depth", ToStr(reader["Depth"]));
+                    SetItem("cubic", ToStr(reader["Cubic"]));
+                    SetItem("barcode", ToStr(reader["Barcode"]));
+                    SetItem("notes", ToStr(reader["Notes"]));
+                    i++;
+                }
+            }
+            finally
+            {
+                if (opened)
+                {
+                    await db.Database.CloseConnectionAsync();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "PDF Overlay: failed to load item rows for job {JobId}", jobId);
+        }
+    }
+
+    private static string? ToStr(object? value) =>
+        value is null or DBNull ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
+
+    private static void AddParam(DbCommand cmd, string name, object value)
+    {
+        var p = cmd.CreateParameter();
+        p.ParameterName = name;
+        p.Value = value;
+        cmd.Parameters.Add(p);
+    }
 }

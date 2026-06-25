@@ -145,7 +145,8 @@ export default function PdfOverlayEditor() {
           </button>
           <h2 className="text-xl font-bold mt-1">{detail.summary.displayName}</h2>
           <p className="text-xs text-text-muted">
-            {detail.summary.clientId} · {detail.summary.documentType} · v{detail.summary.currentVersion}
+            {detail.summary.allClients ? 'All clients' : detail.summary.clientIds.join(', ')} ·{' '}
+            {detail.summary.documentType} · v{detail.summary.currentVersion}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">

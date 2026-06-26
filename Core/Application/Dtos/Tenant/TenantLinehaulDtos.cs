@@ -26,6 +26,10 @@ public class TenantLinehaulRunDto
     public string? DefaultTargetHint { get; set; }
     // Fixes §8 — run-level Speed (service level) override. null = inherit schedule.
     public int? SpeedId { get; set; }
+    // STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB — the run's master booking (tucJobBooking
+    // WHERE LinehaulRunId = Id AND IsLinehaulMaster = 1). null = none linked yet.
+    public int? MasterBookingId { get; set; }
+    public string? MasterBookingLabel { get; set; }   // "jobNo — name/client" for display
     public int MappedStopsCount { get; set; }    // tblBulkJob WHERE LinehaulRunID = Id AND !Void
     public int UsedBySchedulesCount { get; set; } // tblBulkScheduleLinehaul WHERE LinehaulRunID = Id AND Active
     public bool Active { get; set; }             // derived: >=1 active schedule binding
@@ -47,6 +51,9 @@ public class TenantLinehaulRunUpsertDto
     public int? DefaultTargetId { get; set; }
     // Fixes §8 — run-level Speed override (TucJobType.UcjtId). null = inherit schedule.
     public int? SpeedId { get; set; }
+    // STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB — the booking to mark as this run's master
+    // job. null = clear/no master. Applied with the single-master invariant on save.
+    public int? MasterBookingId { get; set; }
 }
 
 public class TenantDepotLookupDto
@@ -65,6 +72,23 @@ public class LinehaulScheduleBindingDto
     public string Name { get; set; } = string.Empty;
     public bool Active { get; set; }
     public string? WeekDay { get; set; }
+}
+
+// Candidate booking for the "link master job" picker on a Linehaul Run
+// (STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB spec). The server flags whether the
+// booking is already linked — to THIS run or another — so the modal can warn
+// or disable rather than silently steal a master from another run.
+public class TenantLinehaulBookingLookupDto
+{
+    public int BookingId { get; set; }                 // tucJobBooking.UcbkId
+    public string JobNumber { get; set; } = string.Empty; // UcbkJobNumber (primary match)
+    public string? JobName { get; set; }               // CustomJobName
+    public string? ClientName { get; set; }            // UcbkClient.UcclName
+    public string? PickupSummary { get; set; }         // PickupAddressLine1 (display hint)
+    public string? DeliverySummary { get; set; }       // DeliveryAddressLine1 (display hint)
+    public int? LinkedRunId { get; set; }              // null = unlinked; set = already on a run
+    public bool IsMaster { get; set; }                 // already a master booking for its run
+    public bool LinkedToThisRun { get; set; }          // already linked to the run being edited
 }
 
 // TenantCourierLookupDto is reused from TenantRouteDtos.cs (same {Id,Name,Code} shape).

@@ -119,6 +119,23 @@ public class TenantLinehaulRunsController(TenantLinehaulService service) : BaseC
         }
     }
 
+    // Candidate bookings to link to this run as its master job (STEVE-LINEHAUL-
+    // RUN-MODAL-MASTER-JOB spec). Booking-number-first search; depot-name text is
+    // a best-effort recall widener, not a filter. Requires a >= 2-char ?q= term.
+    [HttpGet("{id:int}/linkable-bookings")]
+    public async Task<IActionResult> GetLinkableBookings(int id, [FromQuery] string? q)
+    {
+        try
+        {
+            return Ok(await service.SearchLinkableBookingsAsync(id, q));
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to search linkable bookings for linehaul run {Id}", id);
+            throw;
+        }
+    }
+
     [HttpPost("{id:int}/copy")]
     public async Task<IActionResult> Copy(int id)
     {

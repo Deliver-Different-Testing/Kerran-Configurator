@@ -58,6 +58,91 @@ public class TenantLinehaulService(
         return new TenantLinehaulLookupsDto { Depots = depots, Couriers = couriers };
     }
 
+    // ── Master-job linking (STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB spec) ──────────
+    // Candidate lookup for "link a booking to this run as its master job".
+    //
+    // The spec's original query fuzzy-matched depot names against booking
+    // CompanyName / Description and ranked by a ucbkReady time — but tucJobBooking
+    // has NONE of those columns. Re-grounded against the real schema:
+    //   • PRIMARY, reliable path = direct search on the booking/job number
+    //     (UcbkJobNumber) + CustomJobName + client name — the spec's own happy
+    //     path (operator makes the master booking, then links it by its number).
+    //   • depot-name "fuzzy" matching is DEMOTED to a best-effort recall widener
+    //     over the address / street text, folded into the SAME OR so it never
+    //     hides a booking the operator is searching by number (AR2/AR3). It is
+    //     not a hard filter, and there is no depot column to rank proximity by.
+    //   • the ucbkReady time-ranking is dropped (no such column); recency falls
+    //     back to UcbkTime.
+    //
+    // Universe = active, top-level recurring booking templates (ParentId IS NULL).
+    // Requires a >= 2-char term so we never leading-wildcard-scan the whole table,
+    // and caps at 50. Exact then prefix job-number matches float to the top.
+    public async Task<List<TenantLinehaulBookingLookupDto>> SearchLinkableBookingsAsync(int runId, string? q)
+    {
+        var term = (q ?? string.Empty).Trim();
+        if (term.Length < 2) return [];
+
+        return await Context.TucJobBookings.AsNoTracking()
+            .Where(b => b.UcbkActive == true && b.ParentId == null)
+            .Where(b =>
+                b.UcbkJobNumber.Contains(term) ||
+                (b.CustomJobName != null && b.CustomJobName.Contains(term)) ||
+                (b.UcbkClient != null && b.UcbkClient.UcclName != null && b.UcbkClient.UcclName.Contains(term)) ||
+                // best-effort depot-name recall over address/street text (hint, not filter):
+                (b.FromAddressStreetName != null && b.FromAddressStreetName.Contains(term)) ||
+                (b.ToAddressStreetName != null && b.ToAddressStreetName.Contains(term)) ||
+                (b.PickupAddressLine1 != null && b.PickupAddressLine1.Contains(term)) ||
+                (b.DeliveryAddressLine1 != null && b.DeliveryAddressLine1.Contains(term)))
+            .OrderByDescending(b => b.UcbkJobNumber == term)         // exact job no first
+            .ThenByDescending(b => b.UcbkJobNumber.StartsWith(term)) // then prefix
+            .ThenByDescending(b => b.UcbkTime)                       // then most recent
+            .Take(50)
+            .Select(b => new TenantLinehaulBookingLookupDto
+            {
+                BookingId = b.UcbkId,
+                JobNumber = b.UcbkJobNumber ?? string.Empty,
+                JobName = b.CustomJobName,
+                ClientName = b.UcbkClient != null ? b.UcbkClient.UcclName : null,
+                PickupSummary = b.PickupAddressLine1,
+                DeliverySummary = b.DeliveryAddressLine1,
+                LinkedRunId = b.LinehaulRunId,
+                IsMaster = b.IsLinehaulMaster,
+                LinkedToThisRun = b.LinehaulRunId == runId,
+            })
+            .ToListAsync();
+    }
+
+    // Enforce the single-master invariant on save (resolve-on-reopen): demote any
+    // current master for this run, then promote the selected booking. The master
+    // booking owns BOTH LinehaulRunId + IsLinehaulMaster — nothing else writes
+    // these on tucJobBooking today (migration 052 left LinehaulRunId NULL, no
+    // backfill), so demoting clears both. Reassigning a booking that is the master
+    // of ANOTHER run moves it here (the picker DTO surfaces LinkedRunId so the UI
+    // can warn first). Mutates tracked entities only — caller owns SaveChanges so
+    // the run + booking writes land in one transaction.
+    private async Task ApplyMasterBookingAsync(int runId, int? masterBookingId)
+    {
+        var current = await Context.TucJobBookings
+            .Where(b => b.LinehaulRunId == runId && b.IsLinehaulMaster)
+            .ToListAsync();
+
+        foreach (var b in current.Where(b => b.UcbkId != masterBookingId))
+        {
+            b.IsLinehaulMaster = false;
+            b.LinehaulRunId = null;
+        }
+
+        if (masterBookingId is int id && current.All(b => b.UcbkId != id))
+        {
+            var booking = await Context.TucJobBookings.FirstOrDefaultAsync(b => b.UcbkId == id);
+            if (booking is not null)
+            {
+                booking.LinehaulRunId = runId;
+                booking.IsLinehaulMaster = true;
+            }
+        }
+    }
+
     public async Task<TenantLinehaulMutationResult> CreateAsync(TenantLinehaulRunUpsertDto dto)
     {
         var error = await ValidateAsync(dto, null);
@@ -78,6 +163,13 @@ public class TenantLinehaulService(
         };
         Context.TblbulkLinehaulRuns.Add(run);
         await Context.SaveChangesAsync();
+
+        // run.Id is assigned by the insert above; link the master (if any) now.
+        if (dto.MasterBookingId is not null)
+        {
+            await ApplyMasterBookingAsync(run.Id, dto.MasterBookingId);
+            await Context.SaveChangesAsync();
+        }
 
         return TenantLinehaulMutationResult.Ok((await EnrichAsync([run])).Single());
     }
@@ -100,6 +192,7 @@ public class TenantLinehaulService(
         run.CourierId = courierId;   // NULL when Agent/NP (no more 0 sentinel)
         run.DefaultAgentId = agentId;
         run.SpeedId = dto.SpeedId;
+        await ApplyMasterBookingAsync(run.Id, dto.MasterBookingId);   // single-master invariant
         await Context.SaveChangesAsync();
 
         return TenantLinehaulMutationResult.Ok((await EnrichAsync([run])).Single());
@@ -386,9 +479,26 @@ public class TenantLinehaulService(
                 g => g.Select(r => r.SchedName != null ? $"s|{r.SchedName}|{r.ClientId}" : $"b|{r.BindingName}")
                       .Distinct().Count());
 
+        // Master booking per run (STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB). One per run
+        // by invariant; First() is a defensive collapse if data ever drifts.
+        var masters = (await Context.TucJobBookings.AsNoTracking()
+            .Where(b => b.LinehaulRunId != null && runIds.Contains(b.LinehaulRunId.Value) && b.IsLinehaulMaster)
+            .Select(b => new
+            {
+                RunId = b.LinehaulRunId!.Value,
+                b.UcbkId,
+                b.UcbkJobNumber,
+                b.CustomJobName,
+                ClientName = b.UcbkClient != null ? b.UcbkClient.UcclName : null,
+            })
+            .ToListAsync())
+            .GroupBy(m => m.RunId)
+            .ToDictionary(g => g.Key, g => g.First());
+
         return runs.Select(r =>
         {
             var usedBy = activeBindingCounts.GetValueOrDefault(r.Id);
+            var master = masters.GetValueOrDefault(r.Id);
             // Legacy/untyped rows with a courier fall back to Courier so the chip renders.
             var type = TargetTypeName(r.DefaultTargetType) ?? (r.CourierId > 0 ? "Courier" : null);
             var (targetId, targetName, targetHint) = ResolveTarget(type, r.CourierId > 0 ? r.CourierId : null, r.DefaultAgentId, courierNames, agents);
@@ -410,11 +520,23 @@ public class TenantLinehaulService(
                 DefaultTargetName = targetName,
                 DefaultTargetHint = targetHint,
                 SpeedId = r.SpeedId,
+                MasterBookingId = master?.UcbkId,
+                MasterBookingLabel = master is null ? null : BookingLabel(master.UcbkJobNumber, master.CustomJobName, master.ClientName),
                 MappedStopsCount = stopCounts.GetValueOrDefault(r.Id),
                 UsedBySchedulesCount = usedBy,
                 Active = usedBy > 0,
             };
         }).ToList();
+    }
+
+    // Display label for a master booking: "jobNo — name/client" (name preferred,
+    // falls back to client). Mirrors the picker's TenantLinehaulBookingLookupDto.
+    private static string BookingLabel(string? jobNo, string? jobName, string? client)
+    {
+        var primary = string.IsNullOrWhiteSpace(jobNo) ? "(no job #)" : jobNo!.Trim();
+        var secondary = !string.IsNullOrWhiteSpace(jobName) ? jobName!.Trim()
+            : !string.IsNullOrWhiteSpace(client) ? client!.Trim() : null;
+        return secondary is null ? primary : $"{primary} — {secondary}";
     }
 
     // Maps the picker's (type, id) onto the target columns. Agent + NP both land

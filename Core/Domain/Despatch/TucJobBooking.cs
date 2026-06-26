@@ -393,6 +393,11 @@ public partial class TucJobBooking
     // Recurring Routes Fixes §10 — links a linehaul-leg booking to its run.
     public int? LinehaulRunId { get; set; }
 
+    // STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB — marks the single master booking for
+    // its run. Resolve the master via: LinehaulRunId = @runId AND IsLinehaulMaster = 1.
+    // Hand-added (like LinehaulRunId above) rather than via a full re-scaffold.
+    public bool IsLinehaulMaster { get; set; }
+
     public int? AgentId { get; set; }
 
     public decimal? RawBaseAmount { get; set; }

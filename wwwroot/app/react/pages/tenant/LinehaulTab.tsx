@@ -13,6 +13,7 @@ import {
   extractLinehaulError,
   TenantLinehaulRun,
   TenantLinehaulRunUpsert,
+  TenantLinehaulBookingLookup,
   LinehaulLookups,
   LinehaulScheduleBinding,
 } from '@/services/tenant_linehaulService';
@@ -293,6 +294,12 @@ function LinehaulEditModal({
   // Fixes §8 — run-level Speed override. 0 = "— Use schedule default —" (null).
   const [speedId, setSpeedId] = useState<number>(run?.speedId ?? 0);
   const [speeds, setSpeeds] = useState<ReportingSpeed[]>([]);
+  // Master-job link (STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB).
+  const [masterBookingId, setMasterBookingId] = useState<number | null>(run?.masterBookingId ?? null);
+  const [masterLabel, setMasterLabel] = useState<string | null>(run?.masterBookingLabel ?? null);
+  const [bookingQuery, setBookingQuery] = useState('');
+  const [bookingResults, setBookingResults] = useState<TenantLinehaulBookingLookup[]>([]);
+  const [searchingBookings, setSearchingBookings] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -301,6 +308,21 @@ function LinehaulEditModal({
     rateScheduleService.getSpeeds().then((s) => { if (alive) setSpeeds(s.data); }).catch(() => { /* non-fatal */ });
     return () => { alive = false; };
   }, []);
+
+  // Debounced candidate-booking search (>=2 chars; runId 0 for a not-yet-saved run).
+  useEffect(() => {
+    const term = bookingQuery.trim();
+    if (term.length < 2) { setBookingResults([]); setSearchingBookings(false); return; }
+    let alive = true;
+    setSearchingBookings(true);
+    const t = setTimeout(() => {
+      linehaulService.searchLinkableBookings(run?.id ?? 0, term)
+        .then((r) => { if (alive) setBookingResults(r); })
+        .catch(() => { if (alive) setBookingResults([]); })
+        .finally(() => { if (alive) setSearchingBookings(false); });
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [bookingQuery, run?.id]);
 
   // optgroup the speed picker by grouping name (same source as the Job-detail spec).
   const groupedSpeeds = useMemo(() => {
@@ -330,6 +352,7 @@ function LinehaulEditModal({
         defaultTargetType: target?.type ?? null,
         defaultTargetId: target?.id ?? null,
         speedId: speedId > 0 ? speedId : null,
+        masterBookingId,
       };
       if (run) {
         await linehaulService.update(run.id, payload);
@@ -432,6 +455,51 @@ function LinehaulEditModal({
               ))}
             </select>
             <p className="text-[11px] text-text-secondary mt-1">Default service class for legs riding this run — individual schedules can override it per leg. Leave on default to inherit from the schedule.</p>
+          </div>
+
+          {/* STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB — link this run's master booking. */}
+          <div>
+            <label className="block text-[12.5px] font-medium text-text-secondary mb-1">Master job</label>
+            {masterBookingId ? (
+              <div className="flex items-center justify-between gap-2 border border-border rounded-lg px-3 py-2 text-sm">
+                <span className="truncate font-medium text-[#0d0c2c]">{masterLabel ?? `Booking #${masterBookingId}`}</span>
+                <button type="button" onClick={() => { setMasterBookingId(null); setMasterLabel(null); }}
+                  className="text-[12px] text-red-600 hover:underline shrink-0">Clear</button>
+              </div>
+            ) : (
+              <>
+                <input value={bookingQuery} onChange={(e) => setBookingQuery(e.target.value)}
+                  placeholder="Search by job number, name, client, or address…"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-cyan focus:outline-none" />
+                {bookingQuery.trim().length >= 2 && (
+                  <div className="mt-1 border border-border rounded-lg divide-y divide-border max-h-48 overflow-y-auto">
+                    {searchingBookings && <div className="px-3 py-2 text-[12px] text-text-secondary">Searching…</div>}
+                    {!searchingBookings && bookingResults.length === 0 && <div className="px-3 py-2 text-[12px] text-text-secondary">No matching bookings.</div>}
+                    {!searchingBookings && bookingResults.map((b) => {
+                      const linkedElsewhere = b.linkedRunId != null && !b.linkedToThisRun;
+                      return (
+                        <button key={b.bookingId} type="button"
+                          onClick={() => {
+                            if (linkedElsewhere && !confirm(`Booking ${b.jobNumber} is already the master of another run. Move it to this run?`)) return;
+                            setMasterBookingId(b.bookingId);
+                            setMasterLabel(b.jobName ? `${b.jobNumber} — ${b.jobName}` : b.clientName ? `${b.jobNumber} — ${b.clientName}` : b.jobNumber);
+                            setBookingQuery('');
+                            setBookingResults([]);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between gap-2">
+                          <span className="truncate">
+                            <span className="font-medium text-[#0d0c2c]">{b.jobNumber}</span>
+                            {(b.jobName || b.clientName) && <span className="text-text-secondary"> · {b.jobName ?? b.clientName}</span>}
+                          </span>
+                          {linkedElsewhere && <span className="text-[10.5px] text-amber-600 shrink-0 rounded-full bg-amber-50 px-2 py-0.5">linked elsewhere</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+            <p className="text-[11px] text-text-secondary mt-1">The booking that represents this run's master job. Search by job number (most reliable), name, client, or address.</p>
           </div>
 
           {run && (

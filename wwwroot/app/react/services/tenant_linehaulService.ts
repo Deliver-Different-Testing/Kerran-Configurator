@@ -24,6 +24,9 @@ export interface TenantLinehaulRun {
   defaultTargetHint: string | null;
   // Fixes §8 — run-level Speed override (TucJobType id). null = inherit schedule.
   speedId: number | null;
+  // Master-job link (STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB). null = none linked.
+  masterBookingId: number | null;
+  masterBookingLabel: string | null;   // "jobNo — name/client" for display
   mappedStopsCount: number;
   usedBySchedulesCount: number;
   active: boolean;                // derived: >=1 active schedule binding
@@ -40,6 +43,22 @@ export interface TenantLinehaulRunUpsert {
   defaultTargetId: number | null;
   // Fixes §8 — run-level Speed override (TucJobType id). null = inherit schedule.
   speedId: number | null;
+  // Master-job link (STEVE-LINEHAUL-RUN-MODAL-MASTER-JOB). null = clear/no master.
+  masterBookingId: number | null;
+}
+
+// Candidate booking for the "link master job" picker. linkedRunId/isMaster let
+// the modal warn before stealing a master from another run.
+export interface TenantLinehaulBookingLookup {
+  bookingId: number;
+  jobNumber: string;
+  jobName: string | null;
+  clientName: string | null;
+  pickupSummary: string | null;
+  deliverySummary: string | null;
+  linkedRunId: number | null;
+  isMaster: boolean;
+  linkedToThisRun: boolean;
 }
 
 export interface DepotLookup {
@@ -143,6 +162,13 @@ export const linehaulService = {
   },
   async schedulesForRun(id: number): Promise<LinehaulScheduleBinding[]> {
     const { data } = await api.get<LinehaulScheduleBinding[]>(`/linehaul-runs/${id}/schedules`);
+    return data;
+  },
+  // Master-job picker — candidate bookings to link to this run. Needs a >=2-char
+  // term (booking-number-first; depot text is a recall widener server-side).
+  async searchLinkableBookings(runId: number, q: string): Promise<TenantLinehaulBookingLookup[]> {
+    const { data } = await api.get<TenantLinehaulBookingLookup[]>(
+      `/linehaul-runs/${runId}/linkable-bookings`, { params: { q } });
     return data;
   },
 

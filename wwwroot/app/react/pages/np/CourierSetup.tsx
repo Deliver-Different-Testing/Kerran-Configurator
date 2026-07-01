@@ -33,16 +33,20 @@ import type { Courier, DocumentStatus, CourierDocument } from '@/types';
 
 // §10: the standalone 'documents' tab is folded into 'compliance' (Compliance &
 // Licensing) — the document rows + AI upload now live under that tab.
-type CourierTab = 'profile' | 'contact' | 'vehicle' | 'compliance' | 'financial' | 'device' | 'notes';
+// §17a: the standalone 'device' (Device & Access) tab is eliminated. Its Mobile
+// App Login + reset-password + POD moved to the always-visible Login & Access
+// block; Communication Channel / Device Type / Device Admin joined that block;
+// SMS & Network + Working Hours moved to the Profile tab; the Web & Display
+// flags sit in a transitional "Advanced" card on Profile pending §17d sign-off.
+type CourierTab = 'profile' | 'contact' | 'vehicle' | 'compliance' | 'financial' | 'notes';
 
-const TAB_KEYS: CourierTab[] = ['profile', 'contact', 'vehicle', 'compliance', 'financial', 'device', 'notes'];
+const TAB_KEYS: CourierTab[] = ['profile', 'contact', 'vehicle', 'compliance', 'financial', 'notes'];
 const TAB_LABELS: Record<CourierTab, string> = {
   profile: 'Profile',
   contact: 'Contact',
   vehicle: 'Vehicle',
   compliance: 'Compliance & Licensing',
   financial: 'Financial',
-  device: 'Device & Access',
   notes: 'Communications',
 };
 
@@ -421,6 +425,97 @@ export default function CourierSetup({ onSelectCourier }: Props) {
         </div>
       </div>
 
+      {/* ── Login & Access (§17b: always-visible, on every tab) ──
+          Promotes the Mobile App Login + reset-password from the eliminated
+          Device & Access tab to a persistent block, and gathers the connection
+          affordances (channel, device type, device admin, POD, 2FA) here. */}
+      <div className="bg-white border border-border rounded-lg p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-text-primary">Login &amp; Access</h3>
+          {c.hasMobileLogin === false && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-amber-300 bg-amber-50 text-amber-700">● No app login</span>
+          )}
+          {c.hasMobileLogin === true && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-green-200 bg-green-50 text-green-700">● Login active</span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Mobile App Login + reset password (copy preserved from the old tab) */}
+          <div>
+            <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">Mobile App Login</h4>
+            <p className="text-xs text-text-secondary mb-2">
+              Set or reset the password the courier signs in to the mobile app with — their username is their <span className="font-medium">email</span>. If they don't have a login yet, this creates one. Separate from Save; applies immediately.
+            </p>
+            {!c.email?.trim() && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-xs mb-2">
+                Add an email on the Contact tab first — it's the courier's sign-in username.
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-xs text-text-secondary uppercase tracking-wide">New Password</label>
+                <PasswordInput value={loginPassword} onChange={setLoginPassword} maxLength={100} placeholder="Password to give the courier" />
+              </div>
+              <button
+                type="button"
+                onClick={handleResetLogin}
+                disabled={loginSaving || !loginPassword.trim() || !c.email?.trim()}
+                className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {loginSaving ? 'Setting…' : 'Set / Reset Password'}
+              </button>
+            </div>
+            {loginError && (
+              <div className="mt-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">⚠️ {loginError}</div>
+            )}
+            {loginSuccess && (
+              <div className="mt-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-xs">✅ Mobile app password set.</div>
+            )}
+
+            {/* §17b: 2FA slot — the send-code / enrolment-status affordance lands
+                here once the native SMS-auth backend (PHASE1-SMS-AUTH) is built.
+                Deferred this pass; shown disabled so the placement is reserved. */}
+            <div className="mt-4 pt-3 border-t border-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Two-Factor (SMS)</div>
+                  <div className="text-xs text-text-muted mt-0.5">Enrolment &amp; send-code — pending the SMS auth backend.</div>
+                </div>
+                <button
+                  type="button"
+                  disabled
+                  title="Available once SMS 2FA auth is enabled"
+                  className="border border-border text-text-muted px-3 py-1.5 rounded-md text-xs opacity-50 cursor-not-allowed whitespace-nowrap"
+                >
+                  Send enrolment code
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Connection + access affordances that came off the Device & Access tab */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              {/* §17a: Communication Channel + Device Type fold in here (read-only —
+                  they describe how the courier connects, not a page of settings). */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary uppercase tracking-wide">Channel</label>
+                <input type="text" value={c.channel || '—'} readOnly className="bg-surface-light cursor-not-allowed opacity-80" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary uppercase tracking-wide">Device Type</label>
+                <input type="text" value={c.deviceType || '—'} readOnly className="bg-surface-light cursor-not-allowed opacity-80" />
+              </div>
+            </div>
+            <div className="border-t border-border pt-3 space-y-1">
+              <FormField label="Device Admin" type="checkbox" {...bindBool('deviceAdmin')} />
+              <FormField label="POD Required" type="checkbox" {...bindBool('podRequired')} />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Tabs ── */}
       <div className="flex gap-0 border-b border-border mb-5 overflow-x-auto">
         {TAB_KEYS.map(t => (
@@ -452,6 +547,60 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <FormField label="Date of Birth" type="date" {...bind('dob')} />
               <FormField label="Start Date" type="date" {...bind('startDate')} />
               <FormField label="Finish Date" type="date" {...bind('finishDate')} />
+            </div>
+          </div>
+
+          {/* §17c: editable Active toggle on the Profile tab (the at-a-glance
+              Active pill stays in the identity strip). Internal flag is deferred
+              to the §17d investigation sign-off before it surfaces here. */}
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Status</h3>
+            <FormField
+              label="Active"
+              type="checkbox"
+              checked={c.status === 'active'}
+              onChange={(val) => setDraft(d => d ? { ...d, status: (typeof val === 'boolean' ? val : !!val) ? 'active' : 'inactive' } : d)}
+            />
+            <p className="text-xs text-text-muted mt-1">Inactive couriers are hidden from dispatch and can't sign in to the mobile app.</p>
+          </div>
+
+          {/* §17a: Working Hours relocated from the eliminated Device & Access tab. */}
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Working Hours</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Expected Start Time" type="time" {...bind('startTime')} />
+              <FormField label="Expected End Time" type="time" {...bind('endTime')} />
+            </div>
+          </div>
+
+          {/* §17a: SMS & Network moved here as communication-preference flags
+              (they aren't device settings). */}
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Notifications</h3>
+            <div className="space-y-1">
+              <FormField label="Carrier Network" type="checkbox" {...bindBool('vodafone')} />
+              <FormField label="Send Job via SMS" type="checkbox" {...bindBool('smsJob')} />
+              <FormField label="Send Alert SMS" type="checkbox" {...bindBool('smsAlert')} />
+            </div>
+          </div>
+
+          {/* §17a/§17d: the Web & Display flags come off the eliminated tab but
+              their final home is undecided pending the tucCourier-flags
+              investigation. Kept editable here (no regression) in a clearly
+              transitional card; Mobile Advert Courier is hidden per AR-17.6. */}
+          <div className="bg-amber-50/40 border border-amber-200 rounded-lg p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-sm font-semibold text-text-primary">Advanced Settings</h3>
+              <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">Placement under review</span>
+            </div>
+            <p className="text-xs text-text-muted mb-3">
+              These <code className="text-[11px]">tucCourier</code> flags are being reviewed (§17d) — final placement pending sign-off.
+            </p>
+            <div className="space-y-1">
+              <FormField label="Web Enabled" type="checkbox" {...bindBool('webEnabled')} />
+              <FormField label="Auto Despatch" type="checkbox" {...bindBool('autoDispatch')} />
+              <FormField label="Show Client Phone" type="checkbox" {...bindBool('showClientPhone')} />
+              <FormField label="Display on Web" type="checkbox" {...bindBool('displayWeb')} />
             </div>
           </div>
 
@@ -729,90 +878,9 @@ export default function CourierSetup({ onSelectCourier }: Props) {
         </div>
       )}
 
-      {/* ── Device & Access Tab ── */}
-      {tab === 'device' && (
-        <div className="space-y-5">
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Communication Channel</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Channel" type="select" value={c.channel} options={['App', 'SMS', 'Radio']} />
-              <FormField label="Device Type" value={c.deviceType} readonly />
-            </div>
-            <div className="mt-3">
-              <FormField label="Device Admin" type="checkbox" {...bindBool('deviceAdmin')} />
-            </div>
-          </div>
-
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">SMS &amp; Network</h3>
-            <div className="space-y-1">
-              <FormField label="Carrier Network" type="checkbox" {...bindBool('vodafone')} />
-              <FormField label="Send Job via SMS" type="checkbox" {...bindBool('smsJob')} />
-              <FormField label="Send Alert SMS" type="checkbox" {...bindBool('smsAlert')} />
-            </div>
-          </div>
-
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Web &amp; Display</h3>
-            <div className="space-y-1">
-              <FormField label="Web Enabled" type="checkbox" {...bindBool('webEnabled')} />
-              <FormField label="Auto Despatch" type="checkbox" {...bindBool('autoDispatch')} />
-              <FormField label="Show Client Phone" type="checkbox" {...bindBool('showClientPhone')} />
-              <FormField label="Mobile Advert Courier" type="checkbox" checked={c.mobileAdvert} />
-              <FormField label="Display on Web" type="checkbox" {...bindBool('displayWeb')} />
-            </div>
-          </div>
-
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Mobile App Login</h3>
-            {c.hasMobileLogin === false && (
-              <div className="inline-block px-2 py-0.5 rounded text-[11px] border border-amber-300 bg-amber-50 text-amber-700 mb-2">● No login yet — this courier can't sign in to the mobile app</div>
-            )}
-            {c.hasMobileLogin === true && (
-              <div className="inline-block px-2 py-0.5 rounded text-[11px] border border-green-200 bg-green-50 text-green-700 mb-2">● Login active — set a new password below to reset it</div>
-            )}
-            <p className="text-xs text-text-secondary mb-2">
-              Set or reset the password the courier signs in to the mobile app with — their username is their <span className="font-medium">email</span>. If they don't have a login yet, this creates one. Separate from Save; applies immediately.
-            </p>
-            {!c.email?.trim() && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-xs mb-2">
-                Add an email on the Profile tab first — it's the courier's sign-in username.
-              </div>
-            )}
-            <div className="flex items-end gap-2 max-w-lg">
-              <div className="flex-1 flex flex-col gap-1">
-                <label className="text-xs text-text-secondary uppercase tracking-wide">New Password</label>
-                <PasswordInput value={loginPassword} onChange={setLoginPassword} maxLength={100} placeholder="Password to give the courier" />
-              </div>
-              <button
-                type="button"
-                onClick={handleResetLogin}
-                disabled={loginSaving || !loginPassword.trim() || !c.email?.trim()}
-                className="bg-brand-cyan text-brand-dark border-none font-medium px-4 py-2 rounded-md text-sm hover:shadow-cyan-glow disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                {loginSaving ? 'Setting…' : 'Set / Reset Password'}
-              </button>
-            </div>
-            {loginError && (
-              <div className="mt-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs max-w-lg">⚠️ {loginError}</div>
-            )}
-            {loginSuccess && (
-              <div className="mt-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-xs max-w-lg">✅ Mobile app password set.</div>
-            )}
-            <div className="mt-4 pt-3 border-t border-border">
-              <FormField label="POD Required" type="checkbox" {...bindBool('podRequired')} />
-            </div>
-          </div>
-
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Working Hours</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Expected Start Time" type="time" {...bind('startTime')} />
-              <FormField label="Expected End Time" type="time" {...bind('endTime')} />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* §17a: the Device & Access tab was eliminated here — its sections now
+          live in the Login & Access block (login/reset/POD/device-admin/channel)
+          and on the Profile tab (Status, Working Hours, Notifications, Advanced). */}
 
       {/* ── Communications Tab (§13: replaces Notes & Audit) ── */}
       {tab === 'notes' && (

@@ -37,6 +37,10 @@ namespace DfrntDriveConfigurator.Core.Domain
         // Legacy events log, repurposed for courier communications (modal §13).
         public virtual DbSet<TucEvent> TucEvents { get; set; }
 
+        // Courier SMS 2FA code store (modal §17b, database/057). Hand-authored
+        // entity, configured here so it survives EFPT regen (not in efpt.config.json).
+        public virtual DbSet<TucSmsAuthCode> TucSmsAuthCodes { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -163,6 +167,14 @@ namespace DfrntDriveConfigurator.Core.Domain
                 entity.Property(e => e.UcevIsScheduled).HasColumnName("ucevIsScheduled");
                 entity.Property(e => e.UcevNotificationSent).HasColumnName("ucevNotificationSent");
                 entity.Property(e => e.UcevDueTime).HasColumnName("ucevDueTime");
+            });
+
+            modelBuilder.Entity<TucSmsAuthCode>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("TucSmsAuthCode");
+                // PascalCase columns match property names (database/057) — no
+                // per-property HasColumnName needed. Queried by CanonicalMobile.
             });
 
             modelBuilder.Entity<TucAgentDocument>(entity =>

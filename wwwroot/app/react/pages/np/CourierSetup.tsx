@@ -26,6 +26,7 @@ import DocumentUpload from '@/components/common/DocumentUpload';
 import { useDocumentTypes, useCourierDocuments, useComplianceSummary } from '@/hooks/useDocuments';
 import { courierComplianceProfileService, type CourierComplianceProfiles } from '@/services/np_courierComplianceProfileService';
 import { courierCommunicationService, type CourierCommunications } from '@/services/np_courierCommunicationService';
+import { courier2faService, type CourierTwoFactorStatus } from '@/services/np_courier2faService';
 import { CourierDocumentPreviewModal } from '@/components/np/CourierDocumentPreviewModal';
 import { courierDocumentService } from '@/services/np_documentService';
 import { useAuth } from '@/context/AuthContext';
@@ -473,24 +474,9 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               <div className="mt-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-xs">✅ Mobile app password set.</div>
             )}
 
-            {/* §17b: 2FA slot — the send-code / enrolment-status affordance lands
-                here once the native SMS-auth backend (PHASE1-SMS-AUTH) is built.
-                Deferred this pass; shown disabled so the placement is reserved. */}
+            {/* §17b: 2FA (SMS) enrolment status + send-code (AWS Pinpoint backend). */}
             <div className="mt-4 pt-3 border-t border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Two-Factor (SMS)</div>
-                  <div className="text-xs text-text-muted mt-0.5">Enrolment &amp; send-code — pending the SMS auth backend.</div>
-                </div>
-                <button
-                  type="button"
-                  disabled
-                  title="Available once SMS 2FA auth is enabled"
-                  className="border border-border text-text-muted px-3 py-1.5 rounded-md text-xs opacity-50 cursor-not-allowed whitespace-nowrap"
-                >
-                  Send enrolment code
-                </button>
-              </div>
+              <CourierTwoFactorSection courierId={c.id} />
             </div>
           </div>
 
@@ -1178,6 +1164,87 @@ function CourierRolesSummaryCard({ data, onManage }: { data: CourierCompliancePr
             <span key={n} className="text-xs px-2.5 py-0.5 rounded-full bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">{n}</span>
           ))}
           <span className="text-xs text-text-muted ml-1">· {requiredCount} required document{requiredCount === 1 ? '' : 's'}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── §17b: 2FA (SMS) enrolment status + send-code, for the Login & Access block ──
+function CourierTwoFactorSection({ courierId }: { courierId: number }) {
+  const [status, setStatus] = useState<CourierTwoFactorStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    courier2faService.status(courierId)
+      .then(s => { if (alive) setStatus(s); })
+      .catch(() => { /* non-fatal — section still renders a neutral state */ });
+    return () => { alive = false; };
+  }, [courierId]);
+
+  const send = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await courier2faService.sendCode(courierId);
+      setMsg({ kind: 'ok', text: r.message || 'Enrolment code sent.' });
+    } catch (e) {
+      const ax = e as { response?: { status?: number; data?: { message?: string; retryAfterSeconds?: number } } };
+      const d = ax.response?.data;
+      const wait = d?.retryAfterSeconds;
+      setMsg({
+        kind: 'err',
+        text: d?.message
+          ? (wait ? `${d.message} (try again in ~${wait}s)` : d.message)
+          : 'Could not send the code. Please try again.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Enrolment status pill
+  const pill = !status
+    ? { cls: 'border-border bg-surface-light text-text-muted', label: '2FA status…' }
+    : status.mobileVerified
+      ? { cls: 'border-green-200 bg-green-50 text-green-700', label: status.mobileVerifiedDate ? `Enrolled · ${status.mobileVerifiedDate}` : 'Enrolled' }
+      : status.mobileNeedsReview
+        ? { cls: 'border-amber-300 bg-amber-50 text-amber-700', label: 'Mobile needs review' }
+        : { cls: 'border-amber-300 bg-amber-50 text-amber-700', label: 'Not enrolled' };
+
+  const canSend = !!status && status.hasMobile && status.smsConfigured && !busy;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Two-Factor (SMS)</div>
+          <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[11px] border ${pill.cls}`}>● {pill.label}</span>
+        </div>
+        <button
+          type="button"
+          onClick={send}
+          disabled={!canSend}
+          title={
+            !status ? 'Loading…'
+              : !status.smsConfigured ? 'SMS is not configured on this deployment'
+              : !status.hasMobile ? 'Add a mobile number on the Contact tab first'
+              : 'Text the courier a fresh 6-digit enrolment code'
+          }
+          className="bg-brand-cyan text-brand-dark border-none font-medium px-3 py-1.5 rounded-md text-xs hover:shadow-cyan-glow disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+        >
+          {busy ? 'Sending…' : 'Send enrolment code'}
+        </button>
+      </div>
+      {status && !status.smsConfigured && (
+        <div className="text-[11px] text-text-muted mt-1">SMS is not configured on this deployment.</div>
+      )}
+      {msg && (
+        <div className={`mt-2 rounded-md px-3 py-2 text-xs border ${
+          msg.kind === 'ok' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'
+        }`}>
+          {msg.kind === 'ok' ? '✅ ' : '⚠️ '}{msg.text}
         </div>
       )}
     </div>

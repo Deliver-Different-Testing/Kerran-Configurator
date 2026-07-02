@@ -275,6 +275,15 @@ public partial class TucCourier
 
     public string MasterSubSettlementMode { get; set; }
 
+    // Courier SMS 2FA (database/057, modal §17b). Plain columns; PascalCase
+    // names match the DB, mapped by convention. MobileNeedsReview flags a mobile
+    // that failed E.164 parse — SMS is skipped until staff fix it.
+    public bool MobileVerified { get; set; }
+
+    public DateTime? MobileVerifiedDate { get; set; }
+
+    public bool MobileNeedsReview { get; set; }
+
     public virtual ICollection<CourierApplicant> CourierApplicantCouriers { get; set; } = new List<CourierApplicant>();
 
     public virtual ICollection<CourierApplicant> CourierApplicantMasterCouriers { get; set; } = new List<CourierApplicant>();

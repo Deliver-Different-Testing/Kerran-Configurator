@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.AccessControl;
 using System.Threading.Tasks;
 using Amazon;
+using Amazon.PinpointSMSVoiceV2;
 using Amazon.Runtime;
 using Amazon.Runtime.CredentialManagement;
 using Amazon.S3;
@@ -132,6 +133,26 @@ builder.Services.AddSingleton<IAmazonS3>(_ =>
     return new AmazonS3Client(s3Config);
 });
 
+// IAmazonPinpointSMSVoiceV2 — AWS Pinpoint SMS for courier 2FA (modal §17b).
+// Same OS-aware credential resolution as IAmazonS3 (dev SSO on Windows, default
+// chain in-cluster). Region matches S3 (APSoutheast2 unless overridden).
+builder.Services.AddSingleton<IAmazonPinpointSMSVoiceV2>(_ =>
+{
+    var awsOptions = builder.Configuration.GetAWSOptions();
+    var region = awsOptions.Region ?? RegionEndpoint.APSoutheast2;
+    var smsConfig = new AmazonPinpointSMSVoiceV2Config { RegionEndpoint = region };
+
+    if (OperatingSystem.IsWindows())
+    {
+        var ssoCreds = LoadSsoCredentials("default");
+        return new AmazonPinpointSMSVoiceV2Client(ssoCreds, smsConfig);
+    }
+
+    return new AmazonPinpointSMSVoiceV2Client(smsConfig);
+});
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Common.ISmsSender,
+    DfrntDriveConfigurator.Core.Application.Services.Common.PinpointSmsSender>();
+
 // AppSettings — strongly-typed config (env vars + appsettings.json),
 // populated at startup and registered as a singleton. Services inject
 // AppSettings for typed access to bucket names etc. Matches the
@@ -150,6 +171,7 @@ var appSettings = new AppSettings
     PortalDespatchConnection = builder.Configuration["PortalDespatchConnection"] ?? string.Empty,
     PortalTenantSlug = builder.Configuration["PortalTenantSlug"] ?? "portal",
     PortalDisplayName = builder.Configuration["PortalDisplayName"] ?? "Deliver Different",
+    SmsOriginationIdentity = builder.Configuration["SmsOriginationIdentity"] ?? string.Empty,
 };
 builder.Services.AddSingleton(appSettings);
 
@@ -449,6 +471,10 @@ builder.Services.AddScoped<DfrntDriveConfigurator.API.Filters.PortalRequestFilte
 // service. The auth handler (PortalCourier scheme) resolves the token service.
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalCourierSessionTokenService>();
 builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.PortalCourierService>();
+
+// Courier SMS 2FA / passwordless sign-in (modal §17b, PHASE1-SMS-AUTH native).
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.SmsRateLimiter>();
+builder.Services.AddScoped<DfrntDriveConfigurator.Core.Application.Services.Portal.CourierSmsAuthService>();
 
 // Phase 2 courier portal — courier self-service (cookie-authed, CourierOnly).
 builder.Services.AddScoped<

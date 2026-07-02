@@ -62,7 +62,22 @@ const portalApi = axios.create({
   },
 });
 
+export interface CourierSmsVerifyResult {
+  token: string;
+  courierId: number;
+  firstName: string;
+}
+
 export const courierPortalAuthService = {
   validate: (driveToken: string): Promise<CourierPortalSession> =>
     portalApi.post<CourierPortalSession>('/auth/validate', { driveToken }).then(r => r.data),
+
+  // §17b passwordless SMS sign-in — request a 6-digit code, then verify it for a
+  // session token. request-code always resolves (never leaks whether the mobile
+  // is registered); verify-code rejects on a bad code (400) or throttle (429).
+  requestSmsCode: (mobile: string): Promise<{ accepted: boolean; message: string }> =>
+    portalApi.post<{ accepted: boolean; message: string }>('/auth/sms/request-code', { mobile }).then(r => r.data),
+
+  verifySmsCode: (mobile: string, code: string): Promise<CourierSmsVerifyResult> =>
+    portalApi.post<CourierSmsVerifyResult>('/auth/sms/verify-code', { mobile, code }).then(r => r.data),
 };

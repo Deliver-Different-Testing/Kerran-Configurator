@@ -129,4 +129,22 @@ public class AppSettings
     /// <summary>True when the portal has the minimum config to operate.</summary>
     public bool PortalEnabled =>
         !string.IsNullOrEmpty(PortalTenantId) && !string.IsNullOrEmpty(PortalDespatchConnection);
+
+    // ---- Courier SMS 2FA (modal §17b) ------------------------------------
+    // SMS is sent via AWS Pinpoint SMS (SendTextMessage / TRANSACTIONAL), the
+    // same provider smppservice uses — there is no Twilio in the stack. The
+    // credentials come from the ambient AWS credential chain (same as S3); only
+    // the origination identity is per-deployment config.
+
+    /// <summary>
+    /// The AWS Pinpoint origination identity (a registered phone number /
+    /// pool id / sender id) that auth-code texts are sent from. Bound from env
+    /// var SmsOriginationIdentity. Empty value DISABLES SMS 2FA (request-code
+    /// still returns 200 to avoid leaking, but no text is sent; the operator
+    /// modal shows "SMS not configured").
+    /// </summary>
+    public string SmsOriginationIdentity { get; set; } = string.Empty;
+
+    /// <summary>True when SMS 2FA can actually send (origination identity set).</summary>
+    public bool SmsEnabled => !string.IsNullOrEmpty(SmsOriginationIdentity);
 }

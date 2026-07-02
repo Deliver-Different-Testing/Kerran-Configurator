@@ -509,8 +509,14 @@ export default function CourierSetup({ onSelectCourier }: Props) {
               </div>
             </div>
             <div className="border-t border-border pt-3 space-y-1">
+              {/* §17d (Steve sign-off 2026-07-02): "Web Enabled" lands here,
+                  relabelled — it gates mobile-app sign-in (MARSWS_stpIsValidLogin),
+                  so it belongs with the login affordances. Usually set
+                  automatically on provisioning; this is mostly a disable switch. */}
+              <FormField label="Mobile App Access" type="checkbox" {...bindBool('webEnabled')} />
               <FormField label="Device Admin" type="checkbox" {...bindBool('deviceAdmin')} />
               <FormField label="POD Required" type="checkbox" {...bindBool('podRequired')} />
+              <p className="text-[11px] text-text-muted pt-1">Mobile App Access gates whether the courier can sign in to the mobile app.</p>
             </div>
           </div>
         </div>
@@ -584,24 +590,21 @@ export default function CourierSetup({ onSelectCourier }: Props) {
             </div>
           </div>
 
-          {/* §17a/§17d: the Web & Display flags come off the eliminated tab but
-              their final home is undecided pending the tucCourier-flags
-              investigation. Kept editable here (no regression) in a clearly
-              transitional card; Mobile Advert Courier is hidden per AR-17.6. */}
-          <div className="bg-amber-50/40 border border-amber-200 rounded-lg p-5">
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-sm font-semibold text-text-primary">Advanced Settings</h3>
-              <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">Placement under review</span>
-            </div>
-            <p className="text-xs text-text-muted mb-3">
-              These <code className="text-[11px]">tucCourier</code> flags are being reviewed (§17d) — final placement pending sign-off.
-            </p>
+          {/* §17d (Steve sign-off 2026-07-02): the held Web & Display flags moved
+              to their final homes. Web Enabled → Login & Access ("Mobile App
+              Access"); Show Client Phone + Auto Despatch → here (Mobile
+              Preferences); Display on Web dropped from the modal (dead flag — no
+              read path); Mobile Advert stays hidden (AR-17.6). The Internal flag
+              is deliberately NOT surfaced here — Steve's call: it's passed to
+              Kerran for the accounts-app courier profile (dangerous in the general
+              profile since it zeroes contractor pay/bonus). */}
+          <div className="bg-white border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Mobile Preferences</h3>
             <div className="space-y-1">
-              <FormField label="Web Enabled" type="checkbox" {...bindBool('webEnabled')} />
-              <FormField label="Auto Despatch" type="checkbox" {...bindBool('autoDispatch')} />
               <FormField label="Show Client Phone" type="checkbox" {...bindBool('showClientPhone')} />
-              <FormField label="Display on Web" type="checkbox" {...bindBool('displayWeb')} />
+              <FormField label="Auto Despatch" type="checkbox" {...bindBool('autoDispatch')} />
             </div>
+            <p className="text-[11px] text-text-muted pt-2">Show Client Phone reveals the client's number on the courier's mobile job screen. Auto Despatch includes the courier in auto-despatch assignment.</p>
           </div>
 
           {/* §13: Training hours relocated here from the old Notes & Audit tab. */}

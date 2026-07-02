@@ -173,3 +173,30 @@ Two decoy hits worth noting so nobody re-chases them:
 
 **Please confirm the destination column for each of the six flags** (and whether to
 raise migrations to drop `MACourier` / `DisplayWeb`) and I'll finalise the moves.
+
+---
+
+## RESOLUTION — Steve sign-off 2026-07-02
+
+Steve agreed with the recommendations for all flags **except Internal**:
+
+- **Web Enabled** → moved to the **Login & Access** block, relabelled **"Mobile App
+  Access"** (with a caption explaining it gates mobile-app sign-in). ✅ done.
+- **Show Client Phone** + **Auto Despatch** → moved to a **"Mobile Preferences"**
+  card on the Profile tab. ✅ done.
+- **Display on Web** → **dropped from the modal** (dead flag; column left in place,
+  still round-tripped by `NpFleetService`, no read path). ✅ done.
+- **Mobile Advert** → stays hidden (AR-17.6). Column-drop migration = open follow-up
+  (needs BI/external-dependency confirmation before dropping).
+- **Internal** → **NOT surfaced in the configurator general courier profile.**
+  Steve's call: *"dangerous having it in the general courier profile"* — it's passed
+  to **Kerran** to include in the **accounts-app courier profile** he's currently
+  building. Flagged to Kerran 2026-07-02
+  (`~/Documents/claude-handoff/NOTE-for-kerran-internal-flag-2026-07-02.md`).
+
+**SMS provider:** Steve confirmed Twilio is imaginary — the 2FA workstream uses the
+existing AWS Pinpoint SMS path (see the SMS-provider note).
+
+Shipped in configurator commit finalising these moves (see git log). Remaining
+open follow-ups: `MACourier` / `DisplayWeb` column drops; the new AutoDispatch
+engine ignoring the courier `AutoDespatch` flag (raise with that team).

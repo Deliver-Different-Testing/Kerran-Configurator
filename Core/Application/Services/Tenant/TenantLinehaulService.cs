@@ -114,31 +114,47 @@ public class TenantLinehaulService(
 
     // Enforce the single-master invariant on save (resolve-on-reopen): demote any
     // current master for this run, then promote the selected booking. The master
-    // booking owns BOTH LinehaulRunId + IsLinehaulMaster — nothing else writes
-    // these on tucJobBooking today (migration 052 left LinehaulRunId NULL, no
-    // backfill), so demoting clears both. Reassigning a booking that is the master
-    // of ANOTHER run moves it here (the picker DTO surfaces LinkedRunId so the UI
-    // can warn first). Mutates tracked entities only — caller owns SaveChanges so
-    // the run + booking writes land in one transaction.
-    private async Task ApplyMasterBookingAsync(int runId, int? masterBookingId)
+    // booking owns LinehaulRunId + IsLinehaulMaster + (P0-B) the inherited run
+    // courier — nothing else writes these on tucJobBooking today (migration 052
+    // left LinehaulRunId NULL, no backfill), so demoting clears them. Reassigning a
+    // booking that is the master of ANOTHER run moves it here (the picker DTO
+    // surfaces LinkedRunId so the UI can warn first). Mutates tracked entities only
+    // — caller owns SaveChanges so the run + booking writes land in one transaction.
+    //
+    // P0-B (STEVE-LINEHAUL-DRIVER-WORKFLOW-SIMPLIFICATION): the realised master LH
+    // job must be dispatched to the run courier. The booking->job realiser
+    // (UTL_stpJobBooking_InsertJob) copies tucJobBooking.CourierId onto the live
+    // job, so stamping the run courier on the master booking here is enough — no
+    // legacy proc change. Re-stamped on every save so a later change to the run
+    // courier re-syncs the master; that is why the promote branch also refreshes an
+    // already-current (unchanged) master rather than skipping it.
+    private async Task ApplyMasterBookingAsync(int runId, int? masterBookingId, int? runCourierId)
     {
         var current = await Context.TucJobBookings
             .Where(b => b.LinehaulRunId == runId && b.IsLinehaulMaster)
             .ToListAsync();
 
+        // Demote any current master that is not the new selection. Clear the
+        // inherited courier too: a booking that is no longer this run's master must
+        // not keep dispatching its realised job to the run courier.
         foreach (var b in current.Where(b => b.UcbkId != masterBookingId))
         {
             b.IsLinehaulMaster = false;
             b.LinehaulRunId = null;
+            b.CourierId = null;
         }
 
-        if (masterBookingId is int id && current.All(b => b.UcbkId != id))
+        if (masterBookingId is int id)
         {
-            var booking = await Context.TucJobBookings.FirstOrDefaultAsync(b => b.UcbkId == id);
+            // Reuse the already-tracked master when it is unchanged; otherwise load
+            // the selected booking (which may currently be the master of another run).
+            var booking = current.FirstOrDefault(b => b.UcbkId == id)
+                ?? await Context.TucJobBookings.FirstOrDefaultAsync(b => b.UcbkId == id);
             if (booking is not null)
             {
                 booking.LinehaulRunId = runId;
                 booking.IsLinehaulMaster = true;
+                booking.CourierId = runCourierId;   // inherit run courier (NULL for Agent/NP runs)
             }
         }
     }
@@ -167,7 +183,7 @@ public class TenantLinehaulService(
         // run.Id is assigned by the insert above; link the master (if any) now.
         if (dto.MasterBookingId is not null)
         {
-            await ApplyMasterBookingAsync(run.Id, dto.MasterBookingId);
+            await ApplyMasterBookingAsync(run.Id, dto.MasterBookingId, run.CourierId);
             await Context.SaveChangesAsync();
         }
 
@@ -192,7 +208,7 @@ public class TenantLinehaulService(
         run.CourierId = courierId;   // NULL when Agent/NP (no more 0 sentinel)
         run.DefaultAgentId = agentId;
         run.SpeedId = dto.SpeedId;
-        await ApplyMasterBookingAsync(run.Id, dto.MasterBookingId);   // single-master invariant
+        await ApplyMasterBookingAsync(run.Id, dto.MasterBookingId, run.CourierId);   // single-master invariant + P0-B courier
         await Context.SaveChangesAsync();
 
         return TenantLinehaulMutationResult.Ok((await EnrichAsync([run])).Single());

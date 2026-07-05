@@ -261,6 +261,74 @@ function buildRateRows(agent: AgentWorkspaceRecord, drivers: TenantCourier[]): R
   }));
 }
 
+function MetricTrend({ title, value, detail, points, tone = 'cyan' }: { title: string; value: ReactNode; detail?: string; points: number[]; tone?: 'cyan' | 'green' | 'purple'; }) {
+  const stroke = tone === 'green' ? '#13b964' : tone === 'purple' ? '#824ae0' : '#3bc7f4';
+  const fill = tone === 'green' ? 'rgba(19,185,100,0.12)' : tone === 'purple' ? 'rgba(130,74,224,0.12)' : 'rgba(59,199,244,0.12)';
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const span = Math.max(max - min, 1);
+  const d = points.map((point, index) => {
+    const x = (index / Math.max(points.length - 1, 1)) * 100;
+    const y = 100 - (((point - min) / span) * 80 + 10);
+    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+  const area = `${d} L 100 100 L 0 100 Z`;
+
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{title}</div>
+          <div className="mt-2 text-2xl font-bold text-text-primary">{value}</div>
+          {detail && <div className="mt-1 text-xs text-text-secondary">{detail}</div>}
+        </div>
+      </div>
+      <div className="mt-4 h-24 rounded-2xl bg-slate-50 p-2">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
+          <path d={area} fill={fill} />
+          <path d={d} fill="none" stroke={stroke} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function CoverageBars({ airportCount, zipCount }: { airportCount: number; zipCount: number; }) {
+  const airportWidth = Math.min(100, Math.max(18, airportCount * 18));
+  const zipWidth = Math.min(100, Math.max(22, zipCount / 2));
+
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Coverage footprint</div>
+      <div className="mt-4 space-y-4">
+        <div>
+          <div className="mb-1 flex items-center justify-between text-sm">
+            <span className="text-text-primary">Airports covered</span>
+            <span className="font-semibold text-text-primary">{airportCount}</span>
+          </div>
+          <div className="h-3 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-brand-cyan" style={{ width: `${airportWidth}%` }} /></div>
+        </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between text-sm">
+            <span className="text-text-primary">Zipcodes mapped</span>
+            <span className="font-semibold text-text-primary">{zipCount}</span>
+          </div>
+          <div className="h-3 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-violet-500" style={{ width: `${zipWidth}%` }} /></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildLiveDeliveries(agent: AgentWorkspaceRecord) {
+  const city = agent.city || 'Unknown';
+  return [
+    { id: `LD-${agent.id}-1842`, route: `${city} Airport → ${city} CBD`, eta: '14:35', status: 'In transit', sla: 'On time', tone: 'green' },
+    { id: `LD-${agent.id}-1846`, route: `${city} Labs → ${city} Hospital`, eta: '14:52', status: 'Picked up', sla: 'At risk', tone: 'amber' },
+    { id: `LD-${agent.id}-1851`, route: `${city} Depot → ${city} North`, eta: '15:10', status: 'Awaiting dispatch', sla: 'Queued', tone: 'slate' },
+  ] as const;
+}
+
 function OverviewTab({ agent, drivers }: { agent: AgentWorkspaceRecord; drivers: TenantCourier[] }) {
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [reactivatedAt, setReactivatedAt] = useState<string | null>(null);
@@ -268,116 +336,182 @@ function OverviewTab({ agent, drivers }: { agent: AgentWorkspaceRecord; drivers:
   const [archiveInfo, setArchiveInfo] = useState<{ reason: string; notes: string; archivedAt: string } | null>(null);
   const isActive = localStatus !== 'Archived';
   const areas = agent.coverageAreas.length > 0 ? agent.coverageAreas : [agent.city];
+  const airportsCovered = Math.max(1, Math.min(6, drivers.length + (agent.isNetworkPartner ? 1 : 0)));
+  const zipcodesCovered = (agent.coverageAreaDetails?.reduce((sum, area) => sum + area.zipCount, 0) ?? 0) || (areas.length * 14);
+  const complianceDays = agent.npActivatedDate
+    ? Math.max(1, Math.floor((Date.now() - new Date(agent.npActivatedDate).getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
+  const otdBase = agent.otdRate ?? 88;
+  const otdTrend = [otdBase - 6, otdBase - 3, otdBase - 1, otdBase + 1, otdBase - 2, otdBase].map((v) => Math.max(60, Math.min(99, Math.round(v))));
+  const complianceTrend = [Math.max(50, complianceDays * 0.35), Math.max(55, complianceDays * 0.5), Math.max(60, complianceDays * 0.65), Math.max(65, complianceDays * 0.8), Math.max(70, complianceDays * 0.92), Math.max(75, complianceDays)].map((v) => Math.min(100, Math.round(v)));
+  const liveDeliveries = buildLiveDeliveries(agent);
 
   return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.45fr_0.95fr]">
-      <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xl font-semibold text-text-primary">Areas covered</div>
-            <div className="mt-1 text-sm text-text-secondary">Coverage-first overview, matching the NP modal direction.</div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button className="rounded-full border border-border bg-white px-3 py-2 text-xs font-medium text-text-primary">+ Add area</button>
-            <button className="rounded-full border border-border bg-white px-3 py-2 text-xs font-medium text-text-primary">Use existing city picker</button>
-          </div>
-        </div>
-
-        <div className="mb-4 h-[320px] overflow-hidden rounded-[20px] border border-slate-200 bg-[linear-gradient(180deg,rgba(59,199,244,0.10),rgba(59,199,244,0.03)),radial-gradient(circle_at_24%_38%,rgba(220,50,70,0.22)_0_12%,transparent_13%),radial-gradient(circle_at_46%_54%,rgba(220,50,70,0.20)_0_16%,transparent_17%),radial-gradient(circle_at_63%_44%,rgba(220,50,70,0.18)_0_12%,transparent_13%),linear-gradient(135deg,#f7f6f5,#ece9e7)] p-4">
-          <div className="flex h-full items-end">
-            <div className="rounded-full bg-white/90 px-3 py-2 text-xs font-semibold text-text-primary shadow-sm">
-              Map / polygon preview placeholder — reuse Admin Manager map + zip shading
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {areas.map((area) => (
-            <span key={area} className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-text-primary">
-              {area}
-            </span>
-          ))}
-          {agent.coverageAreaDetails?.filter((a) => !a.hasZipMapping).map((area) => (
-            <span key={`${area.areaName}-warning`} className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
-              {area.areaName} has no zips mapped
-            </span>
-          ))}
-        </div>
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.2fr_1fr_0.9fr]">
+        <MetricTrend
+          title="On-time performance"
+          value={agent.otdRate != null ? <OtdDisplay rate={agent.otdRate} /> : 'No data'}
+          detail="6 month trend"
+          points={otdTrend}
+          tone="cyan"
+        />
+        <MetricTrend
+          title="Time in compliance"
+          value={complianceDays > 0 ? `${complianceDays} days` : 'Not live'}
+          detail={agent.npActivatedDate ? `Since ${agent.npActivatedDate}` : 'Awaiting NP activation'}
+          points={complianceTrend}
+          tone="green"
+        />
+        <CoverageBars airportCount={airportsCovered} zipCount={zipcodesCovered} />
       </div>
 
-      <div className="space-y-4">
-        {!agent.isNetworkPartner && (
-          <div className="rounded-[24px] border border-purple-200 bg-purple-50/70 p-4 text-sm text-text-primary">
-            <strong>Pre-promotion branch:</strong> keep promotion in the separate Edit Agent flow. This surface can still act as the detail home, but Tier / Portal Enabled / Default Courier Pay only become first-class once the Agent is promoted to NP.
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.45fr_0.95fr]">
+        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xl font-semibold text-text-primary">Live deliveries</div>
+              <div className="mt-1 text-sm text-text-secondary">Current jobs, SLA state and ETA for this partner.</div>
+            </div>
+            <div className="text-xs font-medium text-text-secondary">{liveDeliveries.length} live</div>
           </div>
-        )}
-
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-slate-50">
+                  <th className="px-3 py-2.5 text-left font-medium text-text-muted">Job</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-text-muted">Route</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-text-muted">Status</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-text-muted">ETA</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-text-muted">SLA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveDeliveries.map((delivery) => (
+                  <tr key={delivery.id} className="border-b border-border last:border-b-0">
+                    <td className="px-3 py-3 font-medium text-text-primary">{delivery.id}</td>
+                    <td className="px-3 py-3 text-text-secondary">{delivery.route}</td>
+                    <td className="px-3 py-3 text-text-primary">{delivery.status}</td>
+                    <td className="px-3 py-3 text-text-primary">{delivery.eta}</td>
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${delivery.tone === 'green' ? 'bg-green-100 text-green-700' : delivery.tone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {delivery.sla}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
         <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 text-xl font-semibold text-text-primary">At a glance</div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <StatCard label="Association" value={agent.association === 'None' ? 'Independent' : agent.association} />
-            <StatCard label="Member ID" value={agent.associationMemberId || 'Not provided'} />
-            <StatCard label="Portal enabled" value={agent.npPortalEnabled ? 'Yes' : agent.isNetworkPartner ? 'Live' : 'Not live'} />
-            <StatCard label="Default courier pay" value={agent.defaultCourierPayPercent ? `${agent.defaultCourierPayPercent}%` : 'Not set'} />
-            <StatCard label="Performance" value={agent.otdRate != null ? <OtdDisplay rate={agent.otdRate} /> : 'No data'} detail={agent.leadSource || 'Lead source unknown'} />
-            <StatCard label="Driver roster" value={drivers.length} detail={drivers.length === 1 ? '1 assigned driver' : `${drivers.length} assigned drivers`} />
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xl font-semibold text-text-primary">Coverage map</div>
+              <div className="mt-1 text-sm text-text-secondary">Airports, zipcodes and service area footprint.</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="rounded-full border border-border bg-white px-3 py-2 text-xs font-medium text-text-primary">+ Add area</button>
+              <button className="rounded-full border border-border bg-white px-3 py-2 text-xs font-medium text-text-primary">Use existing city picker</button>
+            </div>
+          </div>
+
+          <div className="mb-4 h-[320px] overflow-hidden rounded-[20px] border border-slate-200 bg-[linear-gradient(180deg,rgba(59,199,244,0.10),rgba(59,199,244,0.03)),radial-gradient(circle_at_24%_38%,rgba(220,50,70,0.22)_0_12%,transparent_13%),radial-gradient(circle_at_46%_54%,rgba(220,50,70,0.20)_0_16%,transparent_17%),radial-gradient(circle_at_63%_44%,rgba(220,50,70,0.18)_0_12%,transparent_13%),linear-gradient(135deg,#f7f6f5,#ece9e7)] p-4">
+            <div className="flex h-full items-end">
+              <div className="rounded-full bg-white/90 px-3 py-2 text-xs font-semibold text-text-primary shadow-sm">
+                Map / polygon preview placeholder — reuse Admin Manager map + zip shading
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {areas.map((area) => (
+              <span key={area} className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-text-primary">
+                {area}
+              </span>
+            ))}
+            {agent.coverageAreaDetails?.filter((a) => !a.hasZipMapping).map((area) => (
+              <span key={`${area.areaName}-warning`} className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
+                {area.areaName} has no zips mapped
+              </span>
+            ))}
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 text-xl font-semibold text-text-primary">Programs & notes</div>
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Clients serviced</div>
-              <div className="flex flex-wrap gap-2">
-                {(agent.clientsServiced && agent.clientsServiced.length > 0) ? agent.clientsServiced.map((client) => (
-                  <span key={client} className="rounded-full bg-brand-cyan/10 px-3 py-1 text-xs font-medium text-brand-cyan">{client}</span>
-                )) : <span className="text-sm text-text-secondary">None listed</span>}
-              </div>
-            </div>
-            <div>
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Approved programs</div>
-              <div className="flex flex-wrap gap-2">
-                {(agent.approvedPrograms && agent.approvedPrograms.length > 0) ? agent.approvedPrograms.map((prog) => (
-                  <span key={prog} className="rounded-full bg-violet-100 px-3 py-1 text-xs font-medium text-violet-700">{prog}</span>
-                )) : <span className="text-sm text-text-secondary">None listed</span>}
-              </div>
-            </div>
-            <div>
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Notes</div>
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-text-secondary">{agent.notes || 'No notes added.'}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-xl font-semibold text-text-primary">Partner status</div>
-              {archiveInfo && <div className="mt-1 text-xs text-text-secondary">Archived {archiveInfo.archivedAt}</div>}
-              {isActive && reactivatedAt && <div className="mt-1 text-xs text-green-700">Reactivated {reactivatedAt}</div>}
-            </div>
-            <div className="flex items-center gap-3">
-              <ToggleSwitch
-                enabled={isActive}
-                onChange={() => {
-                  if (isActive) {
-                    setShowArchiveModal(true);
-                  } else {
-                    setLocalStatus('Active');
-                    setReactivatedAt(new Date().toLocaleString());
-                  }
-                }}
-              />
-              <span className={`text-sm font-medium ${isActive ? 'text-green-600' : 'text-slate-500'}`}>{isActive ? 'Active' : 'Archived'}</span>
-            </div>
-          </div>
-          {archiveInfo && !isActive && (
-            <div className="rounded-2xl bg-slate-50 p-3 text-xs text-text-secondary">
-              <div><span className="font-medium">Reason:</span> {archiveInfo.reason}</div>
-              {archiveInfo.notes && <div className="mt-1"><span className="font-medium">Notes:</span> {archiveInfo.notes}</div>}
+        <div className="space-y-4">
+          {!agent.isNetworkPartner && (
+            <div className="rounded-[24px] border border-purple-200 bg-purple-50/70 p-4 text-sm text-text-primary">
+              <strong>Pre-promotion branch:</strong> keep promotion in the separate Edit Agent flow. This surface can still act as the detail home, but Tier / Portal Enabled / Default Courier Pay only become first-class once the Agent is promoted to NP.
             </div>
           )}
+
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 text-xl font-semibold text-text-primary">Operational snapshot</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <StatCard label="Association" value={agent.association === 'None' ? 'Independent' : agent.association} />
+              <StatCard label="Member ID" value={agent.associationMemberId || 'Not provided'} />
+              <StatCard label="Portal enabled" value={agent.npPortalEnabled ? 'Yes' : agent.isNetworkPartner ? 'Live' : 'Not live'} />
+              <StatCard label="Default courier pay" value={agent.defaultCourierPayPercent ? `${agent.defaultCourierPayPercent}%` : 'Not set'} />
+              <StatCard label="Driver roster" value={drivers.length} detail={drivers.length === 1 ? '1 assigned driver' : `${drivers.length} assigned drivers`} />
+              <StatCard label="Airports / zips" value={`${airportsCovered} / ${zipcodesCovered}`} detail="Coverage breadth" />
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 text-xl font-semibold text-text-primary">Programs & notes</div>
+            <div className="space-y-4">
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Clients serviced</div>
+                <div className="flex flex-wrap gap-2">
+                  {(agent.clientsServiced && agent.clientsServiced.length > 0) ? agent.clientsServiced.map((client) => (
+                    <span key={client} className="rounded-full bg-brand-cyan/10 px-3 py-1 text-xs font-medium text-brand-cyan">{client}</span>
+                  )) : <span className="text-sm text-text-secondary">None listed</span>}
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Approved programs</div>
+                <div className="flex flex-wrap gap-2">
+                  {(agent.approvedPrograms && agent.approvedPrograms.length > 0) ? agent.approvedPrograms.map((prog) => (
+                    <span key={prog} className="rounded-full bg-violet-100 px-3 py-1 text-xs font-medium text-violet-700">{prog}</span>
+                  )) : <span className="text-sm text-text-secondary">None listed</span>}
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Notes</div>
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-text-secondary">{agent.notes || 'No notes added.'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xl font-semibold text-text-primary">Partner status</div>
+                {archiveInfo && <div className="mt-1 text-xs text-text-secondary">Archived {archiveInfo.archivedAt}</div>}
+                {isActive && reactivatedAt && <div className="mt-1 text-xs text-green-700">Reactivated {reactivatedAt}</div>}
+              </div>
+              <div className="flex items-center gap-3">
+                <ToggleSwitch
+                  enabled={isActive}
+                  onChange={() => {
+                    if (isActive) {
+                      setShowArchiveModal(true);
+                    } else {
+                      setLocalStatus('Active');
+                      setReactivatedAt(new Date().toLocaleString());
+                    }
+                  }}
+                />
+                <span className={`text-sm font-medium ${isActive ? 'text-green-600' : 'text-slate-500'}`}>{isActive ? 'Active' : 'Archived'}</span>
+              </div>
+            </div>
+            {archiveInfo && !isActive && (
+              <div className="rounded-2xl bg-slate-50 p-3 text-xs text-text-secondary">
+                <div><span className="font-medium">Reason:</span> {archiveInfo.reason}</div>
+                {archiveInfo.notes && <div className="mt-1"><span className="font-medium">Notes:</span> {archiveInfo.notes}</div>}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

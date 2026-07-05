@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ExternalLink, Globe, Map as MapIcon, MapPin, Phone, Receipt, Route as RouteIcon, ShieldCheck, Truck, Users, X } from 'lucide-react';
 import { AssociationBadge } from '@/components/common/AssociationBadge';
 import { TierBadge } from '@/components/tenant/TierBadge';
 import type { BusinessComplianceDocument, TenantCourier } from '@/types';
@@ -903,6 +904,169 @@ export function NpComplianceBar({ documents }: { documents: BusinessComplianceDo
   );
 }
 
+function AgentHero({ agent, summary, contacts }: { agent: AgentWorkspaceRecord; summary?: AgentComplianceDetail['summary'] | null; contacts: ContactRow[] }) {
+  const initials = agent.name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'NP';
+  const addressLine = [agent.address, `${agent.city}, ${agent.state} ${agent.postCode}`].filter(Boolean).join(' · ');
+
+  return (
+    <div className="px-6 py-5 border-b border-slate-200 bg-white">
+      <div className="flex flex-col gap-4">
+        <div className="flex items-start gap-5">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black flex-shrink-0 bg-violet-100 text-violet-700">
+            {initials}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-2xl font-extrabold text-brand-dark truncate">{agent.name}</h2>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-xs font-bold uppercase tracking-wider">
+                {agent.isNetworkPartner ? 'Network Partner' : 'Agent'}
+              </span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-mono">
+                AG-{String(agent.id).padStart(4, '0')}
+              </span>
+              <StatusPill status={agent.status} />
+              {agent.npPortalEnabled && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-brand-cyan/15 text-brand-cyan text-xs font-bold uppercase tracking-wider">
+                  Portal Enabled
+                </span>
+              )}
+            </div>
+
+            <div className="text-sm text-slate-500 mt-1">
+              {agent.contactName || 'Primary agent contact'}
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 xl:grid-cols-[1.7fr_1fr] gap-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <HeaderLine icon={MapPin} label="Address" value={addressLine || '—'} />
+                  <HeaderLine icon={Phone} label="Phone" value={agent.phone || '—'} />
+                  <HeaderLine icon={Globe} label="Booking email" value={agent.email || '—'} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mt-3">
+                  <HeaderLine icon={MapIcon} label="Coverage" value={agent.coverageAreas?.slice(0, 2).join(', ') || agent.city || '—'} />
+                  <HeaderLine icon={Users} label="Primary contact" value={contacts[0]?.name || agent.contactName || '—'} />
+                  <HeaderLine icon={ShieldCheck} label="Association" value={agent.association === 'None' ? 'Independent' : agent.association} />
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-brand-cyan/5 border border-brand-cyan/15 px-4 py-3">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Activity snapshot</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 mt-2">
+                  <MiniStat label="NP score" value={summary ? `${summary.approvedMandatoryDocuments}/${summary.mandatoryDocuments}` : '—'} />
+                  <MiniStat label="Driver roster" value={String(Math.max(0, contacts.length - 1))} />
+                  <MiniStat label="Tier" value={agent.npTier ?? '—'} accent="text-violet-700" />
+                  <MiniStat label="Courier pay" value={agent.defaultCourierPayPercent ? `${agent.defaultCourierPayPercent}%` : '—'} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 flex-shrink-0 self-start">
+            <QuickAction icon={<ExternalLink className="w-4 h-4" />} label="Open in Admin Manager" />
+            <QuickAction icon={<Users className="w-4 h-4" />} label="Edit overview" />
+            <QuickAction icon={<ShieldCheck className="w-4 h-4" />} label="Promote / Edit" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgentContextPanel({ agent }: { agent: AgentWorkspaceRecord }) {
+  const links = [
+    { label: 'Pricing & Rating', hint: 'Open pricing rules and overrides for this partner', icon: Receipt },
+    { label: 'Schedules', hint: 'Open linked schedules for this partner', icon: RouteIcon },
+    { label: 'Territory', hint: 'Review territory and zip mappings', icon: MapIcon },
+    { label: 'Drivers', hint: 'Jump to driver fleet and courier records', icon: Truck },
+    { label: 'Contacts', hint: 'Manage partner contacts and portal access', icon: Users },
+  ] as const;
+
+  return (
+    <aside className="w-[320px] bg-white border-l border-slate-200 flex-shrink-0 overflow-y-auto">
+      <div className="p-4 space-y-4">
+        <SectionCard title="Related areas" subtitle="Cross-module links for this partner">
+          <div className="space-y-2">
+            {links.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <div className="w-9 h-9 rounded-lg bg-brand-cyan/15 text-brand-cyan flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-brand-dark">{item.label}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.hint}</div>
+                  </div>
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 mt-1 flex-shrink-0" />
+                </div>
+              );
+            })}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Coverage links" subtitle="What this NP currently covers">
+          <div className="grid grid-cols-2 gap-2">
+            <MiniStat label="Areas" value={String(agent.coverageAreas?.length || 1)} />
+            <MiniStat label="Tier" value={agent.npTier ?? '—'} />
+            <MiniStat label="Ranking" value={agent.ranking > 0 ? String(agent.ranking) : '—'} />
+            <MiniStat label="Status" value={agent.status} />
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Notes" subtitle="Quick operator context">
+          <div className="text-sm text-slate-600 leading-relaxed">
+            {agent.notes || 'No notes added yet.'}
+          </div>
+        </SectionCard>
+      </div>
+    </aside>
+  );
+}
+
+function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-200">
+        <div className="text-sm font-bold text-brand-dark">{title}</div>
+        {subtitle && <div className="text-xs text-slate-500 mt-0.5">{subtitle}</div>}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+function HeaderLine({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        <Icon className="w-3.5 h-3.5 text-brand-cyan" />
+        {label}
+      </div>
+      <div className="text-sm font-medium text-brand-dark mt-1 truncate">{value}</div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
+      <div className={`text-sm font-semibold mt-1 ${accent ?? 'text-brand-dark'}`}>{value}</div>
+    </div>
+  );
+}
+
+function QuickAction({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <button title={label} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-brand-dark hover:bg-slate-100 rounded-md transition-colors">
+      {icon}
+      <span className="hidden 2xl:inline">{label}</span>
+    </button>
+  );
+}
+
 export function AgentWorkspace({ agent, variant }: { agent: AgentWorkspaceRecord; variant: 'inline' | 'page'; }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -925,23 +1089,90 @@ export function AgentWorkspace({ agent, variant }: { agent: AgentWorkspaceRecord
     { id: 'rates', label: 'Rates' },
   ];
 
-  const shellClass = variant === 'page'
-    ? 'mx-auto max-w-[1320px] overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.12)]'
-    : 'overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm';
+  if (variant === 'page') {
+    return (
+      <div className="fixed inset-0 z-[100] bg-white flex">
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="px-6 pt-4 pb-3 border-b border-slate-200 flex items-center gap-4 flex-shrink-0 bg-white">
+            <button
+              onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/agents')}
+              className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-brand-dark transition-colors"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-xl font-extrabold text-brand-dark truncate">{agent.name}</h2>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-violet-100 text-violet-700 text-xs font-bold uppercase tracking-wider">
+                  {agent.isNetworkPartner ? 'Network Partner' : 'Agent'}
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-mono">
+                  AG-{String(agent.id).padStart(4, '0')}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">Cancel</button>
+              <button className="px-4 py-2 text-sm font-semibold text-white bg-brand-cyan hover:bg-brand-cyan/90 rounded-lg transition-colors">Save Changes</button>
+              <button
+                onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/agents')}
+                className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-brand-dark transition-colors ml-1"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <AgentHero agent={agent} summary={summary} contacts={contacts} />
+
+          <div className="px-6 border-b border-slate-200 flex-shrink-0 overflow-x-auto bg-white">
+            <div className="flex gap-0 min-w-max">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                    activeTab === tab.id ? 'text-brand-cyan border-brand-cyan' : 'text-slate-500 border-transparent hover:text-brand-dark'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-slate-50">
+            <div className="px-6 py-5">
+              {activeTab === 'overview' && <OverviewTab agent={agent} drivers={drivers} />}
+              {activeTab === 'compliance' && <ComplianceTab agentId={agent.id} detail={detail} onChanged={refreshDetail} drivers={drivers} />}
+              {activeTab === 'drivers' && <DriversTab drivers={drivers} />}
+              {activeTab === 'contacts' && <ContactsTab agent={agent} drivers={drivers} />}
+              {activeTab === 'rates' && <RatesTab agent={agent} drivers={drivers} />}
+            </div>
+          </div>
+
+          <div className="px-6 py-3 border-t border-slate-200 flex justify-between items-center flex-shrink-0 bg-white">
+            <button className="text-sm font-semibold text-red-600 hover:text-red-700 flex items-center gap-1.5">
+              Deactivate Partner
+            </button>
+            <div className="text-xs text-slate-400">
+              Modelled on the new client modal shell.
+            </div>
+          </div>
+        </div>
+
+        <AgentContextPanel agent={agent} />
+      </div>
+    );
+  }
 
   return (
-    <div className={shellClass}>
+    <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-white px-5 py-5 md:px-6 md:py-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
           <div>
-            {variant === 'page' && (
-              <button
-                onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/agents')}
-                className="mb-3 inline-flex items-center text-sm text-text-secondary transition-colors hover:text-brand-cyan"
-              >
-                ← Back to Directory
-              </button>
-            )}
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Agent #{agent.id}</span>
               {agent.isNetworkPartner && <span className="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">Network Partner</span>}

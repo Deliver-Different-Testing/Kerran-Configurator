@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AssociationBadge } from '@/components/common/AssociationBadge';
 import Modal from '@/components/common/Modal';
-import { AgentWorkspace, NpComplianceBar } from '@/components/tenant/AgentWorkspace';
+import { NpComplianceBar } from '@/components/tenant/AgentWorkspace';
 import { TierBadge } from '@/components/tenant/TierBadge';
 import { getAgentStatusTone } from './agentComplianceService';
 import { useAgents as useLiveAgents } from '@/hooks/useAgents';
@@ -218,7 +218,6 @@ export function AgentList() {
   const [addForm, setAddForm] = useState({ firstName: '', surname: '', email: '', mobile: '', company: '', vehicleType: '', notes: '' });
   const [directorySearch, setDirectorySearch] = useState('');
   const [selectedDirectory, setSelectedDirectory] = useState<'CLDA' | 'ECA'>('CLDA');
-  const [expandedAgentId, setExpandedAgentId] = useState<number | null>(null);
 
   const mode: ListMode = location.pathname === '/agents' ? 'directory' : 'find';
 
@@ -471,14 +470,11 @@ export function AgentList() {
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-sm text-text-muted">No partners match your filters</td>
                   </tr>
-                ) : filtered.map((agent) => {
-                  const expanded = expandedAgentId === agent.id;
-
-                  return (
-                    <Fragment key={agent.id}>
+                ) : filtered.map((agent) => (
                       <tr
-                        onClick={() => setExpandedAgentId(expanded ? null : agent.id)}
-                        className={`cursor-pointer border-t border-border transition-colors hover:bg-slate-50 ${expanded ? 'bg-slate-50/80 shadow-[inset_0_-1px_0_0_rgba(226,232,240,0.9)]' : ''}`}
+                        key={agent.id}
+                        onClick={() => navigate(`/agents/${agent.id}`)}
+                        className="cursor-pointer border-t border-border transition-colors hover:bg-slate-50"
                       >
                         <td className="px-3 py-3">
                           <div className="font-semibold text-text-primary">{agent.name}</div>
@@ -513,26 +509,17 @@ export function AgentList() {
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                setExpandedAgentId(expanded ? null : agent.id);
+                                navigate(`/agents/${agent.id}`);
                               }}
-                              aria-label={expanded ? 'Collapse row' : 'Expand row'}
+                              aria-label="Open partner detail"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-text-secondary transition-colors hover:border-brand-cyan hover:text-brand-cyan"
                             >
-                              <span className={`text-sm leading-none transition-transform ${expanded ? 'rotate-180' : ''}`}>⌄</span>
+                              <span className="text-sm leading-none">→</span>
                             </button>
                           </div>
                         </td>
                       </tr>
-                      {expanded && (
-                        <tr className="border-t-2 border-slate-200 bg-slate-50/60">
-                          <td colSpan={7} className="px-3 py-3">
-                            <AgentWorkspace agent={{ ...agent, npDocs: agent.npDocs ?? [] }} variant="inline" />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>

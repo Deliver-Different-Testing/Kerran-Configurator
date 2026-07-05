@@ -63,8 +63,9 @@
     .mini-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:10px; }
     .mini-stat .k { font:700 10px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; }
     .mini-stat .v { margin-top:6px; font-size:14px; font-weight:700; color:#0d0c2c; }
-    .tabs { padding:0 24px; border-bottom:1px solid #e2e8f0; display:flex; gap:0; overflow:auto; }
-    .tab { border:0; background:transparent; padding:14px 16px; border-bottom:2px solid transparent; font:500 14px/1 var(--font-ui); color:#64748b; cursor:pointer; white-space:nowrap; }
+    .tabs-shell { padding:0 24px; border-bottom:1px solid #e2e8f0; background:#fff; overflow-x:auto; }
+    .tabs { display:flex; gap:0; min-width:max-content; }
+    .tab { border:0; background:transparent; padding:14px 16px; border-bottom:2px solid transparent; margin-bottom:-1px; font:500 14px/1 var(--font-ui); color:#64748b; cursor:pointer; white-space:nowrap; }
     .tab.active { color:#3bc7f4; border-bottom-color:#3bc7f4; }
     .body { background:#f8fafc; padding:20px 24px; }
     .panel { display:none; }
@@ -209,12 +210,14 @@
             </div>
           </div>
 
-          <div class="tabs">
-            <button class="tab active" data-tab="overview">Overview</button>
-            <button class="tab" data-tab="compliance">Compliance</button>
-            <button class="tab" data-tab="drivers">Drivers</button>
-            <button class="tab" data-tab="contacts">Contacts</button>
-            <button class="tab" data-tab="rates">Rates</button>
+          <div class="tabs-shell">
+            <div class="tabs">
+              <button class="tab active" data-tab="overview">Overview</button>
+              <button class="tab" data-tab="compliance">Compliance</button>
+              <button class="tab" data-tab="drivers">Drivers</button>
+              <button class="tab" data-tab="contacts">Contacts</button>
+              <button class="tab" data-tab="rates">Rates</button>
+            </div>
           </div>
 
           <div class="body">

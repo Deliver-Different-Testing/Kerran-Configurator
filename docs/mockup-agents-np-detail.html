@@ -16,27 +16,12 @@
     .nav-item { padding: 12px 14px; border-radius: 12px; color: rgba(255,255,255,.64); margin-bottom: 6px; font-size: 13px; }
     .nav-item.active { background: rgba(67,199,244,.12); color: #fff; box-shadow: inset 3px 0 0 #3bc7f4; }
     .main { padding: 28px; }
-    .intro { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:20px; }
-    .eyebrow { display:block; margin-bottom:8px; }
-    h1 { margin:0 0 6px; font-family: var(--font-display); font-size: 34px; line-height: 1.04; letter-spacing: -.02em; }
-    .sub { margin:0; color:#64748b; font-size:13px; max-width:900px; }
     .btn { border:0; border-radius:999px; padding:12px 18px; font:600 13px/1 var(--font-ui); cursor:pointer; }
     .btn.primary { background:#3bc7f4; color:#0d0c2c; box-shadow:0 4px 12px rgba(67,199,244,.30); }
     .btn.secondary { background:#fff; color:#0d0c2c; border:1px solid #e8ecf1; }
-    .directory { background:rgba(255,255,255,.55); border-radius:20px; padding:18px; box-shadow:0 1px 2px rgba(0,14,37,.05); margin-bottom:24px; }
-    .directory-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
-    .directory-head h2 { margin:0 0 4px; font-family:var(--font-display); font-size:24px; }
-    .directory-head p { margin:0; color:#64748b; font-size:13px; }
-    .stats { display:grid; grid-template-columns:repeat(4,minmax(120px,1fr)); gap:12px; margin-bottom:14px; }
-    .stat { background:#fff; border-radius:14px; padding:14px; }
-    .stat .k { font:600 11px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:8px; }
-    .stat .v { font-family:var(--font-display); font-size:28px; font-weight:600; }
-    .filters { display:grid; grid-template-columns:1.4fr repeat(3,180px); gap:10px; }
-    input, select { width:100%; padding:12px 14px; border-radius:999px; border:0; background:#fff; color:#0d0c2c; font:400 13px/1 var(--font-ui); box-shadow:0 1px 2px rgba(0,14,37,.05); }
     table { width:100%; border-collapse:collapse; background:#fff; border-radius:16px; overflow:hidden; }
     th { padding:14px 16px; text-align:left; font:600 11px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#64748b; background:#fff; border-bottom:1px solid #f1f5f9; }
     td { padding:16px; border-bottom:1px solid #f1f5f9; font-size:13px; }
-    tr.active { background:rgba(67,199,244,.08); }
     .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font:600 11px/1 var(--font-ui); }
     .pill.green { background:#d0f1e0; color:#13b964; }
     .pill.purple { background:#e6dbf9; color:#824ae0; }
@@ -49,7 +34,7 @@
     .modaltitle { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .modaltitle h2 { margin:0; font-size:20px; font-weight:800; color:#0d0c2c; }
     .actions { display:flex; gap:8px; align-items:center; }
-    .hero { padding:20px 24px; border-bottom:1px solid #e2e8f0; }
+    .hero { padding:20px 24px 0; border-bottom:0; }
     .hero-grid { display:grid; grid-template-columns:72px minmax(0,1fr) auto; gap:16px; align-items:start; }
     .avatar { width:72px; height:72px; border-radius:18px; background:#ede9fe; color:#7c3aed; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:900; }
     .identity-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
@@ -63,9 +48,9 @@
     .mini-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:10px; }
     .mini-stat .k { font:700 10px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; }
     .mini-stat .v { margin-top:6px; font-size:14px; font-weight:700; color:#0d0c2c; }
-    .tabs-shell { padding:0 24px; border-bottom:1px solid #e2e8f0; background:#fff; overflow-x:auto; }
+    .tabs-shell { padding:0 24px; border-top:1px solid #e2e8f0; border-bottom:1px solid #dbe4ee; background:#fff; overflow-x:auto; box-shadow:0 1px 0 rgba(255,255,255,.9) inset; }
     .tabs { display:flex; gap:0; min-width:max-content; }
-    .tab { border:0; background:transparent; padding:14px 16px; border-bottom:2px solid transparent; margin-bottom:-1px; font:500 14px/1 var(--font-ui); color:#64748b; cursor:pointer; white-space:nowrap; }
+    .tab { border:0; background:transparent; padding:16px 18px; border-bottom:3px solid transparent; margin-bottom:-1px; font:600 14px/1 var(--font-ui); color:#64748b; cursor:pointer; white-space:nowrap; }
     .tab.active { color:#3bc7f4; border-bottom-color:#3bc7f4; }
     .body { background:#f8fafc; padding:20px 24px; }
     .panel { display:none; }
@@ -112,43 +97,6 @@
       <div class="nav-item">Rates</div>
     </aside>
     <main class="main">
-      <div class="intro">
-        <div>
-          <span class="eyebrow">Kerran Configurator preview</span>
-          <h1>NP detail modelled on the new client modal shell</h1>
-          <p class="sub">This preview belongs in Kerran Configurator and follows the newer customer modal pattern: full-screen shell, hero header, tab strip, KPI-led overview, live deliveries, and a right-hand context panel.</p>
-        </div>
-        <button class="btn primary">+ Add Agent</button>
-      </div>
-
-      <section class="directory">
-        <div class="directory-head">
-          <div>
-            <h2>Agents &amp; Network Partners</h2>
-            <p>Directory context stays visible, but the working surface below is the Kerran-owned preview.</p>
-          </div>
-          <button class="btn secondary">Live DB</button>
-        </div>
-        <div class="stats">
-          <div class="stat"><div class="k">Active</div><div class="v">18</div></div>
-          <div class="stat"><div class="k">NPs</div><div class="v">12</div></div>
-          <div class="stat"><div class="k">Pending</div><div class="v">2</div></div>
-          <div class="stat"><div class="k">Total</div><div class="v">19</div></div>
-        </div>
-        <div class="filters">
-          <input value="Search partners and network partners..." />
-          <select><option>All Status</option></select>
-          <select><option>All Associations</option></select>
-          <select><option>All Types</option></select>
-        </div>
-        <table>
-          <thead><tr><th>Business name</th><th>Location</th><th>Phone</th><th>Status</th><th>Association</th><th>Type</th><th></th></tr></thead>
-          <tbody>
-            <tr class="active"><td><strong>Fort Myers Agent</strong><div class="muted">Joanne Elmes</div></td><td>Fort Myers, FL</td><td>(239) 555-0104</td><td><span class="pill green">Active</span></td><td><span class="pill neutral">ECA</span></td><td><span class="pill purple">NP</span></td><td>Open →</td></tr>
-          </tbody>
-        </table>
-      </section>
-
       <section class="shell">
         <div>
           <div class="topbar">

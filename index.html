@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DFRNT — Kerran NP Detail Preview</title>
+  <link rel="stylesheet" href="./colors_and_type.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--font-ui); background: #f4f2f1; color: #0d0c2c; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 280px 1fr; }
+    .sidebar { background: #14152d; color: rgba(255,255,255,.92); padding: 28px 18px; }
+    .brand { font-family: var(--font-display); font-size: 28px; font-weight: 600; letter-spacing: -.02em; margin-bottom: 28px; }
+    .brand span { color: #3bc7f4; }
+    .nav-label { font: 600 12px/1 var(--font-ui); letter-spacing: .08em; color: rgba(255,255,255,.38); text-transform: uppercase; margin: 18px 0 10px; }
+    .nav-item { padding: 12px 14px; border-radius: 12px; color: rgba(255,255,255,.64); margin-bottom: 6px; font-size: 13px; }
+    .nav-item.active { background: rgba(67,199,244,.12); color: #fff; box-shadow: inset 3px 0 0 #3bc7f4; }
+    .main { padding: 28px; }
+    .intro { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:20px; }
+    .eyebrow { display:block; margin-bottom:8px; }
+    h1 { margin:0 0 6px; font-family: var(--font-display); font-size: 34px; line-height: 1.04; letter-spacing: -.02em; }
+    .sub { margin:0; color:#64748b; font-size:13px; max-width:900px; }
+    .btn { border:0; border-radius:999px; padding:12px 18px; font:600 13px/1 var(--font-ui); cursor:pointer; }
+    .btn.primary { background:#3bc7f4; color:#0d0c2c; box-shadow:0 4px 12px rgba(67,199,244,.30); }
+    .btn.secondary { background:#fff; color:#0d0c2c; border:1px solid #e8ecf1; }
+    .directory { background:rgba(255,255,255,.55); border-radius:20px; padding:18px; box-shadow:0 1px 2px rgba(0,14,37,.05); margin-bottom:24px; }
+    .directory-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
+    .directory-head h2 { margin:0 0 4px; font-family:var(--font-display); font-size:24px; }
+    .directory-head p { margin:0; color:#64748b; font-size:13px; }
+    .stats { display:grid; grid-template-columns:repeat(4,minmax(120px,1fr)); gap:12px; margin-bottom:14px; }
+    .stat { background:#fff; border-radius:14px; padding:14px; }
+    .stat .k { font:600 11px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:8px; }
+    .stat .v { font-family:var(--font-display); font-size:28px; font-weight:600; }
+    .filters { display:grid; grid-template-columns:1.4fr repeat(3,180px); gap:10px; }
+    input, select { width:100%; padding:12px 14px; border-radius:999px; border:0; background:#fff; color:#0d0c2c; font:400 13px/1 var(--font-ui); box-shadow:0 1px 2px rgba(0,14,37,.05); }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:16px; overflow:hidden; }
+    th { padding:14px 16px; text-align:left; font:600 11px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#64748b; background:#fff; border-bottom:1px solid #f1f5f9; }
+    td { padding:16px; border-bottom:1px solid #f1f5f9; font-size:13px; }
+    tr.active { background:rgba(67,199,244,.08); }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font:600 11px/1 var(--font-ui); }
+    .pill.green { background:#d0f1e0; color:#13b964; }
+    .pill.purple { background:#e6dbf9; color:#824ae0; }
+    .pill.blue { background:#d8f4fd; color:#3bc7f4; }
+    .pill.neutral { background:#f4f2f1; color:#0d0c2c; }
+    .shell { background:#fff; border:1px solid #e2e8f0; border-radius:20px; overflow:hidden; box-shadow:0 8px 24px rgba(0,14,37,.15); display:grid; grid-template-columns:minmax(0,1fr) 320px; }
+    .topbar { padding:16px 24px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; gap:16px; }
+    .back { width:36px; height:36px; border-radius:10px; background:#fff; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-weight:700; }
+    .titlewrap { flex:1; min-width:0; }
+    .modaltitle { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .modaltitle h2 { margin:0; font-size:20px; font-weight:800; color:#0d0c2c; }
+    .actions { display:flex; gap:8px; align-items:center; }
+    .hero { padding:20px 24px; border-bottom:1px solid #e2e8f0; }
+    .hero-grid { display:grid; grid-template-columns:72px minmax(0,1fr) auto; gap:16px; align-items:start; }
+    .avatar { width:72px; height:72px; border-radius:18px; background:#ede9fe; color:#7c3aed; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:900; }
+    .identity-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+    .identity-name { font-size:28px; font-weight:800; letter-spacing:-.02em; color:#0d0c2c; }
+    .hero-card { background:#f8fafc; border:1px solid #f1f5f9; border-radius:14px; padding:14px; }
+    .hero-card .k { font:700 10px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; margin-bottom:8px; }
+    .hero-card .v { font-size:13px; color:#0d0c2c; line-height:1.35; }
+    .hero-bottom { margin-top:16px; display:grid; grid-template-columns:1.7fr 1fr; gap:16px; }
+    .contact-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .context-box { background:rgba(59,199,244,.06); border:1px solid rgba(59,199,244,.16); border-radius:14px; padding:14px; }
+    .mini-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:10px; }
+    .mini-stat .k { font:700 10px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; }
+    .mini-stat .v { margin-top:6px; font-size:14px; font-weight:700; color:#0d0c2c; }
+    .tabs { padding:0 24px; border-bottom:1px solid #e2e8f0; display:flex; gap:0; overflow:auto; }
+    .tab { border:0; background:transparent; padding:14px 16px; border-bottom:2px solid transparent; font:500 14px/1 var(--font-ui); color:#64748b; cursor:pointer; white-space:nowrap; }
+    .tab.active { color:#3bc7f4; border-bottom-color:#3bc7f4; }
+    .body { background:#f8fafc; padding:20px 24px; }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px; }
+    .card { background:#fff; border:1px solid #e2e8f0; border-radius:18px; padding:18px; }
+    .card h3 { margin:0 0 4px; font-size:20px; font-family:var(--font-display); }
+    .muted { color:#64748b; font-size:13px; }
+    .metric-value { margin-top:10px; font-size:28px; font-weight:800; color:#0d0c2c; }
+    .trend { margin-top:14px; height:88px; border-radius:14px; background:#f8fafc; padding:8px; }
+    .live-table, .data-table { width:100%; border-collapse:collapse; }
+    .live-table th, .live-table td, .data-table th, .data-table td { padding:12px 10px; text-align:left; border-bottom:1px solid #f1f5f9; font-size:13px; }
+    .live-table th, .data-table th { font:600 11px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#64748b; }
+    .sla { display:inline-flex; padding:6px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+    .sla.green { background:#dcfce7; color:#15803d; }
+    .sla.amber { background:#fef3c7; color:#b45309; }
+    .sla.slate { background:#f1f5f9; color:#475569; }
+    .split { display:grid; grid-template-columns:1.45fr .95fr; gap:16px; }
+    .map { height:280px; border-radius:16px; border:1px solid #e2e8f0; background:linear-gradient(180deg, rgba(59,199,244,.10), rgba(59,199,244,.03)), radial-gradient(circle at 24% 38%, rgba(220,50,70,.22) 0 12%, transparent 13%), radial-gradient(circle at 46% 54%, rgba(220,50,70,.20) 0 16%, transparent 17%), radial-gradient(circle at 63% 44%, rgba(220,50,70,.18) 0 12%, transparent 13%), linear-gradient(135deg, #f7f6f5, #ece9e7); display:flex; align-items:end; padding:16px; margin:14px 0; }
+    .map-note { background:rgba(255,255,255,.92); border-radius:999px; padding:8px 12px; font:600 11px/1 var(--font-ui); }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; }
+    .chip { display:inline-flex; align-items:center; padding:8px 12px; background:#f4f2f1; border-radius:999px; font-size:13px; }
+    .stack { display:grid; gap:16px; }
+    .rightpanel { border-left:1px solid #e2e8f0; background:#fff; }
+    .rightpanel .section { padding:16px; border-bottom:1px solid #e2e8f0; }
+    .rightpanel h4 { margin:0 0 6px; font-size:14px; font-weight:700; color:#0d0c2c; }
+    .linkcard { display:flex; gap:12px; align-items:flex-start; padding:12px; border:1px solid #e2e8f0; background:#f8fafc; border-radius:14px; margin-bottom:10px; }
+    .linkicon { width:36px; height:36px; border-radius:10px; background:rgba(59,199,244,.12); display:flex; align-items:center; justify-content:center; color:#3bc7f4; font-weight:800; }
+    .footer { padding:14px 24px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
+    @media (max-width: 1200px) { .shell { grid-template-columns:1fr; } .rightpanel { border-left:0; border-top:1px solid #e2e8f0; } .hero-bottom, .split, .kpi-grid { grid-template-columns:1fr; } }
+    @media (max-width: 900px) { .app { grid-template-columns:1fr; } .sidebar { display:none; } .stats, .filters, .contact-grid { grid-template-columns:1fr; } .hero-grid { grid-template-columns:1fr; } .actions { flex-wrap:wrap; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">DFRNT <span>Drive</span></div>
+      <div class="nav-label">Kerran Preview</div>
+      <div class="nav-item active">NP Detail</div>
+      <div class="nav-item">Overview</div>
+      <div class="nav-item">Compliance</div>
+      <div class="nav-item">Drivers</div>
+      <div class="nav-item">Contacts</div>
+      <div class="nav-item">Rates</div>
+    </aside>
+    <main class="main">
+      <div class="intro">
+        <div>
+          <span class="eyebrow">Kerran Configurator preview</span>
+          <h1>NP detail modelled on the new client modal shell</h1>
+          <p class="sub">This preview belongs in Kerran Configurator and follows the newer customer modal pattern: full-screen shell, hero header, tab strip, KPI-led overview, live deliveries, and a right-hand context panel.</p>
+        </div>
+        <button class="btn primary">+ Add Agent</button>
+      </div>
+
+      <section class="directory">
+        <div class="directory-head">
+          <div>
+            <h2>Agents &amp; Network Partners</h2>
+            <p>Directory context stays visible, but the working surface below is the Kerran-owned preview.</p>
+          </div>
+          <button class="btn secondary">Live DB</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="k">Active</div><div class="v">18</div></div>
+          <div class="stat"><div class="k">NPs</div><div class="v">12</div></div>
+          <div class="stat"><div class="k">Pending</div><div class="v">2</div></div>
+          <div class="stat"><div class="k">Total</div><div class="v">19</div></div>
+        </div>
+        <div class="filters">
+          <input value="Search partners and network partners..." />
+          <select><option>All Status</option></select>
+          <select><option>All Associations</option></select>
+          <select><option>All Types</option></select>
+        </div>
+        <table>
+          <thead><tr><th>Business name</th><th>Location</th><th>Phone</th><th>Status</th><th>Association</th><th>Type</th><th></th></tr></thead>
+          <tbody>
+            <tr class="active"><td><strong>Fort Myers Agent</strong><div class="muted">Joanne Elmes</div></td><td>Fort Myers, FL</td><td>(239) 555-0104</td><td><span class="pill green">Active</span></td><td><span class="pill neutral">ECA</span></td><td><span class="pill purple">NP</span></td><td>Open →</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="shell">
+        <div>
+          <div class="topbar">
+            <div class="back">←</div>
+            <div class="titlewrap">
+              <div class="modaltitle">
+                <h2>Fort Myers Agent</h2>
+                <span class="pill purple">Network Partner</span>
+                <span class="pill neutral">AG-2045</span>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn secondary">Cancel</button>
+              <button class="btn primary">Save Changes</button>
+              <button class="btn secondary">✕</button>
+            </div>
+          </div>
+
+          <div class="hero">
+            <div class="hero-grid">
+              <div class="avatar">FM</div>
+              <div>
+                <div class="identity-row">
+                  <span class="pill purple">Network Partner</span>
+                  <span class="pill green">Active</span>
+                  <span class="pill blue">Portal Enabled</span>
+                  <span class="pill neutral">ECA</span>
+                  <span class="pill neutral">Base Tier</span>
+                </div>
+                <div class="identity-name">Fort Myers Agent</div>
+                <div class="muted" style="margin-top:6px;">Joanne Elmes</div>
+                <div class="hero-bottom">
+                  <div class="hero-card">
+                    <div class="contact-grid">
+                      <div><div class="k">Address</div><div class="v">3701 Fowler St · Fort Myers, FL 33901</div></div>
+                      <div><div class="k">Phone</div><div class="v">+1 239 555 0104</div></div>
+                      <div><div class="k">Booking Email</div><div class="v">bookings@fortmyersagent.com</div></div>
+                      <div><div class="k">Coverage</div><div class="v">Fort Myers, Cape Coral</div></div>
+                      <div><div class="k">Primary Contact</div><div class="v">Joanne Elmes</div></div>
+                      <div><div class="k">Association</div><div class="v">ECA</div></div>
+                    </div>
+                  </div>
+                  <div class="context-box">
+                    <div class="k">Activity Snapshot</div>
+                    <div class="mini-stats">
+                      <div class="mini-stat"><div class="k">NP Score</div><div class="v">9 / 12</div></div>
+                      <div class="mini-stat"><div class="k">Driver Roster</div><div class="v">2</div></div>
+                      <div class="mini-stat"><div class="k">Tier</div><div class="v">Base</div></div>
+                      <div class="mini-stat"><div class="k">Courier Pay</div><div class="v">68%</div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="actions" style="align-self:start; justify-content:flex-end;">
+                <button class="btn secondary">Open in Admin Manager</button>
+                <button class="btn secondary">Edit Overview</button>
+                <button class="btn secondary">Promote / Edit</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="tabs">
+            <button class="tab active" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="compliance">Compliance</button>
+            <button class="tab" data-tab="drivers">Drivers</button>
+            <button class="tab" data-tab="contacts">Contacts</button>
+            <button class="tab" data-tab="rates">Rates</button>
+          </div>
+
+          <div class="body">
+            <div class="panel active" data-panel="overview">
+              <div class="kpi-grid">
+                <div class="card">
+                  <div class="muted" style="text-transform:uppercase;font-size:11px;font-weight:700;letter-spacing:.08em;">On-time performance</div>
+                  <div class="metric-value">91.5%</div>
+                  <div class="muted">6 month trend</div>
+                  <div class="trend"><svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:100%"><path d="M 0 78 L 20 60 L 40 46 L 60 42 L 80 54 L 100 36 L 100 100 L 0 100 Z" fill="rgba(59,199,244,.12)"></path><path d="M 0 78 L 20 60 L 40 46 L 60 42 L 80 54 L 100 36" fill="none" stroke="#3bc7f4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+                </div>
+                <div class="card">
+                  <div class="muted" style="text-transform:uppercase;font-size:11px;font-weight:700;letter-spacing:.08em;">Time in compliance</div>
+                  <div class="metric-value">294 days</div>
+                  <div class="muted">Since 2024-09-15</div>
+                  <div class="trend"><svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:100%"><path d="M 0 82 L 20 74 L 40 62 L 60 46 L 80 32 L 100 22 L 100 100 L 0 100 Z" fill="rgba(19,185,100,.12)"></path><path d="M 0 82 L 20 74 L 40 62 L 60 46 L 80 32 L 100 22" fill="none" stroke="#13b964" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+                </div>
+                <div class="card">
+                  <div class="muted" style="text-transform:uppercase;font-size:11px;font-weight:700;letter-spacing:.08em;">Coverage footprint</div>
+                  <div style="margin-top:14px;">
+                    <div class="muted" style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>Airports covered</span><strong style="color:#0d0c2c">3</strong></div>
+                    <div style="height:12px;background:#f1f5f9;border-radius:999px;overflow:hidden;"><div style="width:54%;height:100%;background:#3bc7f4;border-radius:999px;"></div></div>
+                  </div>
+                  <div style="margin-top:14px;">
+                    <div class="muted" style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>Zipcodes mapped</span><strong style="color:#0d0c2c">42</strong></div>
+                    <div style="height:12px;background:#f1f5f9;border-radius:999px;overflow:hidden;"><div style="width:74%;height:100%;background:#8b5cf6;border-radius:999px;"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
+                  <div>
+                    <h3>Live deliveries</h3>
+                    <div class="muted">Current jobs, SLA state and ETA for this partner.</div>
+                  </div>
+                  <div class="muted">3 live</div>
+                </div>
+                <table class="live-table">
+                  <thead><tr><th>Job</th><th>Route</th><th>Status</th><th>ETA</th><th>SLA</th></tr></thead>
+                  <tbody>
+                    <tr><td><strong>LD-2045-1842</strong></td><td>Fort Myers Airport → Fort Myers CBD</td><td>In transit</td><td>14:35</td><td><span class="sla green">On time</span></td></tr>
+                    <tr><td><strong>LD-2045-1846</strong></td><td>Fort Myers Labs → Fort Myers Hospital</td><td>Picked up</td><td>14:52</td><td><span class="sla amber">At risk</span></td></tr>
+                    <tr><td><strong>LD-2045-1851</strong></td><td>Fort Myers Depot → Fort Myers North</td><td>Awaiting dispatch</td><td>15:10</td><td><span class="sla slate">Queued</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="split">
+                <div class="card">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+                    <div>
+                      <h3>Coverage map</h3>
+                      <div class="muted">Airports, zipcodes and service area footprint.</div>
+                    </div>
+                    <div class="actions"><button class="btn secondary">+ Add area</button><button class="btn secondary">Use existing city picker</button></div>
+                  </div>
+                  <div class="map"><div class="map-note">Map / polygon preview placeholder — reuse Admin Manager map + zip shading</div></div>
+                  <div class="chips"><div class="chip">Fort Myers</div><div class="chip">Cape Coral</div><div class="chip">Naples</div><div class="chip">Punta Gorda</div><div class="chip">RSW Airport zone</div></div>
+                </div>
+                <div class="stack">
+                  <div class="card">
+                    <h3>Operational snapshot</h3>
+                    <table class="data-table"><tbody>
+                      <tr><td>Association</td><td><strong>ECA</strong></td></tr>
+                      <tr><td>Member ID</td><td><strong>ECA-77421</strong></td></tr>
+                      <tr><td>Portal enabled</td><td><strong>Yes</strong></td></tr>
+                      <tr><td>Default courier pay</td><td><strong>68%</strong></td></tr>
+                      <tr><td>Driver roster</td><td><strong>2</strong></td></tr>
+                      <tr><td>Airports / zips</td><td><strong>3 / 42</strong></td></tr>
+                    </tbody></table>
+                  </div>
+                  <div class="card">
+                    <h3>Programs &amp; notes</h3>
+                    <div class="muted">Clients serviced: ARUP, Quest Diagnostics</div>
+                    <div class="muted" style="margin-top:10px;">Approved programs: ARUP Labs, Quest Specimen Transport</div>
+                    <div class="muted" style="margin-top:10px;">Main Southwest Florida medical coverage partner. Strong airport capability.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel" data-panel="compliance">
+              <div class="split">
+                <div class="card">
+                  <h3>Compliance</h3>
+                  <div class="muted">NP-level documents with staff review and AI suggestion support.</div>
+                  <table class="data-table">
+                    <thead><tr><th>Requirement</th><th>Required</th><th>Status</th><th>AI suggestion</th><th>Expiry</th><th>File</th><th>Action</th></tr></thead>
+                    <tbody>
+                      <tr><td>Business Registration</td><td>Required</td><td><span class="sla green">Approved</span></td><td>AI: Accept</td><td>—</td><td>View</td><td>Verified</td></tr>
+                      <tr><td>Insurance</td><td>Required</td><td><span class="sla amber">Under Review</span></td><td>AI: Needs review</td><td>12 Sep 2026</td><td>View</td><td>Verify / Reject</td></tr>
+                      <tr><td>HIPAA Certification</td><td>Required</td><td><span class="sla slate">Missing</span></td><td>AI: —</td><td>—</td><td>—</td><td>—</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="stack">
+                  <div class="card"><h3>Driver compliance roll-up</h3><div class="muted">Compliant: 1 · Expiring: 1 · Non-compliant: 0</div></div>
+                  <div class="card"><h3>Client compliance profiles</h3><div class="muted">Assigned profiles add their required documents to this NP’s compliance score.</div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel" data-panel="drivers"><div class="card"><h3>Drivers</h3><table class="data-table"><thead><tr><th>Driver</th><th>Vehicle</th><th>Phone</th><th>Status</th><th>Last active</th></tr></thead><tbody><tr><td>Daniel Perez</td><td>Sprinter</td><td>+1 239 555 0191</td><td>Online</td><td>Today 14:20</td></tr><tr><td>Melissa Grant</td><td>Cargo van</td><td>+1 239 555 0188</td><td>Offline</td><td>Yesterday 16:35</td></tr></tbody></table></div></div>
+
+            <div class="panel" data-panel="contacts"><div class="card"><h3>Contacts</h3><table class="data-table"><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last login</th><th>Actions</th></tr></thead><tbody><tr><td>Joanne Elmes</td><td>NP Manager</td><td><span class="sla green">Active</span></td><td>2 hours ago</td><td>Change role</td></tr><tr><td>Glenn Mclean</td><td>Dispatcher</td><td><span class="sla green">Active</span></td><td>Yesterday</td><td>Change role</td></tr><tr><td>Tanya Yuen</td><td>Billing</td><td><span class="sla amber">Invitation Pending</span></td><td>Never</td><td>Resend invite</td></tr></tbody></table></div></div>
+
+            <div class="panel" data-panel="rates"><div class="card"><h3>Rates</h3><table class="data-table"><thead><tr><th>Airport</th><th>Vehicle size</th><th>Distance rate</th><th>Base charge</th><th>Distance included</th><th>Per distance unit</th><th>Extra charge</th><th>Zone rate card</th><th>Action</th></tr></thead><tbody><tr><td>FMY · Fort Myers Primary Airport</td><td>Sprinter</td><td>Default Sprinter Distance Rate</td><td>$45</td><td>10 mi</td><td>$1.90</td><td>Default Sprinter Extra Charge</td><td>Fort Myers Core Zone Card</td><td>Delete</td></tr><tr><td>FMY · Fort Myers Regional Airport</td><td>Van</td><td>Default Van Distance Rate</td><td>$63</td><td>15 mi</td><td>$2.60</td><td>Default Van Extra Charge</td><td>Florida Medical Zone Card</td><td>Delete</td></tr></tbody></table></div></div>
+          </div>
+
+          <div class="footer">
+            <button class="btn secondary">Deactivate Partner</button>
+            <div class="muted">Modelled on the new client modal shell.</div>
+          </div>
+        </div>
+
+        <aside class="rightpanel">
+          <div class="section"><h4>Related areas</h4><div class="muted">Cross-module links for this partner</div></div>
+          <div class="section">
+            <div class="linkcard"><div class="linkicon">$</div><div><strong>Pricing &amp; Rating</strong><div class="muted">Open pricing rules and overrides for this partner</div></div></div>
+            <div class="linkcard"><div class="linkicon">S</div><div><strong>Schedules</strong><div class="muted">Open linked schedules for this partner</div></div></div>
+            <div class="linkcard"><div class="linkicon">Z</div><div><strong>Territory</strong><div class="muted">Review territory and zip mappings</div></div></div>
+            <div class="linkcard"><div class="linkicon">D</div><div><strong>Drivers</strong><div class="muted">Jump to driver fleet and courier records</div></div></div>
+            <div class="linkcard"><div class="linkicon">C</div><div><strong>Contacts</strong><div class="muted">Manage partner contacts and portal access</div></div></div>
+          </div>
+          <div class="section"><h4>Coverage links</h4><div class="muted">Areas: 5 · Tier: Base · Ranking: 4 · Status: Active</div></div>
+          <div class="section"><h4>Notes</h4><div class="muted">Main Southwest Florida medical coverage partner. Strong airport capability.</div></div>
+        </aside>
+      </section>
+    </main>
+  </div>
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.panel');
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      const id = tab.dataset.tab;
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      panels.forEach(panel => panel.classList.toggle('active', panel.dataset.panel === id));
+    }));
+  </script>
+</body>
+</html>

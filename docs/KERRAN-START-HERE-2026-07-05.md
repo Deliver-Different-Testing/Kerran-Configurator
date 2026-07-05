@@ -21,6 +21,11 @@ Wired entry points:
 - sidebar: `Business -> Clients / Customers`
 - available in both **tenant** and **DF Admin** lanes
 
+Latest customer-modal direction now landed in the live review surface:
+- added a **Contacts** tab
+- removed the old **Related areas** right-hand panel from the modal review flow
+- keep the tab strip + hero shell as the primary layout pattern
+
 ### Pricing & Rating shell groundwork
 - route: `/pricing`
 - sidebar: `Business -> Pricing & Rating`
@@ -42,10 +47,29 @@ Wired entry points:
 - schedule edit form now includes visible **multi-client tagging** for schedule-linked rating direction
 - current UI still needs backend/API wiring, but the frontend boundary is now in place
 
+### NP modal redesign groundwork now landed
+- active React surface: `/agents/:id`
+- active preview: `docs/mockup-agents-np-detail.html`
+- latest direction now landed:
+  - customer-modal-based shell
+  - KPI-first Overview
+  - live deliveries section
+  - **no permanent RH Related areas panel**
+  - top hero detail cards widened so the fixed details are not vertically squashed
+
 ## Phase framing Steve wants
 1. **Client modal / customers first**
 2. **Schedules / schedule-linked second**
 3. **Pricing & rating third**
+
+## Live preview links
+### Customer modal / client workstream
+- Customer modal review surface: <https://deliver-different-testing.github.io/scheduled-rate-builder/#/customers>
+- Pricing & Rating prototype target: <https://deliver-different-testing.github.io/App-Configurator-v2-design/>
+- Schedule-linked / schedules review surface: <https://deliver-different-testing.github.io/scheduled-rate-builder/#/schedules>
+
+### NP modal workstream
+- NP modal preview: <https://deliver-different-testing.github.io/Kerran-Configurator/mockup-agents-np-detail.html>
 
 That means this repo should keep growing in that order unless Steve explicitly changes it.
 
@@ -135,4 +159,5 @@ The latest IA/prototype for pricing induction/import lives here:
 - avoid duplicating schedule builder UX where Dane’s real builder already exists
 - import should launch from top actions, not become a messy left-nav destination
 - preserve selected client context when handing off from Pricing & Rating into Schedules
+- remove low-value permanent RH context panels from the latest customer/NP modal direction when they crowd the working surface
 - GitLab/Admin Manager sources are references, not the delivery target

@@ -13,6 +13,23 @@ original_source: /data/.openclaw/workspace/dfrntdrive_configurator/docs/STEVE-NP
 
 # NP Modal — directory redesign + popup NP modal
 
+## Live review links
+
+- **Active Kerran preview:** <https://deliver-different-testing.github.io/Kerran-Configurator/mockup-agents-np-detail.html>
+- **Customer modal shell reference:** <https://deliver-different-testing.github.io/scheduled-rate-builder/#/customers>
+
+## Latest state as of 2026-07-05
+
+The active Kerran direction has now moved beyond the original inline-expand concept:
+
+- `/agents` now hands into a customer-modal-shaped NP detail shell
+- the tab set is fixed to **Overview / Compliance / Drivers / Contacts / Rates**
+- the landing tab is now **KPI/dashboard-first** with live deliveries, not coverage-map-first
+- the old permanent **Related areas** right-hand panel has been removed from the current direction
+- the fixed hero/detail cards have been widened so the top metadata does not get squashed vertically
+
+Treat the preview link above as the fastest visual check before editing more React code.
+
 > **📌 Rolling doc.** Same format as [`STEVE-COURIER-PORTAL-AND-COURIER-MODAL-UPDATE-GARRY-2026-06-17.md`](./STEVE-COURIER-PORTAL-AND-COURIER-MODAL-UPDATE-GARRY-2026-06-17.md). Each section anchored to a Steve-narrated screenshot. Sections 1–3 are the first batch. More will be added.
 
 ## Framing — why this exists alongside the courier modal work
@@ -70,6 +87,8 @@ This work pairs cleanly with [`STEVE-COURIER-PORTAL-AND-COURIER-MODAL-UPDATE-GAR
 
 ### 2b. Always-visible top section (NP identity + overview details)
 
+> **Latest direction override:** the top section should follow the newer customer-modal shell, and the fixed detail rows should favour width/readability over dense multi-column packing. Do not reintroduce a permanent RH context sidebar here.
+
 The top of the NP modal — equivalent to the courier modal's identity strip — surfaces what an operator needs at a glance regardless of which tab they're on. The fields come from **both** the Edit Agent modal (Network Partner / Tier / Portal Enabled / Default Courier Pay %) **and the Admin Manager Agent General tab** (Name, Address, GPS, Phone/Email block, Status, Ranking, Notes) — see §4 for why both feed the same modal.
 
 Identity row:
@@ -99,6 +118,15 @@ Actions row:
 
 ### 2c. Landing tab — Overview with "Areas covered" map + add-others affordance
 
+> **Latest direction override:** Overview is no longer coverage-map-first. The landing tab should lead with:
+>
+> - on-time performance
+> - time in compliance
+> - airports / zipcodes covered
+> - live deliveries
+>
+> The map is supporting context lower on the page, not the headline block.
+
 The first/landing tab inside the modal is **Overview**, and its main visual is the **areas covered by this NP**, rendered on a Google Map.
 
 > Steve 2026-06-19: "We can use a map — we already have the ability to view zipcodes on a map in Admin Manager. The tool is at `adminmanager/#/zipPolygon/{id}` — Google Maps embed with the ZIP's polygon shaded red on top of geography data. We also already store the zips against the NP by choosing the city when setting up the NP."
@@ -122,6 +150,14 @@ The first/landing tab inside the modal is **Overview**, and its main visual is t
 **Fallback** — if rendering the Google Map turns out to be heavy in v1 (large polygons, many cities), fall back to a chip cloud of area names with the same `+ Add area` button. The data path is the same; only the visual changes.
 
 ### 2d. Tab strip — Compliance · Drivers · Contacts · Rates
+
+The current fixed set is exactly:
+
+- **Overview**
+- **Compliance**
+- **Drivers**
+- **Contacts**
+- **Rates**
 
 Replace the current row-expand tabs (Overview / Agent / NP Compliance / Drivers / Driver Compliance) with the new set:
 

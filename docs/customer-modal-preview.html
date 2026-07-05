@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DFRNT — Kerran Customer Modal Preview</title>
+  <link rel="stylesheet" href="./colors_and_type.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--font-ui); background: #f4f2f1; color: #0d0c2c; }
+    .page { min-height: 100vh; padding: 28px; }
+    .shell { background:#fff; border:1px solid #e2e8f0; border-radius:20px; overflow:hidden; box-shadow:0 8px 24px rgba(0,14,37,.15); display:grid; grid-template-columns:minmax(0,1fr) 320px; }
+    .topbar { padding:16px 24px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; gap:16px; }
+    .back,.iconbtn { width:36px; height:36px; border-radius:10px; background:#fff; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-weight:700; }
+    .titlewrap { flex:1; min-width:0; }
+    .head { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .head h2 { margin:0; font-size:20px; font-weight:800; }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font:600 11px/1 var(--font-ui); }
+    .pill.blue { background:#d8f4fd; color:#3bc7f4; }
+    .pill.neutral { background:#f4f2f1; color:#0d0c2c; }
+    .actions { display:flex; gap:8px; align-items:center; }
+    .btn { border:0; border-radius:10px; padding:10px 14px; font:600 13px/1 var(--font-ui); cursor:pointer; }
+    .btn.primary { background:#3bc7f4; color:#0d0c2c; }
+    .btn.secondary { background:#f1f5f9; color:#334155; }
+    .hero { padding:20px 24px; border-bottom:1px solid #e2e8f0; }
+    .hero h1 { margin:0; font-size:30px; font-weight:800; letter-spacing:-.02em; }
+    .sub { color:#64748b; font-size:13px; margin-top:6px; }
+    .summary { margin-top:18px; display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px; }
+    .k { font:700 10px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; margin-bottom:8px; }
+    .v { font-size:14px; font-weight:700; }
+    .tabs-shell { padding:0 24px; border-bottom:1px solid #dbe4ee; background:#fff; overflow-x:auto; }
+    .tabs { display:flex; gap:0; min-width:max-content; }
+    .tab { border:0; background:transparent; padding:16px 18px; border-bottom:3px solid transparent; margin-bottom:-1px; font:600 14px/1 var(--font-ui); color:#64748b; cursor:pointer; white-space:nowrap; }
+    .tab.active { color:#3bc7f4; border-bottom-color:#3bc7f4; }
+    .body { background:#f8fafc; padding:20px 24px; }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .section { background:#fff; border:1px solid #e2e8f0; border-radius:18px; padding:18px; }
+    .section h3 { margin:0 0 4px; font-size:20px; }
+    .muted { color:#64748b; font-size:13px; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px; }
+    .tablewrap { margin-top:16px; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; }
+    table { width:100%; border-collapse:collapse; background:#fff; }
+    th, td { padding:12px 14px; text-align:left; border-bottom:1px solid #f1f5f9; font-size:13px; }
+    th { font:600 11px/1 var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:#64748b; background:#f8fafc; }
+    .side { border-left:1px solid #e2e8f0; background:#fff; }
+    .side .section { border:none; border-bottom:1px solid #e2e8f0; border-radius:0; }
+    @media (max-width: 1200px) { .shell { grid-template-columns:1fr; } .side { border-left:0; border-top:1px solid #e2e8f0; } .summary,.grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="shell">
+      <div>
+        <div class="topbar">
+          <div class="back">←</div>
+          <div class="titlewrap">
+            <div class="head">
+              <h2>Acme Corp</h2>
+              <span class="pill blue">Customer</span>
+              <span class="pill neutral">ACME</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn secondary">Cancel</button>
+            <button class="btn primary">Save Changes</button>
+            <div class="iconbtn">✕</div>
+          </div>
+        </div>
+
+        <div class="hero">
+          <h1>Acme Corp</h1>
+          <div class="sub">Customer modal preview including the new Contacts tab.</div>
+          <div class="summary">
+            <div class="card"><div class="k">Market</div><div class="v">US</div></div>
+            <div class="card"><div class="k">Status</div><div class="v">Active</div></div>
+            <div class="card"><div class="k">Invoice</div><div class="v">Monthly · Email</div></div>
+            <div class="card"><div class="k">Account Manager</div><div class="v">kerran</div></div>
+          </div>
+        </div>
+
+        <div class="tabs-shell">
+          <div class="tabs">
+            <button class="tab" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="profile">Profile</button>
+            <button class="tab" data-tab="commercial">Commercial</button>
+            <button class="tab" data-tab="operations">Operations</button>
+            <button class="tab" data-tab="services">Available Services</button>
+            <button class="tab active" data-tab="contacts">Contacts</button>
+            <button class="tab" data-tab="activity">Activity</button>
+          </div>
+        </div>
+
+        <div class="body">
+          <div class="panel active" data-panel="contacts">
+            <div class="section">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+                <div>
+                  <h3>Contacts</h3>
+                  <div class="muted">Primary contact and billing/contact channels for this customer.</div>
+                </div>
+                <button class="btn secondary">Add Contact</button>
+              </div>
+              <div class="grid">
+                <div class="card"><div class="k">Primary phone</div><div class="v">6025551200</div></div>
+                <div class="card"><div class="k">Secondary phone</div><div class="v">—</div></div>
+                <div class="card"><div class="k">Primary email</div><div class="v">accounts@acme.example</div></div>
+                <div class="card"><div class="k">Invoice email</div><div class="v">invoices@acme.example</div></div>
+                <div class="card"><div class="k">Website</div><div class="v">https://acme.example</div></div>
+                <div class="card"><div class="k">Account manager</div><div class="v">kerran</div></div>
+              </div>
+            </div>
+
+            <div class="section" style="margin-top:16px;">
+              <h3>People & ownership</h3>
+              <div class="tablewrap">
+                <table>
+                  <thead><tr><th>Role</th><th>Name / value</th><th>Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>Account manager</td><td>kerran</td><td>Internal owner</td></tr>
+                    <tr><td>Sales rep</td><td>steve</td><td>Commercial relationship</td></tr>
+                    <tr><td>Billing contact</td><td>invoices@acme.example</td><td>Invoices / remittance</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <div class="section">
+          <h3 style="margin:0;font-size:16px;">Context</h3>
+          <div class="muted" style="margin-top:8px;">This mirrors the customer modal shell and exposes the new Contacts tab for review on GitHub Pages.</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

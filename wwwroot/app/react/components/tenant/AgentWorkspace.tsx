@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Globe, Map as MapIcon, MapPin, Phone, Receipt, Route as RouteIcon, ShieldCheck, Truck, Users, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Globe, Map as MapIcon, MapPin, Phone, ShieldCheck, Users, X } from 'lucide-react';
 import { AssociationBadge } from '@/components/common/AssociationBadge';
 import { TierBadge } from '@/components/tenant/TierBadge';
 import type { BusinessComplianceDocument, TenantCourier } from '@/types';
@@ -974,57 +974,6 @@ function AgentHero({ agent, summary, contacts }: { agent: AgentWorkspaceRecord; 
   );
 }
 
-function AgentContextPanel({ agent }: { agent: AgentWorkspaceRecord }) {
-  const links = [
-    { label: 'Pricing & Rating', hint: 'Open pricing rules and overrides for this partner', icon: Receipt },
-    { label: 'Schedules', hint: 'Open linked schedules for this partner', icon: RouteIcon },
-    { label: 'Territory', hint: 'Review territory and zip mappings', icon: MapIcon },
-    { label: 'Drivers', hint: 'Jump to driver fleet and courier records', icon: Truck },
-    { label: 'Contacts', hint: 'Manage partner contacts and portal access', icon: Users },
-  ] as const;
-
-  return (
-    <aside className="w-[320px] bg-white border-l border-slate-200 flex-shrink-0 overflow-y-auto">
-      <div className="p-4 space-y-4">
-        <SectionCard title="Related areas" subtitle="Cross-module links for this partner">
-          <div className="space-y-2">
-            {links.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.label} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                  <div className="w-9 h-9 rounded-lg bg-brand-cyan/15 text-brand-cyan flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-brand-dark">{item.label}</div>
-                    <div className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.hint}</div>
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 mt-1 flex-shrink-0" />
-                </div>
-              );
-            })}
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Coverage links" subtitle="What this NP currently covers">
-          <div className="grid grid-cols-2 gap-2">
-            <MiniStat label="Areas" value={String(agent.coverageAreas?.length || 1)} />
-            <MiniStat label="Tier" value={agent.npTier ?? '—'} />
-            <MiniStat label="Ranking" value={agent.ranking > 0 ? String(agent.ranking) : '—'} />
-            <MiniStat label="Status" value={agent.status} />
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Notes" subtitle="Quick operator context">
-          <div className="text-sm text-slate-600 leading-relaxed">
-            {agent.notes || 'No notes added yet.'}
-          </div>
-        </SectionCard>
-      </div>
-    </aside>
-  );
-}
-
 function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -1163,7 +1112,6 @@ export function AgentWorkspace({ agent, variant }: { agent: AgentWorkspaceRecord
           </div>
         </div>
 
-        <AgentContextPanel agent={agent} />
       </div>
     );
   }

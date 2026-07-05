@@ -937,14 +937,12 @@ function AgentHero({ agent, summary, contacts }: { agent: AgentWorkspaceRecord; 
               {agent.contactName || 'Primary agent contact'}
             </div>
 
-            <div className="mt-3 grid grid-cols-1 xl:grid-cols-[1.7fr_1fr] gap-4">
+            <div className="mt-3 grid grid-cols-1 xl:grid-cols-[minmax(0,2.15fr)_320px] gap-4">
               <div className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 text-sm">
                   <HeaderLine icon={MapPin} label="Address" value={addressLine || '—'} />
                   <HeaderLine icon={Phone} label="Phone" value={agent.phone || '—'} />
                   <HeaderLine icon={Globe} label="Booking email" value={agent.email || '—'} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mt-3">
                   <HeaderLine icon={MapIcon} label="Coverage" value={agent.coverageAreas?.slice(0, 2).join(', ') || agent.city || '—'} />
                   <HeaderLine icon={Users} label="Primary contact" value={contacts[0]?.name || agent.contactName || '—'} />
                   <HeaderLine icon={ShieldCheck} label="Association" value={agent.association === 'None' ? 'Independent' : agent.association} />

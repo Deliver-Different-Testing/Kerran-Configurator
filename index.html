@@ -27,7 +27,7 @@
     .pill.purple { background:#e6dbf9; color:#824ae0; }
     .pill.blue { background:#d8f4fd; color:#3bc7f4; }
     .pill.neutral { background:#f4f2f1; color:#0d0c2c; }
-    .shell { background:#fff; border:1px solid #e2e8f0; border-radius:20px; overflow:hidden; box-shadow:0 8px 24px rgba(0,14,37,.15); display:grid; grid-template-columns:minmax(0,1fr) 320px; }
+    .shell { background:#fff; border:1px solid #e2e8f0; border-radius:20px; overflow:hidden; box-shadow:0 8px 24px rgba(0,14,37,.15); display:block; }
     .topbar { padding:16px 24px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; gap:16px; }
     .back { width:36px; height:36px; border-radius:10px; background:#fff; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-weight:700; }
     .titlewrap { flex:1; min-width:0; }
@@ -74,11 +74,7 @@
     .chips { display:flex; flex-wrap:wrap; gap:8px; }
     .chip { display:inline-flex; align-items:center; padding:8px 12px; background:#f4f2f1; border-radius:999px; font-size:13px; }
     .stack { display:grid; gap:16px; }
-    .rightpanel { border-left:1px solid #e2e8f0; background:#fff; }
-    .rightpanel .section { padding:16px; border-bottom:1px solid #e2e8f0; }
-    .rightpanel h4 { margin:0 0 6px; font-size:14px; font-weight:700; color:#0d0c2c; }
-    .linkcard { display:flex; gap:12px; align-items:flex-start; padding:12px; border:1px solid #e2e8f0; background:#f8fafc; border-radius:14px; margin-bottom:10px; }
-    .linkicon { width:36px; height:36px; border-radius:10px; background:rgba(59,199,244,.12); display:flex; align-items:center; justify-content:center; color:#3bc7f4; font-weight:800; }
+    .detail-hint { margin-top:16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:14px 16px; border:1px dashed #cbd5e1; border-radius:14px; background:#fff; }
     .footer { padding:14px 24px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
     @media (max-width: 1200px) { .shell { grid-template-columns:1fr; } .rightpanel { border-left:0; border-top:1px solid #e2e8f0; } .hero-bottom, .split, .kpi-grid { grid-template-columns:1fr; } }
     @media (max-width: 900px) { .app { grid-template-columns:1fr; } .sidebar { display:none; } .stats, .filters, .contact-grid { grid-template-columns:1fr; } .hero-grid { grid-template-columns:1fr; } .actions { flex-wrap:wrap; } }
@@ -170,6 +166,13 @@
 
           <div class="body">
             <div class="panel active" data-panel="overview">
+              <div class="detail-hint">
+                <div>
+                  <strong>Detail interactions</strong>
+                  <div class="muted">Use slide-out drawers when rows/cards need deeper context instead of a permanent RHS panel.</div>
+                </div>
+                <button class="btn secondary">Open sample detail drawer</button>
+              </div>
               <div class="kpi-grid">
                 <div class="card">
                   <div class="muted" style="text-transform:uppercase;font-size:11px;font-weight:700;letter-spacing:.08em;">On-time performance</div>
@@ -282,18 +285,6 @@
           </div>
         </div>
 
-        <aside class="rightpanel">
-          <div class="section"><h4>Related areas</h4><div class="muted">Cross-module links for this partner</div></div>
-          <div class="section">
-            <div class="linkcard"><div class="linkicon">$</div><div><strong>Pricing &amp; Rating</strong><div class="muted">Open pricing rules and overrides for this partner</div></div></div>
-            <div class="linkcard"><div class="linkicon">S</div><div><strong>Schedules</strong><div class="muted">Open linked schedules for this partner</div></div></div>
-            <div class="linkcard"><div class="linkicon">Z</div><div><strong>Territory</strong><div class="muted">Review territory and zip mappings</div></div></div>
-            <div class="linkcard"><div class="linkicon">D</div><div><strong>Drivers</strong><div class="muted">Jump to driver fleet and courier records</div></div></div>
-            <div class="linkcard"><div class="linkicon">C</div><div><strong>Contacts</strong><div class="muted">Manage partner contacts and portal access</div></div></div>
-          </div>
-          <div class="section"><h4>Coverage links</h4><div class="muted">Areas: 5 · Tier: Base · Ranking: 4 · Status: Active</div></div>
-          <div class="section"><h4>Notes</h4><div class="muted">Main Southwest Florida medical coverage partner. Strong airport capability.</div></div>
-        </aside>
       </section>
     </main>
   </div>
